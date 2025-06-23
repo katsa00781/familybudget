@@ -1,0 +1,134 @@
+/* familybudget-styles.css */
+
+@layer components {
+  /* Fő színátmenetes háttér (balról jobbra: #2044b2 -> #35e094) */
+  .bg-gradient-main {
+    @apply bg-gradient-to-br from-familybudget-blue to-familybudget-green;
+  }
+
+  /* Fehér, kerekített kártya */
+  .card {
+    @apply bg-white rounded-2xl shadow-sm p-6;
+  }
+
+  /* Regisztrációs/input form doboz */
+  .form-box {
+    @apply bg-white rounded-xl shadow p-8 flex flex-col gap-4;
+  }
+
+  /* Input mező (ikonos, border szín: #1cc8e3) */
+  .input-main {
+    @apply bg-white border-2 border-familybudget-teal rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-familybudget-teal text-gray-800 placeholder-gray-400 flex items-center gap-2;
+  }
+
+  /* Input mező (ikon) */
+  .input-icon {
+    @apply text-familybudget-teal mr-2;
+  }
+
+  /* Nagy, színes gomb (zöld színátmenet, fehér szöveg) */
+  .btn-gradient {
+    @apply w-full py-3 rounded-xl text-white font-bold text-lg bg-gradient-to-r from-familybudget-teal to-familybudget-green shadow-md hover:from-familybudget-green hover:to-familybudget-teal transition;
+  }
+
+  /* Link, aktív: zöld (#35e094) */
+  .link-active {
+    @apply text-familybudget-green font-semibold hover:underline;
+  }
+
+  /* Menü, topbar, logó */
+  .topbar {
+    @apply flex items-center justify-between h-16 px-8 bg-white shadow-sm;
+  }
+
+  .logo {
+    @apply flex items-center gap-2 text-2xl font-bold text-familybudget-blue;
+  }
+
+  .nav-link {
+    @apply text-gray-500 hover:text-familybudget-blue font-medium px-4 py-2;
+  }
+
+  /* Oldalsó menü (sidebar) */
+  .sidebar {
+    @apply bg-white h-full w-56 flex flex-col py-6 px-4 shadow-md;
+  }
+
+  .sidebar-title {
+    @apply text-xl font-bold text-familybudget-blue mb-4;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-2 rounded-lg text-gray-700 hover:bg-[#e6f7fa] cursor-pointer transition;
+  }
+
+  .sidebar-link-active {
+    @apply bg-[#e6f7fa] text-familybudget-teal font-bold;
+  }
+
+  /* Kategória badge (szín: élelmiszer=zöld, rezsi=kék, közlekedés=sárga, szórakozás=lila) */
+  .badge-food {
+    @apply bg-familybudget-food/20 text-familybudget-food px-3 py-1 rounded-full font-medium text-sm;
+  }
+
+  .badge-bill {
+    @apply bg-familybudget-bill/20 text-familybudget-bill px-3 py-1 rounded-full font-medium text-sm;
+  }
+
+  .badge-transport {
+    @apply bg-familybudget-transport/20 text-familybudget-transport px-3 py-1 rounded-full font-medium text-sm;
+  }
+
+  .badge-entertainment {
+    @apply bg-familybudget-entertainment/20 text-familybudget-entertainment px-3 py-1 rounded-full font-medium text-sm;
+  }
+
+  /* Dashboard összeg dobozok (nagy, árnyék, színes szöveg) */
+  .dashboard-amount-box {
+    @apply bg-white rounded-xl shadow p-5 flex flex-col items-center;
+  }
+
+  .amount-income {
+    @apply text-familybudget-green font-bold text-2xl;
+  }
+
+  .amount-expense {
+    @apply text-[#f26d6d] font-bold text-2xl;
+  }
+
+  .amount-balance {
+    @apply text-familybudget-teal font-bold text-2xl;
+  }
+
+  /* Kereső input */
+  .input-search {
+    @apply border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-familybudget-teal;
+  }
+
+  /* Táblázat */
+  .table-main {
+    @apply w-full table-auto rounded-xl overflow-hidden;
+  }
+
+  .thead-main {
+    @apply bg-[#e6f7fa] text-gray-900;
+  }
+
+  .tr-hover {
+    @apply hover:bg-[#f5f5f5] transition;
+  }
+
+  /* Szűrő gombok (kategória/családtag) */
+  .filter-btn {
+    @apply px-4 py-2 rounded-full border border-gray-300 bg-white text-gray-600 hover:bg-[#e6f7fa] transition;
+  }
+
+  .filter-btn-selected {
+    @apply border-none bg-gradient-to-r from-familybudget-teal to-familybudget-green text-white;
+  }
+
+  /* Plusz gomb (kék kör, lebegő) */
+  .btn-fab {
+    @apply fixed bottom-8 left-8 bg-familybudget-teal text-white w-14 h-14 flex items-center justify-center rounded-full shadow-lg text-3xl hover:bg-familybudget-green transition;
+  }
+}

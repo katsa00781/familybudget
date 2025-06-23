@@ -1,0 +1,287 @@
+/* Egyéni Tailwind osztályok és komponens-struktúra a FamilyBudget UI-hoz */
+
+/* Fő színátmenetes háttér */
+.bg-gradient-main {
+  background: linear-gradient(to bottom right, #2044b2, #35e094);
+}
+
+/* Fehér, kerekített kártya */
+.card {
+  background-color: white;
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  padding: 1.5rem;
+}
+
+/* Regisztrációs/input form doboz */
+.form-box {
+  background-color: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Input mező (ikonos, border szín: #1cc8e3) */
+.input-main {
+  background-color: white;
+  border: 2px solid #1cc8e3;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.input-main:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(28, 200, 227, 0.3);
+}
+
+.input-main::placeholder {
+  color: #9ca3af;
+}
+
+/* Input mező (ikon) */
+.input-icon {
+  color: #1cc8e3;
+  margin-right: 0.5rem;
+}
+
+/* Nagy, színes gomb (zöld színátmenet, fehér szöveg) */
+.btn-gradient {
+  width: 100%;
+  padding: 0.75rem 0;
+  border-radius: 0.75rem;
+  color: white;
+  font-weight: 700;
+  font-size: 1.125rem;
+  background: linear-gradient(to right, #1cc8e3, #35e094);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.btn-gradient:hover {
+  background: linear-gradient(to right, #35e094, #1cc8e3);
+}
+
+/* Link, aktív: zöld (#35e094) */
+.link-active {
+  color: #35e094;
+  font-weight: 600;
+}
+
+.link-active:hover {
+  text-decoration: underline;
+}
+
+/* Menü, topbar, logó */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 4rem;
+  padding: 0 2rem;
+  background-color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2044b2;
+}
+
+.nav-link {
+  color: #6b7280;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+}
+
+.nav-link:hover {
+  color: #2044b2;
+}
+
+/* Oldalsó menü (sidebar) */
+.sidebar {
+  background-color: white;
+  height: 100%;
+  width: 14rem;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 1rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+}
+
+.sidebar-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #2044b2;
+  margin-bottom: 1rem;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sidebar-link:hover {
+  background-color: #e6f7fa;
+}
+
+.sidebar-link-active {
+  background-color: #e6f7fa;
+  color: #1cc8e3;
+  font-weight: 700;
+}
+
+/* Kategória badge (szín: élelmiszer=zöld, rezsi=kék, közlekedés=sárga, szórakozás=lila) */
+.badge-food {
+  background-color: rgba(0, 224, 145, 0.2);
+  color: #00e091;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.badge-bill {
+  background-color: rgba(28, 200, 227, 0.2);
+  color: #1cc8e3;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.badge-transport {
+  background-color: rgba(255, 199, 0, 0.2);
+  color: #ffc700;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.badge-entertainment {
+  background-color: rgba(160, 118, 242, 0.2);
+  color: #a076f2;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+/* Dashboard összeg dobozok (nagy, árnyék, színes szöveg) */
+.dashboard-amount-box {
+  background-color: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.amount-income {
+  color: #27cb74;
+  font-weight: 700;
+  font-size: 1.5rem;
+}
+
+.amount-expense {
+  color: #f26d6d;
+  font-weight: 700;
+  font-size: 1.5rem;
+}
+
+.amount-balance {
+  color: #1cc8e3;
+  font-weight: 700;
+  font-size: 1.5rem;
+}
+
+/* Kereső input */
+.input-search {
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+}
+
+.input-search:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(28, 200, 227, 0.3);
+}
+
+/* Táblázat */
+.table-main {
+  width: 100%;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.thead-main {
+  background-color: #e6f7fa;
+  color: #111827;
+}
+
+.tr-hover:hover {
+  background-color: #f5f5f5;
+  transition: all 0.2s ease;
+}
+
+/* Szűrő gombok (kategória/családtag) */
+.filter-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  border: 1px solid #d1d5db;
+  background-color: white;
+  color: #4b5563;
+  transition: all 0.2s ease;
+}
+
+.filter-btn:hover {
+  background-color: #e6f7fa;
+}
+
+.filter-btn-selected {
+  border: none;
+  background: linear-gradient(to right, #1cc8e3, #35e094);
+  color: white;
+}
+
+/* Plusz gomb (kék kör, lebegő) */
+.btn-fab {
+  position: fixed;
+  bottom: 2rem;
+  left: 2rem;
+  background-color: #1cc8e3;
+  color: white;
+  width: 3.5rem;
+  height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+  font-size: 1.875rem;
+  transition: all 0.3s ease;
+}
+
+.btn-fab:hover {
+  background-color: #35e094;
+}

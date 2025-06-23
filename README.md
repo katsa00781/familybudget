@@ -35,7 +35,7 @@ Egyszerű családi költségvetés kezelő alkalmazás Next.js-szel, shadcn UI k
    npm run dev
    ```
 
-5. Nyisd meg a böngészőt a [http://localhost:3000](http://localhost:3000) címen.
+5. Nyisd meg a böngészőt a [http://localhost:3000](http://localhost:3000) címen, ahol a dashboard oldal fogad.
 
 ## Funkciók
 

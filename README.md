@@ -15,8 +15,8 @@ Egyszerű családi költségvetés kezelő alkalmazás Next.js-szel, shadcn UI k
 
 1. Klónozd le a projektet:
    ```bash
-   git clone https://yourgitrepo.com/csaladi-koltsegvetes.git
-   cd csaladi-koltsegvetes
+   git clone https://github.com/katsa00781/familybudget.git
+   cd familybudget
    ```
 
 2. Telepítsd a függőségeket:

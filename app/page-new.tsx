@@ -1,5 +1,5 @@
-import ProtectedRoute from "@/src/components/protected-route";
-import Dashboard from "@/src/components/dashboard";
+import ProtectedRoute from "@/components/protected-route";
+import Dashboard from "@/components/dashboard";
 
 export default function Home() {
   return (

@@ -2,286 +2,402 @@
 
 import { Button } from "@/src/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/src/components/ui/card";
+import { Badge } from "@/src/components/ui/badge";
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
+  PieChart, Pie, Cell
 } from 'recharts';
 import { 
-  ShoppingCart, Home as HomeIcon, Car, Film, Package, Plus, BarChart2, Settings, CreditCard,
-  Wallet, CalendarDays
+  ShoppingCart, Home as HomeIcon, Car, Package, Plus, BarChart2, Settings, CreditCard,
+  Wallet, Bell, TrendingUp, TrendingDown, Users, Zap,
+  ChevronDown, CircleDollarSign, ChefHat, TrendingUpIcon
 } from 'lucide-react';
 
 export default function Dashboard() {
   // Minta adatok a havi trendhez
   const monthlyData = [
-    { name: '5', bevétel: 15000, kiadás: 12000 },
-    { name: '10', bevétel: 20000, kiadás: 18000 },
-    { name: '15', bevétel: 30000, kiadás: 25000 },
-    { name: '20', bevétel: 40000, kiadás: 30000 },
-    { name: '25', bevétel: 50000, kiadás: 45000 },
-    { name: '30', bevétel: 60000, kiadás: 52000 }
+    { name: '5', Bevételek: 15000, Kiadások: 12000 },
+    { name: '10', Bevételek: 20000, Kiadások: 15000 },
+    { name: '15', Bevételek: 30000, Kiadások: 22000 },
+    { name: '20', Bevételek: 40000, Kiadások: 28000 },
+    { name: '25', Bevételek: 50000, Kiadások: 35000 },
+    { name: '30', Bevételek: 60000, Kiadások: 45000 }
   ];
 
-  // Minta adatok a kategóriák kördiagramjához
+  // Kategóriák kördiagramjához
   const categoryData = [
-    { name: 'Élelmiszer', value: 45000, color: '#0084C7' },
-    { name: 'Lakhatás', value: 120000, color: '#00B4DB' },
-    { name: 'Közlekedés', value: 25000, color: '#00C9A7' },
-    { name: 'Szórakozás', value: 15000, color: '#C1E1C5' },
-    { name: 'Egyéb', value: 10000, color: '#F0F8FF' }
+    { name: 'Lakhatás', value: 31, color: '#1fb6ff' },
+    { name: 'Élelmiszer', value: 25, color: '#00d4aa' },
+    { name: 'Közlekedés', value: 16, color: '#ff9500' },
+    { name: 'Szórakozás', value: 13, color: '#a855f7' },
+    { name: 'Egyéb', value: 15, color: '#f43f5e' }
   ];
 
-  // Minta tranzakciók
-  const recentTransactions = [
-    { icon: <ShoppingCart size={16} />, name: 'Tesco', date: '2023.11.28', category: 'Élelmiszer', amount: -12500 },
-    { icon: <HomeIcon size={16} />, name: 'Lakbér', date: '2023.11.27', category: 'Lakhatás', amount: -120000 },
-    { icon: <Car size={16} />, name: 'Benzin', date: '2023.11.26', category: 'Közlekedés', amount: -15000 },
-    { icon: <Film size={16} />, name: 'Mozi', date: '2023.11.25', category: 'Szórakozás', amount: -4500 },
-    { icon: <CreditCard size={16} />, name: 'Fizetés', date: '2023.11.24', category: 'Bevétel', amount: 475000 },
+  // Havi összesítés adatok
+  const monthlySummaryData = [
+    { category: 'Bevételek', amount: 475000, color: 'bg-green-100', textColor: 'text-green-600' },
+    { category: 'Kiadások', amount: 152000, color: 'bg-red-100', textColor: 'text-red-600' }
+  ];
+
+  // Kategória szerinti bontás
+  const categoryBreakdown = [
+    { name: 'Lakhatás', amount: 120000, percentage: '9.6%', icon: <HomeIcon size={16} /> },
+    { name: 'Közlekedés', amount: 15000, percentage: '9.6%', icon: <Car size={16} /> },
+    { name: 'Élelmiszer', amount: 12500, percentage: '6.2%', icon: <ShoppingCart size={16} /> }
   ];
 
   // Közelgő számlák
   const upcomingBills = [
-    { icon: <HomeIcon size={16} />, name: 'Lakbér', dueDate: '2023.12.05', amount: 120000 },
-    { icon: <Package size={16} />, name: 'Internet', dueDate: '2023.12.10', amount: 8500 },
+    { name: 'Lakbér', amount: 120000, date: '2023.12.01', icon: <HomeIcon size={16} /> },
+    { name: 'Internet', amount: 8500, date: '2023.12.10', icon: <Zap size={16} /> }
   ];
 
-  // Gyors műveletek
-  const quickActions = [
-    { icon: <Plus size={18} />, name: 'Új tranzakció', color: 'bg-familybudget-teal' },
-    { icon: <Wallet size={18} />, name: 'Új számla', color: 'bg-familybudget-blue' },
-    { icon: <BarChart2 size={18} />, name: 'Jelentések', color: 'bg-familybudget-green' },
-    { icon: <Settings size={18} />, name: 'Beállítások', color: 'bg-gray-700' }
+  const sidebarMenuItems = [
+    { icon: <BarChart2 size={20} />, label: 'Áttekintés', active: true, href: '/attekintes' },
+    { icon: <CircleDollarSign size={20} />, label: 'Bérkalkulátor', href: '/berkalkulator' },
+    { icon: <ChefHat size={20} />, label: 'Receptek', href: '/receptek' },
+    { icon: <ShoppingCart size={20} />, label: 'Bevásárlás', href: '/bevasarlas' },
+    { icon: <Package size={20} />, label: 'Tervezés', href: '/tervezes' },
+    { icon: <TrendingUpIcon size={20} />, label: 'Befektetések', href: '/befektetesek' },
+    { icon: <BarChart2 size={20} />, label: 'Jelentések', href: '/jelentesek' },
+    { icon: <CreditCard size={20} />, label: 'Számlák', href: '/szamlak' }
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 p-6">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Sidebar */}
+      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+        <div className="p-6">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-familybudget-teal rounded-lg flex items-center justify-center">
-              <Wallet className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-lg flex items-center justify-center">
+              <Users className="w-5 h-5 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-familybudget-blue">FamilyBudget</h1>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <CalendarDays size={16} />
-            <span>November 2023</span>
+            <span className="text-sm font-medium text-gray-900">Kovács család</span>
           </div>
         </div>
-      </header>
+        
+        <div className="px-6 mb-6">
+          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+            <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-full flex items-center justify-center">
+              <span className="text-white text-sm font-medium">J</span>
+            </div>
+            <div className="text-sm">
+              <div className="font-medium text-gray-900">János</div>
+              <div className="text-gray-500">Tulajdonos</div>
+            </div>
+          </div>
+        </div>
+
+        <nav className="flex-1 px-3">
+          {sidebarMenuItems.map((item, index) => (
+            <a
+              key={index}
+              href={item.href || "#"}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium mb-1 transition-colors ${
+                item.active 
+                  ? 'bg-cyan-50 text-cyan-700 border-r-2 border-cyan-500' 
+                  : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {item.icon}
+              {item.label}
+            </a>
+          ))}
+        </nav>
+      </aside>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto p-6 space-y-6">
-        {/* Összesítő kártyák */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-familybudget-blue to-familybudget-teal text-white">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-blue-100 text-sm">Egyenleg</p>
-                  <p className="text-2xl font-bold">385,000 Ft</p>
-                </div>
-                <Wallet className="w-8 h-8 text-blue-200" />
-              </div>
-            </CardContent>
-          </Card>
+      <main className="flex-1 overflow-auto">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Szia, János!</h1>
+              <p className="text-gray-600">A családod pénzügyi rendjében vannak</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <Button variant="outline" size="icon">
+                <Bell size={20} />
+              </Button>
+              <Button variant="outline" size="icon">
+                <Settings size={20} />
+              </Button>
+            </div>
+          </div>
+        </header>
 
-          <Card className="border-0 shadow-lg">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Havi bevétel</p>
-                  <p className="text-2xl font-bold text-familybudget-green">475,000 Ft</p>
+        <div className="p-6 space-y-6">
+          {/* Összesítő kártyák */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="bg-white border-0 shadow-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-sm">Összes bevétel</p>
+                    <p className="text-2xl font-bold text-gray-900">475 000 Ft</p>
+                  </div>
+                  <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
+                    <TrendingUp className="w-6 h-6 text-blue-600" />
+                  </div>
                 </div>
-                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                  <span className="text-green-600 text-lg">↗</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card className="border-0 shadow-lg">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Havi kiadás</p>
-                  <p className="text-2xl font-bold text-red-600">215,000 Ft</p>
+            <Card className="bg-white border-0 shadow-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-sm">Összes kiadás</p>
+                    <p className="text-2xl font-bold text-gray-900">382 650 Ft</p>
+                  </div>
+                  <div className="w-12 h-12 bg-red-50 rounded-lg flex items-center justify-center">
+                    <TrendingDown className="w-6 h-6 text-red-600" />
+                  </div>
                 </div>
-                <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
-                  <span className="text-red-600 text-lg">↘</span>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white border-0 shadow-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-600 text-sm">Egyenleg</p>
+                    <p className="text-2xl font-bold text-gray-900">92 350 Ft</p>
+                  </div>
+                  <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
+                    <Wallet className="w-6 h-6 text-green-600" />
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
 
-          <Card className="border-0 shadow-lg">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Megtakarítás</p>
-                  <p className="text-2xl font-bold text-familybudget-blue">260,000 Ft</p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Havi trend */}
+            <Card className="bg-white border-0 shadow-sm">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg font-semibold text-gray-900">Havi trend</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={monthlyData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="name" stroke="#64748b" fontSize={12} />
+                      <YAxis stroke="#64748b" fontSize={12} />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'white', 
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                        }} 
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="Bevételek" 
+                        stroke="#10b981" 
+                        strokeWidth={2}
+                        dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="Kiadások" 
+                        stroke="#f59e0b" 
+                        strokeWidth={2}
+                        dot={{ fill: '#f59e0b', strokeWidth: 2, r: 4 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
-                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <span className="text-blue-600 text-lg">💰</span>
+              </CardContent>
+            </Card>
+
+            {/* Gyors műveletek */}
+            <Card className="bg-white border-0 shadow-sm">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg font-semibold text-gray-900">Gyors műveletek</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <Button className="h-20 flex flex-col gap-2 bg-cyan-500 hover:bg-cyan-600">
+                    <Plus size={20} />
+                    <span className="text-sm">Új bevétel</span>
+                  </Button>
+                  <Button className="h-20 flex flex-col gap-2 bg-orange-500 hover:bg-orange-600">
+                    <TrendingDown size={20} />
+                    <span className="text-sm">Új kiadás</span>
+                  </Button>
+                  <Button className="h-20 flex flex-col gap-2 bg-purple-500 hover:bg-purple-600">
+                    <BarChart2 size={20} />
+                    <span className="text-sm">Havi jelentés</span>
+                  </Button>
+                  <Button className="h-20 flex flex-col gap-2 bg-green-500 hover:bg-green-600">
+                    <Wallet size={20} />
+                    <span className="text-sm">Költségvetés</span>
+                  </Button>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+          </div>
 
-        {/* Diagramok */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Havi trend */}
-          <Card className="border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold text-familybudget-blue">Havi trend</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthlyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="name" stroke="#666" />
-                    <YAxis stroke="#666" />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'white', 
-                        border: '1px solid #e0e0e0',
-                        borderRadius: '8px'
-                      }} 
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="bevétel" 
-                      stroke="#00C9A7" 
-                      strokeWidth={3}
-                      dot={{ fill: '#00C9A7', strokeWidth: 2, r: 4 }}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="kiadás" 
-                      stroke="#FF6B6B" 
-                      strokeWidth={3}
-                      dot={{ fill: '#FF6B6B', strokeWidth: 2, r: 4 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Kategória összefoglaló */}
+            <Card className="bg-white border-0 shadow-sm">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg font-semibold text-gray-900">Kategória összefoglaló</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64 mb-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={categoryData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={40}
+                        outerRadius={80}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {categoryData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value) => [`${value}%`, 'Arány']}
+                        contentStyle={{ 
+                          backgroundColor: 'white', 
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '8px'
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="space-y-2">
+                  {categoryData.map((category, index) => (
+                    <div key={index} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full`} style={{ backgroundColor: category.color }}></div>
+                        <span className="text-gray-700">{category.name}</span>
+                      </div>
+                      <span className="font-medium text-gray-900">{category.value}%</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    <strong>Kategória elemzés</strong><br />
+                    A lakhatási költségek teszik ki a legnagyobb részt (31%). 
+                    Érdemes lehet megfontolni a közlekedési kiadások csökkentését (16%).
+                    Az élelmiszerekre költött összeg optimális szinten van (25%-ot jelent).
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* Kategóriák megoszlása */}
-          <Card className="border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold text-familybudget-blue">Kiadások kategóriái</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={categoryData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={110}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {categoryData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value) => [`${value.toLocaleString()} Ft`, 'Összeg']}
-                      contentStyle={{ 
-                        backgroundColor: 'white', 
-                        border: '1px solid #e0e0e0',
-                        borderRadius: '8px'
-                      }}
-                    />
-                    <Legend 
-                      verticalAlign="bottom" 
-                      height={36}
-                      iconType="circle"
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            {/* Havi összesítés */}
+            <Card className="bg-white border-0 shadow-sm">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg font-semibold text-gray-900">Havi összesítés</CardTitle>
+                  <Badge variant="outline" className="text-xs">
+                    2023 November <ChevronDown size={12} className="ml-1" />
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {monthlySummaryData.map((item, index) => (
+                  <div key={index} className={`p-4 rounded-lg ${item.color}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">{item.category}</span>
+                      <span className={`text-lg font-bold ${item.textColor}`}>
+                        {item.amount.toLocaleString()} Ft
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">Egyenleg</span>
+                    <span className="text-lg font-bold text-blue-600">
+                      +323 000 Ft
+                    </span>
+                  </div>
+                </div>
 
-        {/* Alsó rész - 3 oszlop */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Legutóbbi tranzakciók */}
-          <Card className="border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold text-familybudget-blue">Legutóbbi tranzakciók</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {recentTransactions.map((transaction, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
-                      {transaction.icon}
+                <div className="space-y-3 mt-6">
+                  <h4 className="text-sm font-medium text-gray-900">Havi áttekintés</h4>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <div className="text-xs text-gray-500">Bevétel</div>
+                      <div className="text-sm font-medium text-gray-900">Havonta</div>
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">{transaction.name}</p>
-                      <p className="text-sm text-gray-500">{transaction.date} • {transaction.category}</p>
-                    </div>
-                  </div>
-                  <span className={`font-semibold ${transaction.amount > 0 ? 'text-familybudget-green' : 'text-red-600'}`}>
-                    {transaction.amount > 0 ? '+' : ''}{transaction.amount.toLocaleString()} Ft
-                  </span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          {/* Közelgő számlák */}
-          <Card className="border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold text-familybudget-blue">Közelgő számlák</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {upcomingBills.map((bill, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
-                      {bill.icon}
+                      <div className="text-xs text-gray-500">Kiadás</div>
+                      <div className="text-sm font-medium text-gray-900">Havonta</div>
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">{bill.name}</p>
-                      <p className="text-sm text-yellow-700">Esedékes: {bill.dueDate}</p>
+                      <div className="text-xs text-gray-500">Bevételek</div>
+                      <div className="text-sm font-medium text-gray-900">Összesen</div>
                     </div>
                   </div>
-                  <span className="font-semibold text-red-600">
-                    {bill.amount.toLocaleString()} Ft
-                  </span>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          {/* Gyors műveletek */}
-          <Card className="border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold text-familybudget-blue">Gyors műveletek</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {quickActions.map((action, index) => (
-                <Button key={index} variant="outline" className="w-full justify-start gap-3 h-12">
-                  <div className={`w-8 h-8 ${action.color} rounded-lg flex items-center justify-center text-white`}>
-                    {action.icon}
+            {/* Kategória szerinti bontás */}
+            <Card className="bg-white border-0 shadow-sm">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg font-semibold text-gray-900">Kategória szerinti bontás</CardTitle>
+                  <Badge className="bg-cyan-500 text-white text-xs">Kiadások</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {categoryBreakdown.map((category, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
+                        {category.icon}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{category.name}</p>
+                        <p className="text-xs text-gray-500">{category.percentage}</p>
+                      </div>
+                    </div>
+                    <span className="font-semibold text-gray-900">
+                      {category.amount.toLocaleString()} Ft
+                    </span>
                   </div>
-                  {action.name}
-                </Button>
-              ))}
-            </CardContent>
-          </Card>
+                ))}
+                
+                <div className="pt-4 space-y-3">
+                  <h4 className="text-sm font-medium text-gray-900">Közelgő számlák</h4>
+                  {upcomingBills.map((bill, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
+                          {bill.icon}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{bill.name}</p>
+                          <p className="text-xs text-yellow-700">{bill.date}</p>
+                        </div>
+                      </div>
+                      <span className="font-semibold text-red-600">
+                        {bill.amount.toLocaleString()} Ft
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </main>
     </div>

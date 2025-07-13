@@ -40,14 +40,11 @@ const MainNav = () => {
                 <Link href="/koltsegvetes" className="text-lg hover:text-blue-600 transition-colors">
                   Költségvetés
                 </Link>
-                <Link href="/tervezes" className="text-lg hover:text-blue-600 transition-colors">
-                  Tervezés
+                <Link href="/bevetelek" className="text-lg hover:text-blue-600 transition-colors">
+                  Bevételek
                 </Link>
                 <Link href="/bevasarlas" className="text-lg hover:text-blue-600 transition-colors">
                   Bevásárlás
-                </Link>
-                <Link href="/szamlak" className="text-lg hover:text-blue-600 transition-colors">
-                  Számlák
                 </Link>
                 <Link href="/befektetesek" className="text-lg hover:text-blue-600 transition-colors">
                   Befektetések

@@ -33,7 +33,22 @@ interface SavedBudget {
   user_id: string
   budget_data: BudgetItem[]
   total_amount: number
+  name?: string
+  description?: string
   created_at: string
+  updated_at?: string
+}
+
+interface IncomePlan {
+  id: string
+  user_id: string
+  name: string
+  description?: string
+  monthly_income: number
+  additional_incomes: { id: string; name: string; amount: number }[]
+  total_income: number
+  created_at: string
+  updated_at?: string
 }
 
 interface User {
@@ -137,6 +152,12 @@ export default function KoltsegvetesPage() {
   const [savedBudgets, setSavedBudgets] = useState<SavedBudget[]>([])
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [budgetName, setBudgetName] = useState('')
+  const [budgetDescription, setBudgetDescription] = useState('')
+  const [selectedBudgetId, setSelectedBudgetId] = useState<string>('')
+  const [expectedIncome, setExpectedIncome] = useState<number>(0)
+  const [incomePlans, setIncomePlans] = useState<IncomePlan[]>([])
+  const [selectedIncomeId, setSelectedIncomeId] = useState<string>('')
   const supabase = createClient()
 
   // Felhasználó betöltése
@@ -237,21 +258,58 @@ export default function KoltsegvetesPage() {
       const allItems = budgetData.flatMap(category => category.items)
       const { total } = calculateTotals()
 
-      const { error } = await supabase
-        .from('budget_plans')
-        .insert({
-          user_id: currentUser.id,
-          budget_data: allItems,
-          total_amount: total,
-          created_at: new Date().toISOString()
-        })
+      const budgetToSave = {
+        user_id: currentUser.id,
+        budget_data: allItems,
+        total_amount: total,
+        name: budgetName || `Költségvetés ${new Date().toLocaleDateString('hu-HU')}`,
+        description: budgetDescription || null
+      }
+
+      let data, error
+
+      if (selectedBudgetId) {
+        // Meglévő költségvetés frissítése
+        const updateResult = await supabase
+          .from('budget_plans')
+          .update(budgetToSave)
+          .eq('id', selectedBudgetId)
+          .select()
+        
+        data = updateResult.data
+        error = updateResult.error
+        
+        if (!error) {
+          toast.success("Költségvetés sikeresen frissítve!")
+        }
+      } else {
+        // Új költségvetés létrehozása
+        const insertResult = await supabase
+          .from('budget_plans')
+          .insert({
+            ...budgetToSave,
+            created_at: new Date().toISOString()
+          })
+          .select()
+        
+        data = insertResult.data
+        error = insertResult.error
+        
+        if (!error) {
+          toast.success("Új költségvetés sikeresen elmentve!")
+          // Ha új költségvetést mentünk, automatikusan kiválasztjuk
+          if (data && data[0]) {
+            setSelectedBudgetId(data[0].id)
+          }
+        }
+      }
 
       if (error) throw error
 
-      toast.success("Költségvetés sikeresen elmentve!")
-      
       // Frissítjük a mentett költségvetések listáját
       loadSavedBudgets()
+      
+      console.log('Saved budget:', data)
     } catch (error: unknown) {
       console.error('Error saving budget:', error)
       const errorMessage = error instanceof Error ? error.message : 'Ismeretlen hiba történt'
@@ -264,26 +322,148 @@ export default function KoltsegvetesPage() {
   // Mentett költségvetések betöltése
   const loadSavedBudgets = useCallback(async () => {
     if (!currentUser) return
-
+    
     try {
       const { data, error } = await supabase
         .from('budget_plans')
         .select('*')
         .eq('user_id', currentUser.id)
         .order('created_at', { ascending: false })
-
+      
       if (error) throw error
       setSavedBudgets(data || [])
-    } catch (error: unknown) {
-      console.error('Error loading budgets:', error)
+    } catch (error) {
+      console.error('Hiba a költségvetések betöltésekor:', error)
+      toast.error('Hiba történt a költségvetések betöltésekor!')
     }
   }, [currentUser, supabase])
 
+  // Költségvetés betöltése
+  const loadBudget = useCallback(async (budgetId: string) => {
+    if (!budgetId || budgetId === '') {
+      // Ha nincs kiválasztva költségvetés, töröljük a form adatokat
+      setBudgetName('')
+      setBudgetDescription('')
+      setSelectedBudgetId('')
+      setBudgetData(createInitialBudgetData())
+      return
+    }
+    
+    try {
+      setIsLoading(true)
+      const { data, error } = await supabase
+        .from('budget_plans')
+        .select('*')
+        .eq('id', budgetId)
+        .single()
+      
+      if (error) throw error
+      
+      if (data) {
+        // Költségvetés adatok betöltése
+        const loadedItems = data.budget_data as BudgetItem[]
+        
+        // Új költségvetés struktúra létrehozása a betöltött adatokkal
+        const newBudgetData = createInitialBudgetData()
+        
+        // Meglévő tételek törlése és újak hozzáadása
+        newBudgetData.forEach(category => {
+          category.items = []
+        })
+        
+        // Betöltött tételek kategóriák szerint csoportosítása
+        loadedItems.forEach(item => {
+          const categoryIndex = newBudgetData.findIndex(cat => cat.name === item.category)
+          if (categoryIndex !== -1) {
+            newBudgetData[categoryIndex].items.push(item)
+          }
+        })
+        
+        setBudgetData(newBudgetData)
+        setBudgetName(data.name || '')
+        setBudgetDescription(data.description || '')
+        setSelectedBudgetId(budgetId)
+        
+        toast.success(`Költségvetés betöltve: ${data.name}`)
+      }
+    } catch (error) {
+      console.error('Hiba a költségvetés betöltésekor:', error)
+      toast.error('Hiba történt a költségvetés betöltésekor!')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [supabase])
+
+  // Legutolsó költségvetés automatikus betöltése
+  const loadLatestBudget = useCallback(async () => {
+    if (!currentUser || savedBudgets.length === 0) return
+    
+    // A legutolsó mentett költségvetés kiválasztása (már created_at szerint rendezve van)
+    const latestBudget = savedBudgets[0]
+    if (latestBudget) {
+      await loadBudget(latestBudget.id)
+      toast.info(`Legutolsó költségvetés automatikusan betöltve: ${latestBudget.name}`)
+    }
+  }, [currentUser, savedBudgets, loadBudget])
+
+  // Bevételi tervek betöltése
+  const loadIncomePlans = useCallback(async () => {
+    if (!currentUser) return
+    
+    try {
+      const { data, error } = await supabase
+        .from('income_plans')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: false })
+      
+      if (error) throw error
+      setIncomePlans(data || [])
+    } catch (error) {
+      console.error('Hiba a bevételi tervek betöltésekor:', error)
+      toast.error('Hiba történt a bevételi tervek betöltésekor!')
+    }
+  }, [currentUser, supabase])
+
+  // Bevételi terv kiválasztása
+  const selectIncomePlan = useCallback((incomeId: string) => {
+    if (!incomeId || incomeId === '') {
+      setSelectedIncomeId('')
+      setExpectedIncome(0)
+      return
+    }
+    
+    const selectedPlan = incomePlans.find(plan => plan.id === incomeId)
+    if (selectedPlan) {
+      setSelectedIncomeId(incomeId)
+      setExpectedIncome(selectedPlan.total_income)
+      toast.success(`Bevételi terv betöltve: ${selectedPlan.name}`)
+    }
+  }, [incomePlans])
+
+  // Felhasználó és mentett költségvetések betöltése
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUser(user)
+    }
+    getUser()
+  }, [supabase.auth])
+
+  // Mentett költségvetések betöltése amikor a felhasználó betöltődik
   useEffect(() => {
     if (currentUser) {
       loadSavedBudgets()
+      loadIncomePlans()
     }
-  }, [currentUser, loadSavedBudgets])
+  }, [currentUser, loadSavedBudgets, loadIncomePlans])
+
+  // Legutolsó költségvetés automatikus betöltése, amikor a mentett költségvetések betöltődnek
+  useEffect(() => {
+    if (savedBudgets.length > 0 && !selectedBudgetId) {
+      loadLatestBudget()
+    }
+  }, [savedBudgets, selectedBudgetId, loadLatestBudget])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('hu-HU', {
@@ -331,6 +511,168 @@ export default function KoltsegvetesPage() {
           <p className="text-lg">
             Tervezd meg havi költségvetésedet kategóriák szerint és tartsd kézben a pénzügyeidet.
           </p>
+        </div>
+
+        {/* Mentett költségvetések betöltése és bevétel kezelése */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Mentett költségvetések */}
+          <Card className="bg-white shadow-lg border-0">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign size={20} className="text-green-600" />
+                Mentett Költségvetések
+              </CardTitle>
+              <CardDescription>
+                Töltsd be egy korábban elmentett költségvetésedet
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="saved-budgets" className="block text-sm font-medium text-gray-700 mb-2">
+                    Válassz egy költségvetést
+                  </label>
+                  <Select value={selectedBudgetId} onValueChange={(value) => loadBudget(value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Válassz egy mentett költségvetést..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {savedBudgets.map((budget) => (
+                        <SelectItem key={budget.id} value={budget.id}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{budget.name}</span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(budget.created_at).toLocaleDateString('hu-HU')} - 
+                              {budget.total_amount.toLocaleString('hu-HU')} HUF
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => loadBudget('')}
+                    variant="outline"
+                    className="flex-1 flex items-center gap-2"
+                  >
+                    <Plus size={16} />
+                    Új költségvetés
+                  </Button>
+                  {selectedBudgetId && (
+                    <div className="flex-1 text-sm text-gray-600 flex items-center">
+                      <span className="font-medium">Módosítás alatt: </span>
+                      <span className="ml-1 text-blue-600 font-semibold">
+                        {savedBudgets.find(b => b.id === selectedBudgetId)?.name}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                
+                {savedBudgets.length === 0 && (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    Még nincsenek mentett költségvetések
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tervezett bevétel és összehasonlítás */}
+          <Card className="bg-white shadow-lg border-0">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp size={20} className="text-blue-600" />
+                Bevétel vs Költségvetés
+              </CardTitle>
+              <CardDescription>
+                Hasonlítsd össze a tervezett bevételed a költségvetéseddel
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="income-plan" className="block text-sm font-medium text-gray-700 mb-2">
+                    Válassz egy bevételi tervet
+                  </label>
+                  <Select value={selectedIncomeId} onValueChange={(value) => selectIncomePlan(value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Válassz egy bevételi tervet..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {incomePlans.map((plan) => (
+                        <SelectItem key={plan.id} value={plan.id}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{plan.name}</span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(plan.created_at).toLocaleDateString('hu-HU')} - 
+                              {plan.total_income.toLocaleString('hu-HU')} HUF
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {incomePlans.length === 0 && (
+                    <p className="text-sm text-gray-500 text-center py-2">
+                      Még nincsenek mentett bevételi tervek
+                    </p>
+                  )}
+                </div>
+                
+                <div className="text-sm text-gray-600">
+                  <span className="font-medium">Jelenleg kiválasztott bevétel: </span>
+                  <span className="font-bold text-blue-600">
+                    {expectedIncome > 0 ? `${expectedIncome.toLocaleString('hu-HU')} HUF` : 'Nincs kiválasztva'}
+                  </span>
+                </div>
+                
+                {expectedIncome > 0 && (
+                  <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-600">Tervezett bevétel:</span>
+                      <span className="font-bold text-green-600">
+                        {expectedIncome.toLocaleString('hu-HU')} HUF
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-600">Összes költség:</span>
+                      <span className="font-bold text-red-600">
+                        {calculateTotals().total.toLocaleString('hu-HU')} HUF
+                      </span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-600">Különbség:</span>
+                      <span className={`font-bold ${expectedIncome - calculateTotals().total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {(expectedIncome - calculateTotals().total).toLocaleString('hu-HU')} HUF
+                      </span>
+                    </div>
+                    
+                    {expectedIncome - calculateTotals().total < 0 && (
+                      <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                        <span className="text-sm text-red-700 font-medium">
+                          Figyelem! A költségvetés meghaladja a bevételt!
+                        </span>
+                      </div>
+                    )}
+                    
+                    {expectedIncome - calculateTotals().total >= 0 && (
+                      <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span className="text-sm text-green-700 font-medium">
+                          Kiváló! A költségvetés belefér a bevételbe.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Összesítő kártyák */}
@@ -386,17 +728,56 @@ export default function KoltsegvetesPage() {
 
         {/* Mentés gomb */}
         <div className="mb-6">
-          <Button 
-            onClick={saveBudget} 
-            disabled={isLoading || !currentUser}
-            className="bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white shadow-lg px-6 py-3 flex items-center gap-2"
-          >
-            <Save size={20} />
-            {isLoading ? 'Mentés...' : 'Költségvetés Mentése'}
-          </Button>
-          {!currentUser && (
-            <p className="text-sm text-white/80 mt-2">A mentéshez be kell jelentkezned!</p>
-          )}
+          <Card className="bg-white shadow-lg border-0 mb-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Save size={20} className="text-green-600" />
+                Költségvetés Mentése
+              </CardTitle>
+              <CardDescription>
+                Add meg a költségvetés nevét és leírását a mentés előtt
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label htmlFor="budget-name" className="block text-sm font-medium text-gray-700 mb-2">
+                    Költségvetés neve
+                  </label>
+                  <Input
+                    id="budget-name"
+                    value={budgetName}
+                    onChange={(e) => setBudgetName(e.target.value)}
+                    placeholder={`Költségvetés ${new Date().toLocaleDateString('hu-HU')}`}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="budget-description" className="block text-sm font-medium text-gray-700 mb-2">
+                    Leírás (opcionális)
+                  </label>
+                  <Input
+                    id="budget-description"
+                    value={budgetDescription}
+                    onChange={(e) => setBudgetDescription(e.target.value)}
+                    placeholder="Rövid leírás a költségvetésről"
+                    className="w-full"
+                  />
+                </div>
+              </div>
+              <Button 
+                onClick={saveBudget} 
+                disabled={isLoading || !currentUser}
+                className="bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white shadow-lg px-6 py-3 flex items-center gap-2"
+              >
+                <Save size={20} />
+                {isLoading ? 'Mentés...' : selectedBudgetId ? 'Költségvetés Frissítése' : 'Új Költségvetés Mentése'}
+              </Button>
+              {!currentUser && (
+                <p className="text-sm text-gray-500 mt-2">A mentéshez be kell jelentkezned!</p>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Költségvetési táblázat */}

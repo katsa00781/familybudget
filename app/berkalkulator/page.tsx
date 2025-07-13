@@ -28,6 +28,12 @@ interface User {
   };
 }
 
+interface AdditionalIncome {
+  id: string;
+  name: string;
+  amount: number;
+}
+
 export default function BerkalkulatorPage() {
   // Állapotok
   const [users, setUsers] = useState<User[]>([]);
@@ -38,6 +44,7 @@ export default function BerkalkulatorPage() {
   const [szabadsagNapok, setSzabadsagNapok] = useState(3.03); // 24.51 / 8.1
   const [tuloraOrak, setTuloraOrak] = useState(0);
   const [unnepnapiOrak, setUnnepnapiOrak] = useState(8.17);
+  const [additionalIncomes, setAdditionalIncomes] = useState<AdditionalIncome[]>([]);
   
   // Számított értékek
   const ledolgozottOrak = ledolgozottNapok * 8.1;
@@ -339,6 +346,35 @@ export default function BerkalkulatorPage() {
     }
   };
 
+  // Egyéb jövedelmi tételek kezelése
+  const addAdditionalIncome = () => {
+    const newIncome: AdditionalIncome = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: '',
+      amount: 0
+    }
+    setAdditionalIncomes(prev => [...prev, newIncome])
+  }
+
+  const removeAdditionalIncome = (id: string) => {
+    setAdditionalIncomes(prev => prev.filter(income => income.id !== id))
+  }
+
+  const updateAdditionalIncome = (id: string, field: 'name' | 'amount', value: string | number) => {
+    setAdditionalIncomes(prev => prev.map(income => 
+      income.id === id 
+        ? { ...income, [field]: value }
+        : income
+    ))
+  }
+
+  // Teljes havi bevétel számítása (nettó bér + egyéb jövedelmek)
+  const getTotalMonthlyIncome = useCallback(() => {
+    const nettoSalary = eredmény?.netto || 0
+    const additionalTotal = additionalIncomes.reduce((sum, income) => sum + income.amount, 0)
+    return nettoSalary + additionalTotal
+  }, [eredmény, additionalIncomes])
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-6">
       <div className="max-w-6xl mx-auto">
@@ -616,6 +652,65 @@ export default function BerkalkulatorPage() {
                     <p className="text-2xl font-bold text-blue-600">
                       {formatCurrency(eredmény.netto)}
                     </p>
+                  </div>
+
+                  {/* Egyéb jövedelmi tételek */}
+                  <div className="pt-3 border-t">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-sm font-medium text-gray-700">Egyéb jövedelmek</p>
+                      <Button
+                        onClick={addAdditionalIncome}
+                        size="sm"
+                        variant="outline"
+                        className="flex items-center gap-1"
+                      >
+                        <Plus size={14} />
+                        Hozzáad
+                      </Button>
+                    </div>
+                    
+                    {additionalIncomes.length > 0 && (
+                      <div className="space-y-2 mb-3">
+                        {additionalIncomes.map((income) => (
+                          <div key={income.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                            <Input
+                              placeholder="Jövedelem neve"
+                              value={income.name}
+                              onChange={(e) => updateAdditionalIncome(income.id, 'name', e.target.value)}
+                              className="flex-1"
+                            />
+                            <Input
+                              type="number"
+                              placeholder="Összeg"
+                              value={income.amount || ''}
+                              onChange={(e) => updateAdditionalIncome(income.id, 'amount', parseInt(e.target.value) || 0)}
+                              className="w-24"
+                            />
+                            <Button
+                              onClick={() => removeAdditionalIncome(income.id)}
+                              size="sm"
+                              variant="outline"
+                              className="px-2"
+                            >
+                              ×
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {additionalIncomes.length > 0 && (
+                      <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                        <p className="text-sm font-medium text-green-800 mb-1">Teljes havi bevétel:</p>
+                        <p className="text-lg font-bold text-green-700">
+                          {formatCurrency(getTotalMonthlyIncome())}
+                        </p>
+                        <div className="text-xs text-green-600 mt-1">
+                          <div>Nettó bér: {formatCurrency(eredmény.netto)}</div>
+                          <div>Egyéb jövedelem: {formatCurrency(additionalIncomes.reduce((sum, income) => sum + income.amount, 0))}</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-3 border-t bg-orange-50 p-3 rounded-lg">

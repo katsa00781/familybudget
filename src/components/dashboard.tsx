@@ -9,7 +9,7 @@ import {
 } from 'recharts';
 import { 
   ShoppingCart, Home as HomeIcon, Car, Package, Plus, BarChart2, Settings, CreditCard,
-  Wallet, Bell, TrendingUp, TrendingDown, Users, Zap,
+  Wallet, Bell, TrendingUp, TrendingDown, Users, Zap, User,
   ChevronDown, CircleDollarSign, ChefHat, TrendingUpIcon
 } from 'lucide-react';
 
@@ -55,6 +55,7 @@ export default function Dashboard() {
   const sidebarMenuItems = [
     { icon: <BarChart2 size={20} />, label: 'Áttekintés', active: true, href: '/attekintes' },
     { icon: <CircleDollarSign size={20} />, label: 'Bérkalkulátor', href: '/berkalkulator' },
+    { icon: <User size={20} />, label: 'Profil', href: '/profil' },
     { icon: <ChefHat size={20} />, label: 'Receptek', href: '/receptek' },
     { icon: <ShoppingCart size={20} />, label: 'Bevásárlás', href: '/bevasarlas' },
     { icon: <Package size={20} />, label: 'Tervezés', href: '/tervezes' },

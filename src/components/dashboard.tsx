@@ -8,9 +8,9 @@ import {
   PieChart, Pie, Cell
 } from 'recharts';
 import { 
-  ShoppingCart, Home as HomeIcon, Car, Package, Plus, BarChart2, Settings, CreditCard,
-  Wallet, Bell, TrendingUp, TrendingDown, Users, Zap, User,
-  ChevronDown, CircleDollarSign, ChefHat, TrendingUpIcon
+  ShoppingCart, Home as HomeIcon, Car, Plus, BarChart2, Settings,
+  Wallet, Bell, TrendingUp, TrendingDown, Zap,
+  ChevronDown
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -52,63 +52,10 @@ export default function Dashboard() {
     { name: 'Internet', amount: 8500, date: '2023.12.10', icon: <Zap size={16} /> }
   ];
 
-  const sidebarMenuItems = [
-    { icon: <BarChart2 size={20} />, label: 'Áttekintés', active: true, href: '/attekintes' },
-    { icon: <CircleDollarSign size={20} />, label: 'Bérkalkulátor', href: '/berkalkulator' },
-    { icon: <User size={20} />, label: 'Profil', href: '/profil' },
-    { icon: <ChefHat size={20} />, label: 'Receptek', href: '/receptek' },
-    { icon: <ShoppingCart size={20} />, label: 'Bevásárlás', href: '/bevasarlas' },
-    { icon: <Package size={20} />, label: 'Tervezés', href: '/tervezes' },
-    { icon: <TrendingUpIcon size={20} />, label: 'Befektetések', href: '/befektetesek' },
-    { icon: <BarChart2 size={20} />, label: 'Jelentések', href: '/jelentesek' },
-    { icon: <CreditCard size={20} />, label: 'Számlák', href: '/szamlak' }
-  ];
-
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-lg flex items-center justify-center">
-              <Users className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-sm font-medium text-gray-900">Kovács család</span>
-          </div>
-        </div>
-        
-        <div className="px-6 mb-6">
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-medium">J</span>
-            </div>
-            <div className="text-sm">
-              <div className="font-medium text-gray-900">János</div>
-              <div className="text-gray-500">Tulajdonos</div>
-            </div>
-          </div>
-        </div>
-
-        <nav className="flex-1 px-3">
-          {sidebarMenuItems.map((item, index) => (
-            <a
-              key={index}
-              href={item.href || "#"}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium mb-1 transition-colors ${
-                item.active 
-                  ? 'bg-cyan-50 text-cyan-700 border-r-2 border-cyan-500' 
-                  : 'text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </a>
-          ))}
-        </nav>
-      </aside>
-
+    <div className="min-h-screen bg-gray-50">
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
+      <main className="w-full">
         {/* Header */}
         <header className="bg-white border-b border-gray-200 p-6">
           <div className="flex items-center justify-between">

@@ -10,61 +10,73 @@ import { Menu } from "lucide-react";
 const MainNav = () => {
   return (
     <div className="flex items-center justify-between p-4 border-b">
-      <div className="flex items-center gap-6">
-        <Link href="/" className="text-xl font-bold">
-          Családi Költségvetés
-        </Link>
+      {/* Logo */}
+      <Link href="/" className="text-xl font-bold">
+        Családi Költségvetés
+      </Link>
 
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex gap-6">
-          <Link href="/dashboard" className="hover:underline">
-            Áttekintés
-          </Link>
-          <Link href="/expenses" className="hover:underline">
-            Kiadások
-          </Link>
-          <Link href="/income" className="hover:underline">
-            Bevételek
-          </Link>
-          <Link href="/budgets" className="hover:underline">
-            Költségvetések
-          </Link>
-          <Link href="/settings" className="hover:underline">
-            Beállítások
-          </Link>
-        </nav>
-      </div>
+      {/* Csak Sidebar Navigation */}
+      <div className="flex items-center gap-3">
+        {/* Hamburger menü */}
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <Menu className="h-5 w-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right" className="w-[300px]">
+            <div className="flex flex-col gap-6 mt-8">
+              <div className="text-lg font-semibold border-b pb-2">
+                Navigáció
+              </div>
+              
+              <div className="flex flex-col gap-4">
+                <Link href="/attekintes" className="text-lg hover:text-blue-600 transition-colors">
+                  Áttekintés
+                </Link>
+                <Link href="/berkalkulator" className="text-lg hover:text-blue-600 transition-colors">
+                  Bérkalkulátor
+                </Link>
+                <Link href="/koltsegvetes" className="text-lg hover:text-blue-600 transition-colors">
+                  Költségvetés
+                </Link>
+                <Link href="/tervezes" className="text-lg hover:text-blue-600 transition-colors">
+                  Tervezés
+                </Link>
+                <Link href="/bevasarlas" className="text-lg hover:text-blue-600 transition-colors">
+                  Bevásárlás
+                </Link>
+                <Link href="/szamlak" className="text-lg hover:text-blue-600 transition-colors">
+                  Számlák
+                </Link>
+                <Link href="/befektetesek" className="text-lg hover:text-blue-600 transition-colors">
+                  Befektetések
+                </Link>
+                <Link href="/jelentesek" className="text-lg hover:text-blue-600 transition-colors">
+                  Jelentések
+                </Link>
+                <Link href="/receptek" className="text-lg hover:text-blue-600 transition-colors">
+                  Receptek
+                </Link>
+                <Link href="/profil" className="text-lg hover:text-blue-600 transition-colors">
+                  Profil
+                </Link>
+              </div>
 
-      {/* Mobile Navigation */}
-      <Sheet>
-        <SheetTrigger asChild className="md:hidden">
-          <Button variant="ghost" size="icon">
-            <Menu className="h-5 w-5" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left">
-          <div className="flex flex-col gap-4 mt-8">
-            <Link href="/dashboard" className="text-lg">
-              Áttekintés
-            </Link>
-            <Link href="/expenses" className="text-lg">
-              Kiadások
-            </Link>
-            <Link href="/income" className="text-lg">
-              Bevételek
-            </Link>
-            <Link href="/budgets" className="text-lg">
-              Költségvetések
-            </Link>
-            <Link href="/settings" className="text-lg">
-              Beállítások
-            </Link>
-          </div>
-        </SheetContent>
-      </Sheet>
-      
-      <div className="flex items-center gap-2">
-        <Button variant="outline">Bejelentkezés</Button>
+              {/* Auth linkek */}
+              <div className="border-t pt-4 mt-4">
+                <div className="flex flex-col gap-3">
+                  <Link href="/login" className="text-sm text-gray-600 hover:text-blue-600 transition-colors">
+                    Bejelentkezés
+                  </Link>
+                  <Link href="/register" className="text-sm text-gray-600 hover:text-blue-600 transition-colors">
+                    Regisztráció
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     </div>
   );

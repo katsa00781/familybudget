@@ -8,7 +8,6 @@ import { Label } from "@/src/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/src/components/ui/select";
 import { Calculator, Clock, Plus, TrendingUp, Info } from 'lucide-react';
 import { createClient } from "@/src/lib/utils/supabase/client";
-import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 interface SavedCalculation {
   id: string;

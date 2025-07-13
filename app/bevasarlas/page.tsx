@@ -26,6 +26,17 @@ import {
   SelectValue,
 } from '@/src/components/ui/select'
 
+interface Product {
+  id: string
+  name: string
+  brand?: string
+  category: string
+  store_name?: string
+  price?: number
+  unit: string
+  barcode?: string
+}
+
 interface ShoppingItem {
   id: string
   name: string
@@ -75,6 +86,8 @@ export default function BevasarlasPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('')
   const [selectedUnit, setSelectedUnit] = useState<string>('')
+  const [productSuggestions, setProductSuggestions] = useState<Product[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
   const supabase = createClient()
 
   // Felhasználó betöltése
@@ -112,26 +125,80 @@ export default function BevasarlasPage() {
     }
   }, [currentUser, loadSavedLists])
 
-  // Új tétel hozzáadása
-  const addItem = () => {
-    if (!searchTerm.trim()) {
-      toast.error('Add meg a termék nevét!')
+  // Termékkeresés
+  const searchProducts = useCallback(async (searchText: string) => {
+    if (!currentUser || searchText.length < 2) {
+      setProductSuggestions([])
+      setShowSuggestions(false)
       return
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .or(`name.ilike.%${searchText}%,brand.ilike.%${searchText}%,barcode.ilike.%${searchText}%`)
+        .limit(5)
+
+      if (error) throw error
+      setProductSuggestions(data || [])
+      setShowSuggestions(true)
+    } catch (error) {
+      console.error('Hiba a termékkereséskor:', error)
+      setProductSuggestions([])
+      setShowSuggestions(false)
+    }
+  }, [currentUser, supabase])
+
+  // Keresőmező változás
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      searchProducts(searchTerm)
+    }, 300)
+
+    return () => clearTimeout(debounceTimer)
+  }, [searchTerm, searchProducts])
+
+  // Új tétel hozzáadása
+  const addItem = (product?: Product) => {
+    let itemData: Partial<ShoppingItem>
+
+    if (product) {
+      // Termékből hozzáadás
+      itemData = {
+        name: product.brand ? `${product.brand} ${product.name}` : product.name,
+        quantity: 1,
+        unit: product.unit,
+        category: product.category,
+        price: product.price,
+        checked: false
+      }
+    } else {
+      // Manuális hozzáadás
+      if (!searchTerm.trim()) {
+        toast.error('Add meg a termék nevét!')
+        return
+      }
+      itemData = {
+        name: searchTerm.trim(),
+        quantity: 1,
+        unit: selectedUnit || 'db',
+        category: selectedCategory || 'Egyéb',
+        checked: false
+      }
     }
 
     const newItem: ShoppingItem = {
       id: generateId(),
-      name: searchTerm.trim(),
-      quantity: 1,
-      unit: selectedUnit || 'db',
-      category: selectedCategory || 'Egyéb',
-      checked: false
-    }
+      ...itemData
+    } as ShoppingItem
 
     setCurrentItems(prev => [...prev, newItem])
     setSearchTerm('')
     setSelectedUnit('')
     setSelectedCategory('')
+    setShowSuggestions(false)
   }
 
   // Tétel eltávolítása
@@ -498,10 +565,56 @@ export default function BevasarlasPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button onClick={addItem} className="bg-cyan-500 hover:bg-cyan-600">
+                  <Button onClick={() => addItem()} className="bg-cyan-500 hover:bg-cyan-600">
                     <Plus size={16} />
                   </Button>
                 </div>
+
+                {/* Termék javaslatok */}
+                {showSuggestions && productSuggestions.length > 0 && (
+                  <div className="mb-4 bg-white border rounded-lg shadow-sm">
+                    <div className="p-3 border-b">
+                      <h4 className="text-sm font-medium text-gray-700">Termék javaslatok az adatbázisból:</h4>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto">
+                      {productSuggestions.map((product) => (
+                        <div 
+                          key={product.id} 
+                          className="flex items-center justify-between p-3 hover:bg-gray-50 border-b last:border-b-0 cursor-pointer"
+                          onClick={() => addItem(product)}
+                        >
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-900">
+                              {product.brand ? `${product.brand} ${product.name}` : product.name}
+                            </div>
+                            <div className="text-sm text-gray-500 flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs">{product.category}</Badge>
+                              {product.store_name && (
+                                <span className="text-xs">• {product.store_name}</span>
+                              )}
+                              {product.price && (
+                                <span className="text-xs">• {formatCurrency(product.price)}/{product.unit}</span>
+                              )}
+                            </div>
+                          </div>
+                          <Button size="sm" variant="ghost" className="text-green-600">
+                            <Plus size={16} />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="p-2 border-t bg-gray-50">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setShowSuggestions(false)}
+                        className="w-full text-xs text-gray-500"
+                      >
+                        Javaslatok elrejtése
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Tételek listája */}
                 <div className="space-y-2 mb-6">

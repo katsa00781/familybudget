@@ -1,3 +1,4 @@
+-- database: :memory:
 -- POLICY HIBÁK JAVÍTÁSA
 -- Futtasd ezt le a Supabase SQL Editor-ban
 

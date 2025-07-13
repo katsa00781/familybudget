@@ -1,3 +1,4 @@
+-- database: :memory:
 -- Migration: Create budget_plans table
 -- Futtasd ezt le a Supabase SQL Editor-ban
 

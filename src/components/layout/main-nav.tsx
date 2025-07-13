@@ -46,6 +46,9 @@ const MainNav = () => {
                 <Link href="/bevasarlas" className="text-lg hover:text-blue-600 transition-colors">
                   Bevásárlás
                 </Link>
+                <Link href="/termekek" className="text-lg hover:text-blue-600 transition-colors">
+                  Termékek
+                </Link>
                 <Link href="/befektetesek" className="text-lg hover:text-blue-600 transition-colors">
                   Befektetések
                 </Link>

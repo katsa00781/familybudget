@@ -43,5 +43,53 @@ Egyszerű családi költségvetés kezelő alkalmazás Next.js-szel, shadcn UI k
 - 💸 **Kiadások kezelése** - Kiadások követése és kategorizálása
 - 💰 **Bevételek kezelése** - Bevételek rögzítése és nyomon követése
 - 📋 **Költségvetési tervek** - Havi vagy éves költségvetések készítése és nyomon követése
-- 📱 **Reszponzív dizájn** - Minden eszközön jól használható felület
+- � **Bevásárlólista** - Intelligens bevásárlólista termék javaslatokkal
+- 📦 **Termékadatbázis** - Termékek kezelése vonalkód támogatással
+- �📱 **Reszponzív dizájn** - Minden eszközön jól használható felület
 - 🔒 **Biztonságos autentikáció** - Felhasználói fiókok és adatvédelem
+
+## Adatbázis migráció
+
+**FONTOS**: Az alkalmazás használata előtt le kell futtatnod a migration fájlokat a Supabase-ben!
+
+### Lépésről lépésre útmutató:
+
+1. **Jelentkezz be a Supabase Dashboard-ba**:
+   - Menj a [https://supabase.com/dashboard](https://supabase.com/dashboard) oldalra
+   - Válaszd ki a projekted
+
+2. **Nyisd meg az SQL Editor-t**:
+   - A bal oldali menüben kattints a "SQL Editor" gombra
+
+3. **Futtasd le a migration fájlokat sorrendben**:
+
+   **A) Bevásárlólista tábla létrehozása:**
+   ```sql
+   -- Másold be és futtasd le a supabase/migrations/005_create_shopping_lists.sql tartalmát
+   ```
+
+   **B) Termék tábla létrehozása:**
+   ```sql
+   -- Másold be és futtasd le a supabase/migrations/006_create_products.sql tartalmát
+   ```
+
+4. **Ellenőrizd a táblák létrejöttét**:
+   - A "Database" > "Tables" menüben ellenőrizd, hogy megjelentek-e:
+     - `shopping_lists`
+     - `shopping_list_items`
+     - `products`
+
+### Migration fájlok helye:
+- `supabase/migrations/005_create_shopping_lists.sql` - Bevásárlólista rendszer
+- `supabase/migrations/006_create_products.sql` - Termékadatbázis
+
+### Mi történik, ha nem futtatod le a migration-eket?
+- A bevásárlólista oldal hibával fog betölteni
+- A termékek oldal "migration szükséges" figyelmeztetést fog mutatni
+- Az intelligens termék javaslatok nem fognak működni
+
+### Hibaelhárítás:
+Ha hibát kapsz a migration futtatásakor:
+1. Ellenőrizd, hogy már léteznek-e a táblák
+2. Ha igen, használd a `DROP TABLE IF EXISTS` parancsot a migration fájl elejére
+3. Vagy kihagyhatod a `CREATE TABLE` részeket és csak a `POLICY` részeket futtathatod le

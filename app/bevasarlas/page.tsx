@@ -88,6 +88,7 @@ export default function BevasarlasPage() {
   const [selectedUnit, setSelectedUnit] = useState<string>('')
   const [productSuggestions, setProductSuggestions] = useState<Product[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [migrationWarning, setMigrationWarning] = useState(false)
   const supabase = createClient()
 
   // Felhasználó betöltése
@@ -110,7 +111,16 @@ export default function BevasarlasPage() {
         .eq('user_id', currentUser.id)
         .order('created_at', { ascending: false })
       
-      if (error) throw error
+      if (error) {
+        // Ellenőrizzük, hogy a tábla létezik-e
+        if (error.code === 'PGRST116' || error.message?.includes('does not exist')) {
+          console.error('A shopping_lists tábla nem található. Futtasd le a 005_create_shopping_lists.sql migration-t!')
+          toast.error('A bevásárlólista adatbázis még nincs beállítva. Futtasd le a migration fájlt a Supabase-ben!')
+          setMigrationWarning(true)
+          return
+        }
+        throw error
+      }
       setSavedLists(data || [])
     } catch (error) {
       console.error('Hiba a bevásárlólisták betöltésekor:', error)
@@ -311,7 +321,13 @@ export default function BevasarlasPage() {
       
     } catch (error) {
       console.error('Hiba a mentéskor:', error)
-      toast.error('Hiba történt a mentés során!')
+      // Specifikus hibaüzenet, ha a tábla nem létezik
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorMessage.includes('does not exist') || errorMessage.includes('PGRST116')) {
+        toast.error('A bevásárlólista adatbázis még nincs beállítva. Futtasd le a 005_create_shopping_lists.sql migration-t a Supabase-ben!')
+      } else {
+        toast.error('Hiba történt a mentés során!')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -394,6 +410,38 @@ export default function BevasarlasPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-6">
       <div className="max-w-7xl mx-auto">
+        {/* Migration Warning */}
+        {migrationWarning && (
+          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-r-lg">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="font-medium">
+                  Adatbázis migration szükséges!
+                </p>
+                <p className="text-sm">
+                  A bevásárlólista funkcióhoz futtasd le a <code className="bg-yellow-200 px-1 rounded">supabase/migrations/005_create_shopping_lists.sql</code> fájlt a Supabase SQL Editor-ban.
+                </p>
+              </div>
+              <div className="ml-auto pl-3">
+                <button
+                  onClick={() => setMigrationWarning(false)}
+                  className="inline-flex rounded-md bg-yellow-50 p-1.5 text-yellow-500 hover:bg-yellow-100"
+                >
+                  <span className="sr-only">Bezárás</span>
+                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* Header */}
         <div className="text-white mb-6">
           <div className="flex items-center gap-3 mb-4">

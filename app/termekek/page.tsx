@@ -80,11 +80,12 @@ export default function TermekekPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [products, setProducts] = useState<Product[]>([])
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
+  const [migrationWarning, setMigrationWarning] = useState(false)
   
   // Szűrők
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterCategory, setFilterCategory] = useState<string>('')
-  const [filterStore, setFilterStore] = useState<string>('')
+  const [filterCategory, setFilterCategory] = useState<string>('all')
+  const [filterStore, setFilterStore] = useState<string>('all')
   
   // Új termék form
   const [newProduct, setNewProduct] = useState({
@@ -126,7 +127,17 @@ export default function TermekekPage() {
         .eq('user_id', currentUser.id)
         .order('created_at', { ascending: false })
       
-      if (error) throw error
+      if (error) {
+        // Ellenőrizzük, hogy a tábla létezik-e
+        if (error.code === 'PGRST116' || error.message?.includes('does not exist')) {
+          console.error('A products tábla nem található. Futtasd le a 006_create_products.sql migration-t!')
+          toast.error('A termékadatbázis még nincs beállítva. Futtasd le a migration fájlt a Supabase-ben!')
+          setMigrationWarning(true)
+          return
+        }
+        throw error
+      }
+      
       setProducts(data || [])
       setFilteredProducts(data || [])
     } catch (error) {
@@ -155,11 +166,11 @@ export default function TermekekPage() {
       )
     }
 
-    if (filterCategory) {
+    if (filterCategory && filterCategory !== 'all') {
       filtered = filtered.filter(product => product.category === filterCategory)
     }
 
-    if (filterStore) {
+    if (filterStore && filterStore !== 'all') {
       filtered = filtered.filter(product => product.store_name === filterStore)
     }
 
@@ -300,7 +311,42 @@ export default function TermekekPage() {
         throw new Error('A JSON-nak tömbnek kell lennie!')
       }
 
-      const productsToInsert = jsonData.map((item: {
+      // Meglévő termékek lekérése duplikáció ellenőrzéshez
+      const { data: existingProducts, error: fetchError } = await supabase
+        .from('products')
+        .select('name, brand, barcode')
+        .eq('user_id', currentUser.id)
+
+      if (fetchError) throw fetchError
+
+      const productsToInsert: Array<{
+        user_id: string;
+        name: string;
+        brand: string | null;
+        category: string;
+        store_name: string | null;
+        price: number | null;
+        unit: string;
+        barcode: string | null;
+        sku: string | null;
+        description: string | null;
+        available: boolean;
+      }> = []
+      const skippedProducts: string[] = []
+      const existingProductsSet = new Set()
+
+      // Meglévő termékek indexelése
+      existingProducts?.forEach(product => {
+        // Vonalkód alapú egyediség (ha van vonalkód)
+        if (product.barcode) {
+          existingProductsSet.add(`barcode:${product.barcode}`)
+        }
+        // Név + márka alapú egyediség
+        const key = `${product.name}|${product.brand || ''}`.toLowerCase()
+        existingProductsSet.add(key)
+      })
+
+      jsonData.forEach((item: {
         name?: string;
         termek_neve?: string;
         brand?: string;
@@ -320,27 +366,79 @@ export default function TermekekPage() {
         description?: string;
         leiras?: string;
         available?: boolean;
-      }) => ({
-        user_id: currentUser.id,
-        name: item.name || item.termek_neve,
-        brand: item.brand || item.marka || null,
-        category: item.category || item.kategoria || 'Egyéb',
-        store_name: item.store_name || item.bolt || null,
-        price: item.price || item.ar || null,
-        unit: item.unit || item.egyseg || 'db',
-        barcode: item.barcode || item.vonalkod || null,
-        sku: item.sku || item.termek_kod || null,
-        description: item.description || item.leiras || null,
-        available: item.available !== undefined ? item.available : true
-      }))
+      }) => {
+        const productName = item.name || item.termek_neve
+        const productBrand = item.brand || item.marka || null
+        const productBarcode = item.barcode || item.vonalkod || null
 
-      const { error } = await supabase
-        .from('products')
-        .insert(productsToInsert)
+        if (!productName) {
+          skippedProducts.push('Névtelen termék')
+          return
+        }
 
-      if (error) throw error
+        // Duplikáció ellenőrzés
+        let isDuplicate = false
+        
+        // 1. Vonalkód alapú ellenőrzés (ha van)
+        if (productBarcode && existingProductsSet.has(`barcode:${productBarcode}`)) {
+          isDuplicate = true
+        }
+        
+        // 2. Név + márka alapú ellenőrzés
+        const nameKey = `${productName}|${productBrand || ''}`.toLowerCase()
+        if (existingProductsSet.has(nameKey)) {
+          isDuplicate = true
+        }
 
-      toast.success(`${productsToInsert.length} termék sikeresen importálva!`)
+        if (isDuplicate) {
+          skippedProducts.push(productName)
+          return
+        }
+
+        // Új termék hozzáadása a listához és az indexhez
+        productsToInsert.push({
+          user_id: currentUser.id,
+          name: productName,
+          brand: productBrand,
+          category: item.category || item.kategoria || 'Egyéb',
+          store_name: item.store_name || item.bolt || null,
+          price: item.price || item.ar || null,
+          unit: item.unit || item.egyseg || 'db',
+          barcode: productBarcode,
+          sku: item.sku || item.termek_kod || null,
+          description: item.description || item.leiras || null,
+          available: item.available !== undefined ? item.available : true
+        })
+
+        // Indexhez hozzáadás, hogy az importon belüli duplikációkat is elkerüljük
+        if (productBarcode) {
+          existingProductsSet.add(`barcode:${productBarcode}`)
+        }
+        existingProductsSet.add(nameKey)
+      })
+
+      // Import végrehajtása
+      if (productsToInsert.length > 0) {
+        const { error } = await supabase
+          .from('products')
+          .insert(productsToInsert)
+
+        if (error) throw error
+      }
+
+      // Eredmény kijelzése
+      let message = ''
+      if (productsToInsert.length > 0) {
+        message += `${productsToInsert.length} termék sikeresen importálva!`
+      }
+      if (skippedProducts.length > 0) {
+        message += ` ${skippedProducts.length} termék kihagyva (már létezik).`
+      }
+      if (productsToInsert.length === 0 && skippedProducts.length === 0) {
+        message = 'Nincs importálható termék!'
+      }
+
+      toast.success(message)
       setJsonInput('')
       setShowJsonDialog(false)
       loadProducts()
@@ -384,6 +482,38 @@ export default function TermekekPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-6">
       <div className="max-w-7xl mx-auto">
+        {/* Migration Warning */}
+        {migrationWarning && (
+          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-r-lg">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="font-medium">
+                  Adatbázis migration szükséges!
+                </p>
+                <p className="text-sm">
+                  A termékadatbázis működéséhez futtasd le a <code className="bg-yellow-200 px-1 rounded">supabase/migrations/006_create_products.sql</code> fájlt a Supabase SQL Editor-ban.
+                </p>
+              </div>
+              <div className="ml-auto pl-3">
+                <button
+                  onClick={() => setMigrationWarning(false)}
+                  className="inline-flex rounded-md bg-yellow-50 p-1.5 text-yellow-500 hover:bg-yellow-100"
+                >
+                  <span className="sr-only">Bezárás</span>
+                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* Header */}
         <div className="text-white mb-6">
           <div className="flex items-center gap-3 mb-4">
@@ -513,25 +643,26 @@ export default function TermekekPage() {
                       JSON importálás
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
-                    <DialogHeader>
+                  <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+                    <DialogHeader className="flex-shrink-0">
                       <DialogTitle>Termékek importálása JSON-ból</DialogTitle>
                       <DialogDescription>
                         Illessz be egy JSON tömböt a termékekkel. Példa formátum:
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4">
-                      <div className="bg-gray-100 p-3 rounded text-sm font-mono text-gray-700 max-h-40 overflow-y-auto">
+                    <div className="flex-1 overflow-hidden flex flex-col space-y-4">
+                      <div className="bg-gray-100 p-3 rounded text-sm font-mono text-gray-700 max-h-32 overflow-y-auto flex-shrink-0">
                         <pre>{jsonExample}</pre>
                       </div>
-                      <Textarea
-                        placeholder="Illeszd be a JSON adatokat ide..."
-                        value={jsonInput}
-                        onChange={(e) => setJsonInput(e.target.value)}
-                        rows={10}
-                        className="font-mono text-sm"
-                      />
-                      <div className="flex gap-2">
+                      <div className="flex-1 min-h-0">
+                        <Textarea
+                          placeholder="Illeszd be a JSON adatokat ide..."
+                          value={jsonInput}
+                          onChange={(e) => setJsonInput(e.target.value)}
+                          className="font-mono text-sm h-full resize-none"
+                        />
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0">
                         <Button onClick={importFromJson} disabled={isLoading} className="flex-1">
                           <Upload size={16} className="mr-2" />
                           {isLoading ? 'Importálás...' : 'Importálás'}
@@ -576,7 +707,7 @@ export default function TermekekPage() {
                       <SelectValue placeholder="Összes kategória" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Összes kategória</SelectItem>
+                      <SelectItem value="all">Összes kategória</SelectItem>
                       {CATEGORIES.map((category) => (
                         <SelectItem key={category} value={category}>
                           {category}
@@ -589,7 +720,7 @@ export default function TermekekPage() {
                       <SelectValue placeholder="Összes bolt" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Összes bolt</SelectItem>
+                      <SelectItem value="all">Összes bolt</SelectItem>
                       {STORES.map((store) => (
                         <SelectItem key={store} value={store}>
                           {store}

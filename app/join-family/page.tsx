@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/utils/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
@@ -21,7 +21,7 @@ interface User {
   email?: string;
 }
 
-export default function JoinFamilyPage() {
+function JoinFamilyContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
   const [familyInfo, setFamilyInfo] = useState<FamilyInfo | null>(null);
@@ -241,5 +241,20 @@ export default function JoinFamilyPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function JoinFamilyPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 flex items-center justify-center p-6">
+        <div className="text-center text-white">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-lg">Betöltés...</p>
+        </div>
+      </div>
+    }>
+      <JoinFamilyContent />
+    </Suspense>
   );
 }

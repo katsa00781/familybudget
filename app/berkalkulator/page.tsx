@@ -34,6 +34,22 @@ interface AdditionalIncome {
   amount: number;
 }
 
+// 2025-ös kulcsok a bérpapír alapján (konstansként a komponens kívül)
+const KULCSOK = {
+  SZOCIALIS_HOZZAJARULAS: 0.135, // 13.5%
+  TB_JARULÉK: 0.185, // 18.5% (dolgozói)
+  NYUGDIJJARULÉK: 0.10, // 10% (csak nagyobb bérekeknél)
+  SZJA_KULCS: 0.15, // 15%
+  ÖNKÉNTES_NYUGDIJ: 0.02, // 2% (opcionális)
+  MUSZAKPOTLEK: 0.45, // 45% műszakpótlék
+  TULORA_POTLEK: 1.0, // 100% túlórapótlék (változtatva 1.5-ről 1.0-ra)
+  UNNEPNAPI_SZORZO: 2.0, // 200% ünnepnapi munka
+  BETEGSZABADSAG_SZAZALEK: 0.70, // 70% betegszabadság
+  GYED_NAPI: 13570, // GYED napi összeg (407120/30)
+  KIKULDETESI_POTLEK: 6710, // ~27165/4.05 nap
+  ERDEKKÉPVISELETI_TAGDIJ_SZAZALEK: 0.008 // ~0.8%
+};
+
 export default function BerkalkulatorPage() {
   // Állapotok
   const [users, setUsers] = useState<User[]>([]);
@@ -61,6 +77,7 @@ export default function BerkalkulatorPage() {
     haviberesIdober: number;
     fizetettSzabadsag: number;
     tuloraAlapossszeg: number;
+    tuloraPotlek: number; // Hozzáadva a túlóra pótlék
     muszakpotlek: number;
     tuloraMuszakpotlek: number;
     unnepnapiMunka: number;
@@ -87,22 +104,6 @@ export default function BerkalkulatorPage() {
 
   const [eredmény, setEredmény] = useState<SalaryResult | null>(null);
 
-  // 2025-ös kulcsok a bérpapír alapján
-  const KULCSOK = {
-    SZOCIALIS_HOZZAJARULAS: 0.135, // 13.5%
-    TB_JARULÉK: 0.185, // 18.5% (dolgozói)
-    NYUGDIJJARULÉK: 0.10, // 10% (csak nagyobb bérekeknél)
-    SZJA_KULCS: 0.15, // 15%
-    ÖNKÉNTES_NYUGDIJ: 0.02, // 2% (opcionális)
-    MUSZAKPOTLEK: 0.45, // 45% műszakpótlék
-    TULORA_SZORZO: 1.5, // 150% túlóra
-    UNNEPNAPI_SZORZO: 2.0, // 200% ünnepnapi munka
-    BETEGSZABADSAG_SZAZALEK: 0.70, // 70% betegszabadság
-    GYED_NAPI: 13570, // GYED napi összeg (407120/30)
-    KIKULDETESI_POTLEK: 6710, // ~27165/4.05 nap
-    ERDEKKÉPVISELETI_TAGDIJ_SZAZALEK: 0.008 // ~0.8%
-  };
-
   const calculateSalary = useCallback(() => {
     // Alapbér óránkénti számítása (havi alapbér / 174 óra)
     const oraber = alapber / 174;
@@ -110,7 +111,11 @@ export default function BerkalkulatorPage() {
     // Járandóságok számítása
     const haviberesIdober = Math.round(ledolgozottOrak * oraber);
     const fizetettSzabadsag = Math.round(szabadsagOrak * oraber);
-    const tuloraAlapossszeg = Math.round(tuloraOrak * oraber);
+    
+    // Túlóra számítás javítva: alapórabér + 100% pótlék
+    const tuloraAlapossszeg = Math.round(tuloraOrak * oraber); // Alap órabér
+    const tuloraPotlek = Math.round(tuloraOrak * oraber * KULCSOK.TULORA_POTLEK); // +100% pótlék
+    
     const muszakpotlek = Math.round(muszakpotlekOrak * oraber * KULCSOK.MUSZAKPOTLEK);
     const tuloraMuszakpotlek = Math.round(tuloraOrak * oraber * KULCSOK.MUSZAKPOTLEK);
     const unnepnapiMunka = Math.round(unnepnapiOrak * oraber * KULCSOK.UNNEPNAPI_SZORZO);
@@ -118,12 +123,13 @@ export default function BerkalkulatorPage() {
     const kikuldetesTobblet = Math.round(kikuldetesNapok * KULCSOK.KIKULDETESI_POTLEK);
     const gyedMunkavMellett = Math.round(gyedMellett * KULCSOK.GYED_NAPI);
     
-    // Bruttó bér összesen
-    const bruttoBer = haviberesIdober + fizetettSzabadsag + tuloraAlapossszeg + 
+    // Bruttó bér összesen - hozzáadva a túlóra pótlék
+    const bruttoBer = haviberesIdober + fizetettSzabadsag + tuloraAlapossszeg + tuloraPotlek +
                      muszakpotlek + tuloraMuszakpotlek + unnepnapiMunka + 
                      betegszabadsag + kikuldetesTobblet;
     
     // Összes járandóság (bruttó + egyéb juttatások)
+    // GYED adómentes, ezért külön kezeljük
     const osszesJarandsag = bruttoBer + gyedMunkavMellett + formaruhakompenzacio;
     
     // TB járulék számítás (bruttó bér alapján)
@@ -139,7 +145,7 @@ export default function BerkalkulatorPage() {
     // Érdekképviseleti tagdíj
     const erdekKepvTagdij = Math.round(bruttoBer * KULCSOK.ERDEKKÉPVISELETI_TAGDIJ_SZAZALEK);
     
-    // SZJA alap (GYED nem része az SZJA alapnak)
+    // SZJA alap (GYED adómentes, ezért nem része az SZJA alapnak!)
     const szjaAlap = bruttoBer + formaruhakompenzacio - tbJarulék - nyugdijJarulék - onkentesNyugdij;
     
     // Családi adókedvezmény alkalmazása
@@ -164,6 +170,7 @@ export default function BerkalkulatorPage() {
       haviberesIdober,
       fizetettSzabadsag,
       tuloraAlapossszeg,
+      tuloraPotlek, // Új mező a túlóra pótléknak
       muszakpotlek,
       tuloraMuszakpotlek,
       unnepnapiMunka,
@@ -187,7 +194,7 @@ export default function BerkalkulatorPage() {
       levonasArany: ((osszesLevonas / osszesJarandsag) * 100).toFixed(1),
       munkaltaroiTerhek: ((szocHozzjarulas / osszesJarandsag) * 100).toFixed(1)
     });
-  }, [alapber, ledolgozottNapok, ledolgozottOrak, szabadsagNapok, szabadsagOrak, tuloraOrak, muszakpotlekOrak, 
+  }, [alapber, ledolgozottOrak, szabadsagOrak, tuloraOrak, muszakpotlekOrak, 
       unnepnapiOrak, betegszabadsagNapok, kikuldetesNapok, gyedMellett, 
       formaruhakompenzacio, családiAdókedvezmény]);
 
@@ -385,7 +392,7 @@ export default function BerkalkulatorPage() {
             <h1 className="text-3xl font-bold">Részletes Magyar Bérkalkulátor 2025</h1>
           </div>
           <p className="text-lg">
-            Számítsd ki a havi nettó bért és add hozzá a passzív jövedelemeket a teljes 
+            Számítsd ki a havi nettó bért és add hozzá a passzív jövedelmeket a teljes 
             jövedelem meghatározásához.
           </p>
         </div>
@@ -503,6 +510,7 @@ export default function BerkalkulatorPage() {
                         onChange={(e) => setTuloraOrak(Number(e.target.value))}
                         className="mt-1"
                       />
+                      <p className="text-xs text-gray-500 mt-1">+100% pótlék (összesen 200%)</p>
                     </div>
                     
                     <div>
@@ -722,6 +730,18 @@ export default function BerkalkulatorPage() {
                       Teljes költség: {formatCurrency(eredmény.teljesMunkaltaroiKoltseg)}
                     </p>
                   </div>
+
+                  {eredmény.gyedMunkavMellett > 0 && (
+                    <div className="pt-3 border-t bg-blue-50 p-3 rounded-lg">
+                      <p className="text-xs font-semibold text-blue-700 mb-1">GYED munkavégzés mellett:</p>
+                      <p className="text-xs text-blue-600">
+                        Összeg: {formatCurrency(eredmény.gyedMunkavMellett)}
+                      </p>
+                      <p className="text-xs text-blue-500 italic">
+                        ✓ Adómentes juttatás (nem része az SZJA alapnak)
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}

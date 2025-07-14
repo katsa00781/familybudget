@@ -43,6 +43,7 @@ interface ShoppingItem {
   quantity: number
   unit: string
   price?: number
+  previousPrice?: number // Korábbi ár az összehasonlításhoz
   category: string
   checked: boolean
 }
@@ -175,6 +176,11 @@ export default function BevasarlasPage() {
     let itemData: Partial<ShoppingItem>
 
     if (product) {
+      // Ellenőrizzük, hogy van-e már ilyen termék a listában
+      const existingItem = currentItems.find(item => 
+        item.name.toLowerCase() === (product.brand ? `${product.brand} ${product.name}` : product.name).toLowerCase()
+      )
+
       // Termékből hozzáadás
       itemData = {
         name: product.brand ? `${product.brand} ${product.name}` : product.name,
@@ -182,7 +188,20 @@ export default function BevasarlasPage() {
         unit: product.unit,
         category: product.category,
         price: product.price,
+        previousPrice: existingItem?.price, // Korábbi ár tárolása
         checked: false
+      }
+
+      // Árváltozás értesítés
+      if (existingItem?.price && product.price && existingItem.price !== product.price) {
+        const priceChange = ((product.price - existingItem.price) / existingItem.price) * 100
+        const changeText = priceChange > 0 ? 'drágulás' : 'árcsökkenés'
+        const changeColor = priceChange > 0 ? '🔴' : '🟢'
+        
+        toast.info(
+          `${changeColor} Árváltozás: ${product.name} - ${Math.abs(priceChange).toFixed(1)}% ${changeText}`,
+          { duration: 5000 }
+        )
       }
     } else {
       // Manuális hozzáadás
@@ -190,11 +209,18 @@ export default function BevasarlasPage() {
         toast.error('Add meg a termék nevét!')
         return
       }
+      
+      // Ellenőrizzük a meglévő tételeket manuális hozzáadásnál is
+      const existingItem = currentItems.find(item => 
+        item.name.toLowerCase() === searchTerm.trim().toLowerCase()
+      )
+
       itemData = {
         name: searchTerm.trim(),
         quantity: 1,
         unit: selectedUnit || 'db',
         category: selectedCategory || 'Egyéb',
+        previousPrice: existingItem?.price,
         checked: false
       }
     }
@@ -217,7 +243,55 @@ export default function BevasarlasPage() {
   }
 
   // Tétel módosítása
-  const updateItem = (id: string, field: keyof ShoppingItem, value: string | number | boolean) => {
+  const updateItem = async (id: string, field: keyof ShoppingItem, value: string | number | boolean) => {
+    const item = currentItems.find(item => item.id === id)
+    if (!item) return
+
+    // Ha az ár változik, frissítsük a termékadatbázisban is
+    if (field === 'price' && typeof value === 'number' && currentUser && value > 0) {
+      try {
+        // Keressük meg a terméket az adatbázisban név alapján
+        const { data: products, error: searchError } = await supabase
+          .from('products')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .ilike('name', `%${item.name.replace(/^[^\s]+ /, '')}%`) // Brand nélküli keresés
+          .limit(1)
+
+        if (!searchError && products && products.length > 0) {
+          const product = products[0]
+          
+          // Árváltozás számítása
+          const oldPrice = product.price || 0
+          if (oldPrice > 0 && oldPrice !== value) {
+            const priceChange = ((value - oldPrice) / oldPrice) * 100
+            const changeText = priceChange > 0 ? 'drágulás' : 'árcsökkenés'
+            const changeIcon = priceChange > 0 ? '🔴' : '🟢'
+            
+            toast.info(
+              `${changeIcon} Ár frissítve: ${item.name} - ${Math.abs(priceChange).toFixed(1)}% ${changeText}`,
+              { duration: 4000 }
+            )
+          }
+          
+          // Frissítsük a termék árát az adatbázisban
+          const { error: updateError } = await supabase
+            .from('products')
+            .update({ 
+              price: value,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', product.id)
+
+          if (!updateError) {
+            console.log(`Termék ár frissítve: ${item.name} - ${value} Ft`)
+          }
+        }
+      } catch (error) {
+        console.error('Hiba a termék ár frissítésekor:', error)
+      }
+    }
+
     setCurrentItems(prev => prev.map(item => 
       item.id === id ? { ...item, [field]: value } : item
     ))
@@ -396,12 +470,51 @@ export default function BevasarlasPage() {
     }
   }
 
+  // Árváltozás számítása és megjelenítése
+  const getPriceChangeInfo = (item: ShoppingItem) => {
+    // Debug info
+    console.log('Price check for:', item.name, 'price:', item.price, 'previousPrice:', item.previousPrice)
+    
+    if (!item.price || !item.previousPrice || item.price === item.previousPrice) {
+      return null
+    }
+    
+    const change = ((item.price - item.previousPrice) / item.previousPrice) * 100
+    const isIncrease = change > 0
+    
+    return {
+      percentage: Math.abs(change).toFixed(1),
+      isIncrease,
+      icon: isIncrease ? '📈' : '📉',
+      color: isIncrease ? 'text-red-600' : 'text-green-600',
+      bgColor: isIncrease ? 'bg-red-50' : 'bg-green-50',
+      text: isIncrease ? 'drágulás' : 'árcsökkenés'
+    }
+  }
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('hu-HU', {
       style: 'currency',
       currency: 'HUF',
       minimumFractionDigits: 0,
     }).format(amount)
+  }
+
+  // Teszt árváltozás funkció
+  const addTestPriceChange = () => {
+    const testItem: ShoppingItem = {
+      id: `test-${Date.now()}`,
+      name: 'Teszt Kenyér',
+      quantity: 1,
+      unit: 'db',
+      price: 500,
+      previousPrice: 450, // 11.1% drágulás
+      category: 'Pékáru',
+      checked: false
+    }
+    
+    setCurrentItems(prev => [...prev, testItem])
+    toast.success('Teszt termék hozzáadva árváltozással!')
   }
 
   const checkedItemsCount = currentItems.filter(item => item.checked).length
@@ -570,6 +683,10 @@ export default function BevasarlasPage() {
                           <Check size={16} className="mr-2" />
                           Összes bejelölése
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => addTestPriceChange()}>
+                          <Plus size={16} className="mr-2" />
+                          Teszt árváltozás
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -680,17 +797,35 @@ export default function BevasarlasPage() {
                           onCheckedChange={(checked) => updateItem(item.id, 'checked', checked)}
                         />
                         <div className="flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 mb-1">
                             <span className={`font-medium ${item.checked ? 'line-through text-gray-500' : 'text-gray-900'}`}>
                               {item.name}
                             </span>
                             <Badge variant="outline" className="text-xs">
                               {item.category}
                             </Badge>
+                            {(() => {
+                              const priceChange = getPriceChangeInfo(item)
+                              return priceChange ? (
+                                <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${priceChange.bgColor} ${priceChange.color}`}>
+                                  <span>{priceChange.icon}</span>
+                                  <span className="font-medium">{priceChange.percentage}%</span>
+                                  <span>{priceChange.text}</span>
+                                </div>
+                              ) : null
+                            })()}
                           </div>
                           <div className="text-sm text-gray-500">
                             {item.quantity} {item.unit}
                             {item.price && ` • ${formatCurrency(item.price * item.quantity)}`}
+                            {(() => {
+                              const priceChange = getPriceChangeInfo(item)
+                              return priceChange ? (
+                                <span className="ml-2 text-xs text-gray-400">
+                                  (előző: {formatCurrency(item.previousPrice!)})
+                                </span>
+                              ) : null
+                            })()}
                           </div>
                         </div>
                         <div className="flex items-center gap-1">

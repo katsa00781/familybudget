@@ -350,7 +350,7 @@ export default function MegtakaritasokPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Fejléc */}
         <div className="text-center mb-8">
@@ -395,13 +395,12 @@ export default function MegtakaritasokPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-gray-600">Aktív Célok</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <Target className="text-purple-600" size={24} />
-                <span className="text-2xl font-bold text-gray-900">
-                  {savingsGoals.length}
-                </span>
-              </div>
+            <CardContent>                <div className="flex items-center gap-2">
+                  <Target className="text-teal-600" size={24} />
+                  <span className="text-2xl font-bold text-gray-900">
+                    {savingsGoals.length}
+                  </span>
+                </div>
             </CardContent>
           </Card>
         </div>
@@ -413,12 +412,12 @@ export default function MegtakaritasokPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
-                    <Target size={20} className="text-purple-600" />
+                    <Target size={20} className="text-teal-600" />
                     Megtakarítási Célok
                   </CardTitle>
                   <Button 
                     onClick={() => setShowNewGoalForm(true)}
-                    className="bg-purple-500 hover:bg-purple-600"
+                    className="bg-teal-500 hover:bg-teal-600"
                   >
                     <Plus size={16} className="mr-2" />
                     Új cél
@@ -428,7 +427,7 @@ export default function MegtakaritasokPage() {
               <CardContent>
                 {isLoading ? (
                   <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500 mx-auto"></div>
                   </div>
                 ) : savingsGoals.length > 0 ? (
                   <div className="space-y-4">
@@ -495,7 +494,7 @@ export default function MegtakaritasokPage() {
                               <span>{daysLeft > 0 ? `${daysLeft} nap hátra` : 'Lejárt'}</span>
                             </div>
                             <div className="text-sm">
-                              <span className="font-medium text-purple-600">
+                              <span className="font-medium text-teal-600">
                                 Havi szükséges: {formatCurrency(monthlyAmount)}
                               </span>
                             </div>
@@ -650,7 +649,7 @@ export default function MegtakaritasokPage() {
                 </div>
 
                 <div className="flex gap-2 pt-4">
-                  <Button onClick={saveGoal} className="flex-1 bg-purple-500 hover:bg-purple-600">
+                  <Button onClick={saveGoal} className="flex-1 bg-teal-500 hover:bg-teal-600">
                     Mentés
                   </Button>
                   <Button variant="outline" onClick={() => setShowNewGoalForm(false)}>

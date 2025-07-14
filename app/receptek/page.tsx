@@ -244,7 +244,7 @@ export default function ReceptekPage() {
   )
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-400 via-red-500 to-pink-500 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Fejléc */}
         <div className="text-center mb-8">
@@ -262,12 +262,12 @@ export default function ReceptekPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
-                    <Search size={20} className="text-orange-600" />
+                    <Search size={20} className="text-teal-600" />
                     Receptkezelés
                   </CardTitle>
                   <Button 
                     onClick={() => setShowNewRecipeForm(!showNewRecipeForm)}
-                    className="bg-orange-500 hover:bg-orange-600"
+                    className="bg-teal-500 hover:bg-teal-600"
                   >
                     <Plus size={16} className="mr-2" />
                     Új recept
@@ -301,14 +301,14 @@ export default function ReceptekPage() {
                   <div className="space-y-3 max-h-96 overflow-y-auto">
                     {isLoading ? (
                       <div className="text-center py-4">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-500 mx-auto"></div>
                       </div>
                     ) : filteredRecipes.length > 0 ? (
                       filteredRecipes.map((recipe) => (
                         <div
                           key={recipe.id}
-                          className={`p-3 border rounded-lg cursor-pointer transition-all hover:bg-orange-50 ${
-                            selectedRecipe?.id === recipe.id ? 'border-orange-500 bg-orange-50' : 'border-gray-200'
+                          className={`p-3 border rounded-lg cursor-pointer transition-all hover:bg-teal-50 ${
+                            selectedRecipe?.id === recipe.id ? 'border-teal-500 bg-teal-50' : 'border-gray-200'
                           }`}
                           onClick={() => setSelectedRecipe(recipe)}
                         >
@@ -380,7 +380,7 @@ export default function ReceptekPage() {
               <Card className="bg-white shadow-xl border-0">
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-orange-600">Új recept</CardTitle>
+                    <CardTitle className="text-teal-600">Új recept</CardTitle>
                     <Button 
                       variant="ghost" 
                       onClick={() => setShowNewRecipeForm(false)}
@@ -513,11 +513,10 @@ export default function ReceptekPage() {
                     </div>
 
                     {/* Mentés gombok */}
-                    <div className="flex gap-2 pt-4">
-                      <Button 
-                        onClick={saveRecipe}
-                        className="flex-1 bg-orange-500 hover:bg-orange-600"
-                      >
+                    <div className="flex gap-2 pt-4">                    <Button 
+                      onClick={saveRecipe}
+                      className="flex-1 bg-teal-500 hover:bg-teal-600"
+                    >
                         <Save size={16} className="mr-2" />
                         Recept mentése
                       </Button>
@@ -621,7 +620,7 @@ export default function ReceptekPage() {
               /* Üdvözlő képernyő */
               <Card className="bg-white shadow-xl border-0">
                 <CardContent className="p-12 text-center">
-                  <ChefHat size={64} className="mx-auto mb-4 text-orange-500" />
+                  <ChefHat size={64} className="mx-auto mb-4 text-teal-500" />
                   <h2 className="text-2xl font-bold text-gray-900 mb-2">Válassz egy receptet</h2>
                   <p className="text-gray-600 mb-6">
                     Kattints a bal oldali listában egy receptre a részletek megtekintéséhez,
@@ -629,7 +628,7 @@ export default function ReceptekPage() {
                   </p>
                   <Button 
                     onClick={() => setShowNewRecipeForm(true)}
-                    className="bg-orange-500 hover:bg-orange-600"
+                    className="bg-teal-500 hover:bg-teal-600"
                   >
                     <Plus size={16} className="mr-2" />
                     Új recept létrehozása

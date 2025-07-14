@@ -19,11 +19,19 @@ export function useUserProfile() {
   const [family, setFamily] = useState<Family | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const supabase = createClient();
+  // Ellenőrizzük, hogy vannak-e környezeti változók
+  const hasSupabaseConfig = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabase = hasSupabaseConfig ? createClient() : null;
 
   const loadUserProfile = async () => {
     try {
       setIsLoading(true);
+      
+      if (!supabase) {
+        console.warn('Supabase not configured, skipping user profile loading');
+        return;
+      }
+      
       const { data: { user } } = await supabase.auth.getUser();
       
       if (user) {

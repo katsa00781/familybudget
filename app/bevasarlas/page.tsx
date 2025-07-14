@@ -472,9 +472,6 @@ export default function BevasarlasPage() {
 
   // Árváltozás számítása és megjelenítése
   const getPriceChangeInfo = (item: ShoppingItem) => {
-    // Debug info
-    console.log('Price check for:', item.name, 'price:', item.price, 'previousPrice:', item.previousPrice)
-    
     if (!item.price || !item.previousPrice || item.price === item.previousPrice) {
       return null
     }
@@ -502,19 +499,33 @@ export default function BevasarlasPage() {
 
   // Teszt árváltozás funkció
   const addTestPriceChange = () => {
-    const testItem: ShoppingItem = {
-      id: `test-${Date.now()}`,
-      name: 'Teszt Kenyér',
-      quantity: 1,
-      unit: 'db',
-      price: 500,
-      previousPrice: 450, // 11.1% drágulás
-      category: 'Pékáru',
-      checked: false
-    }
+    const testItems: ShoppingItem[] = [
+      {
+        id: `test-increase-${Date.now()}`,
+        name: '🍞 Teszt Kenyér',
+        quantity: 1,
+        unit: 'db',
+        price: 500,
+        previousPrice: 450, // 11.1% drágulás
+        category: 'Pékáru',
+        checked: false
+      },
+      {
+        id: `test-decrease-${Date.now() + 1}`,
+        name: '🥛 Teszt Tej',
+        quantity: 1,
+        unit: 'liter',
+        price: 350,
+        previousPrice: 400, // 12.5% árcsökkenés
+        category: 'Tejtermék',
+        checked: false
+      }
+    ]
     
-    setCurrentItems(prev => [...prev, testItem])
-    toast.success('Teszt termék hozzáadva árváltozással!')
+    setCurrentItems(prev => [...prev, ...testItems])
+    toast.success('Teszt termékek hozzáadva árváltozással!', {
+      description: 'Egy drágulás és egy árcsökkenés példa'
+    })
   }
 
   const checkedItemsCount = currentItems.filter(item => item.checked).length
@@ -732,6 +743,13 @@ export default function BevasarlasPage() {
                   </Select>
                   <Button onClick={() => addItem()} className="bg-cyan-500 hover:bg-cyan-600">
                     <Plus size={16} />
+                  </Button>
+                  <Button 
+                    onClick={() => addTestPriceChange()} 
+                    className="bg-orange-500 hover:bg-orange-600 text-white"
+                    title="Teszt termék hozzáadása árváltozással"
+                  >
+                    🧪 Teszt
                   </Button>
                 </div>
 

@@ -48,6 +48,14 @@ Ez a mappa tartalmazza az összes adatbázis migrációt a Family Budget alkalma
 - Képek és leírások támogatása
 - Elérhetőség követés
 
+### 007_create_recipes.sql  
+**Recept kezelő rendszer táblái**
+- `recipes` tábla: Receptek alapadataival (név, leírás, elkészítési idő, adagok)
+- `recipe_ingredients` tábla: Recept hozzávalók (mennyiség, egység)
+- Bevásárló lista integráció
+- Felhasználónkénti elkülönítés RLS-sel
+- Automatikus timestampek
+
 ```sql
 -- Futtatás:
 -- Másold ki a fájl tartalmát és futtasd le a Supabase SQL Editor-ban
@@ -61,6 +69,7 @@ Ez a mappa tartalmazza az összes adatbázis migrációt a Family Budget alkalma
 2. `004_create_income_plans.sql` - Bevételi tervek  
 3. `005_create_shopping_lists.sql` - Bevásárlólisták
 4. `006_create_products.sql` - Termékadatbázis
+5. `007_create_recipes.sql` - Receptek
 
 ## Hogyan futtasd a migrációkat
 
@@ -109,7 +118,8 @@ auth.users (Supabase beépített)
 ├── budget_plans (költségvetések)
 ├── income_plans (bevételi tervek)  
 ├── shopping_lists (bevásárlólisták)
-└── products (termékadatbázis)
+├── products (termékadatbázis)
+└── recipes (receptek)
 ```
 
 ## Következő lépések
@@ -119,6 +129,7 @@ A migrációk futtatása után az alkalmazás teljes funkcionalitással használ
 - ✅ Bevételi tervek kezelése
 - ✅ Bevásárlólisták készítése
 - ✅ Termékadatbázis kezelés vonalkóddal
+- ✅ Receptek kezelése és bevásárlólistára vétele
 
 ## Mobilalkalmazás előkészítés
 

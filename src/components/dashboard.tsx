@@ -463,27 +463,27 @@ export default function Dashboard() {
             <CardHeader>
               <CardTitle className="text-teal-700">Gyors műveletek</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <a href="/berkalkulator">
-                <Button className="w-full bg-teal-600 hover:bg-teal-700 text-white">
+            <CardContent className="space-y-3 p-6">
+              <a href="/berkalkulator" className="block">
+                <Button className="w-full bg-teal-600 hover:bg-teal-700 text-white py-3">
                   <Calculator className="mr-2 h-4 w-4" />
                   Bérkalkulátor
                 </Button>
               </a>
-              <a href="/bevasarlolista">
-                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+              <a href="/bevasarlolista" className="block">
+                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3">
                   <ShoppingCart className="mr-2 h-4 w-4" />
                   Új bevásárlólista
                 </Button>
               </a>
-              <a href="/receptek">
-                <Button className="w-full bg-green-600 hover:bg-green-700 text-white">
+              <a href="/receptek" className="block">
+                <Button className="w-full bg-green-600 hover:bg-green-700 text-white py-3">
                   <ChefHat className="mr-2 h-4 w-4" />
                   Receptek
                 </Button>
               </a>
-              <a href="/jelentesek">
-                <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white">
+              <a href="/jelentesek" className="block">
+                <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3">
                   <PiggyBank className="mr-2 h-4 w-4" />
                   Megtakarítások
                 </Button>

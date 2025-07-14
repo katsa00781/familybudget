@@ -56,10 +56,10 @@ export default function BerkalkulatorPage() {
   const [loading, setLoading] = useState(true);
   const [familyMember, setFamilyMember] = useState("");
   const [alapber, setAlapber] = useState(986400);
-  const [ledolgozottNapok, setLedolgozottNapok] = useState(18.15); // 147.06 / 8.1
-  const [szabadsagNapok, setSzabadsagNapok] = useState(3.03); // 24.51 / 8.1
+  const [ledolgozottNapok, setLedolgozottNapok] = useState(20); // Alapértelmezett munkanapok száma
+  const [szabadsagNapok, setSzabadsagNapok] = useState(0);
   const [tuloraOrak, setTuloraOrak] = useState(0);
-  const [unnepnapiOrak, setUnnepnapiOrak] = useState(8.17);
+  const [unnepnapiOrak, setUnnepnapiOrak] = useState(0);
   const [additionalIncomes, setAdditionalIncomes] = useState<AdditionalIncome[]>([]);
   
   // Számított értékek
@@ -67,7 +67,7 @@ export default function BerkalkulatorPage() {
   const muszakpotlekOrak = ledolgozottOrak; // Mindig megegyezik a ledolgozott órákkal
   const szabadsagOrak = szabadsagNapok * 8.1;
   const [betegszabadsagNapok, setBetegszabadsagNapok] = useState(0);
-  const [kikuldetesNapok, setKikuldetesNapok] = useState(4.05);
+  const [kikuldetesNapok, setKikuldetesNapok] = useState(0);
   const [gyedMellett, setGyedMellett] = useState(30);
   const [formaruhakompenzacio, setFormaruhakompenzacio] = useState(0);
   const [családiAdókedvezmény, setCsaládiAdókedvezmény] = useState(333330);
@@ -103,6 +103,22 @@ export default function BerkalkulatorPage() {
   }
 
   const [eredmény, setEredmény] = useState<SalaryResult | null>(null);
+
+  // Helper funkció az input mezők kezelésére
+  const handleInputFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    e.target.select();
+  };
+
+  const handleInputChange = (setter: (value: number) => void) => {
+    return (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      if (value === '') {
+        setter(0);
+      } else {
+        setter(Number(value));
+      }
+    };
+  };
 
   const calculateSalary = useCallback(() => {
     // Alapbér óránkénti számítása (havi alapbér / 174 óra)
@@ -329,6 +345,8 @@ export default function BerkalkulatorPage() {
         tb_jarulék: eredmény.tbJarulék,
         szoc_hozzajarulas: eredmény.szocHozzjarulas,
         teljes_munkaltaroi_koltseg: eredmény.teljesMunkaltaroiKoltseg,
+        // Egyéb jövedelmek mentése
+        additional_incomes: JSON.stringify(additionalIncomes),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -436,8 +454,10 @@ export default function BerkalkulatorPage() {
                       <div className="mt-1 relative">
                         <Input
                           type="number"
-                          value={alapber}
-                          onChange={(e) => setAlapber(Number(e.target.value))}
+                          value={alapber || ''}
+                          onChange={handleInputChange(setAlapber)}
+                          onFocus={handleInputFocus}
+                          placeholder="pl. 986400"
                           className="pr-8"
                         />
                         <span className="absolute right-3 top-3 text-sm text-gray-500">Ft</span>
@@ -451,8 +471,10 @@ export default function BerkalkulatorPage() {
                       <div className="mt-1 relative">
                         <Input
                           type="number"
-                          value={családiAdókedvezmény}
-                          onChange={(e) => setCsaládiAdókedvezmény(Number(e.target.value))}
+                          value={családiAdókedvezmény || ''}
+                          onChange={handleInputChange(setCsaládiAdókedvezmény)}
+                          onFocus={handleInputFocus}
+                          placeholder="pl. 333330"
                           className="pr-8"
                         />
                         <span className="absolute right-3 top-3 text-sm text-gray-500">Ft</span>
@@ -474,8 +496,10 @@ export default function BerkalkulatorPage() {
                       <Input
                         type="number"
                         step="0.01"
-                        value={ledolgozottNapok}
-                        onChange={(e) => setLedolgozottNapok(Number(e.target.value))}
+                        value={ledolgozottNapok || ''}
+                        onChange={handleInputChange(setLedolgozottNapok)}
+                        onFocus={handleInputFocus}
+                        placeholder="20"
                         className="mt-1"
                       />
                       <p className="text-xs text-gray-500 mt-1">
@@ -490,8 +514,10 @@ export default function BerkalkulatorPage() {
                       <Input
                         type="number"
                         step="0.01"
-                        value={szabadsagNapok}
-                        onChange={(e) => setSzabadsagNapok(Number(e.target.value))}
+                        value={szabadsagNapok || ''}
+                        onChange={handleInputChange(setSzabadsagNapok)}
+                        onFocus={handleInputFocus}
+                        placeholder="0"
                         className="mt-1"
                       />
                       <p className="text-xs text-gray-500 mt-1">
@@ -506,8 +532,10 @@ export default function BerkalkulatorPage() {
                       <Input
                         type="number"
                         step="0.1"
-                        value={tuloraOrak}
-                        onChange={(e) => setTuloraOrak(Number(e.target.value))}
+                        value={tuloraOrak || ''}
+                        onChange={handleInputChange(setTuloraOrak)}
+                        onFocus={handleInputFocus}
+                        placeholder="0"
                         className="mt-1"
                       />
                       <p className="text-xs text-gray-500 mt-1">+100% pótlék (összesen 200%)</p>
@@ -543,8 +571,10 @@ export default function BerkalkulatorPage() {
                       <Input
                         type="number"
                         step="0.1"
-                        value={unnepnapiOrak}
-                        onChange={(e) => setUnnepnapiOrak(Number(e.target.value))}
+                        value={unnepnapiOrak || ''}
+                        onChange={handleInputChange(setUnnepnapiOrak)}
+                        onFocus={handleInputFocus}
+                        placeholder="0"
                         className="mt-1"
                       />
                       <p className="text-xs text-gray-500 mt-1">+100% pótlék</p>
@@ -556,8 +586,10 @@ export default function BerkalkulatorPage() {
                       </Label>
                       <Input
                         type="number"
-                        value={betegszabadsagNapok}
-                        onChange={(e) => setBetegszabadsagNapok(Number(e.target.value))}
+                        value={betegszabadsagNapok || ''}
+                        onChange={handleInputChange(setBetegszabadsagNapok)}
+                        onFocus={handleInputFocus}
+                        placeholder="0"
                         className="mt-1"
                       />
                       <p className="text-xs text-gray-500 mt-1">70% térítés</p>
@@ -570,8 +602,10 @@ export default function BerkalkulatorPage() {
                       <Input
                         type="number"
                         step="0.1"
-                        value={kikuldetesNapok}
-                        onChange={(e) => setKikuldetesNapok(Number(e.target.value))}
+                        value={kikuldetesNapok || ''}
+                        onChange={handleInputChange(setKikuldetesNapok)}
+                        onFocus={handleInputFocus}
+                        placeholder="0"
                         className="mt-1"
                       />
                     </div>
@@ -582,8 +616,10 @@ export default function BerkalkulatorPage() {
                       </Label>
                       <Input
                         type="number"
-                        value={gyedMellett}
-                        onChange={(e) => setGyedMellett(Number(e.target.value))}
+                        value={gyedMellett || ''}
+                        onChange={handleInputChange(setGyedMellett)}
+                        onFocus={handleInputFocus}
+                        placeholder="30"
                         className="mt-1"
                       />
                     </div>
@@ -594,8 +630,10 @@ export default function BerkalkulatorPage() {
                       </Label>
                       <Input
                         type="number"
-                        value={formaruhakompenzacio}
-                        onChange={(e) => setFormaruhakompenzacio(Number(e.target.value))}
+                        value={formaruhakompenzacio || ''}
+                        onChange={handleInputChange(setFormaruhakompenzacio)}
+                        onFocus={handleInputFocus}
+                        placeholder="0"
                         className="mt-1"
                       />
                     </div>

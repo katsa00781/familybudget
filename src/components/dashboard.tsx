@@ -90,7 +90,7 @@ export default function Dashboard() {
         .order('created_at', { ascending: false })
         .limit(1);
 
-      // Bevételi tervek betöltése
+      // Bevételi tervek betöltése az income_plans táblából
       const { data: incomeData } = await supabase
         .from('income_plans')
         .select('*')
@@ -115,7 +115,44 @@ export default function Dashboard() {
         .order('created_at', { ascending: false });
 
       setBudgetPlans(budgetData || []);
-      setIncomePlans(incomeData || []);
+      
+      // Income plans feldolgozása - az income_plans tábla sémája szerint
+      if (incomeData && incomeData.length > 0) {
+        const latestIncome = incomeData[0];
+        
+        // Additional incomes parse-olása
+        let additionalIncomes: OtherIncome[] = [];
+        try {
+          if (latestIncome.additional_incomes) {
+            const parsed = typeof latestIncome.additional_incomes === 'string' 
+              ? JSON.parse(latestIncome.additional_incomes)
+              : latestIncome.additional_incomes;
+            
+            if (Array.isArray(parsed)) {
+              additionalIncomes = parsed.map((income: { name?: string; amount?: number; description?: string }) => ({
+                name: income.name || 'Egyéb jövedelem',
+                amount: income.amount || 0,
+                description: income.description || ''
+              }));
+            }
+          }
+        } catch (error) {
+          console.warn('Error parsing additional incomes:', error);
+        }
+
+        // IncomePlan objektum összeállítása az income_plans táblából
+        const incomeFromPlans: IncomePlan = {
+          id: latestIncome.id,
+          base_income: latestIncome.monthly_income || 0,  // monthly_income mező használata
+          other_income: additionalIncomes,               // additional_incomes mező használata
+          total_income: latestIncome.total_income || 0   // total_income mező használata
+        };
+
+        setIncomePlans([incomeFromPlans]);
+      } else {
+        setIncomePlans([]);
+      }
+      
       setSavingsGoals(savingsData || []);
       setShoppingLists(shoppingData || []);
       
@@ -169,28 +206,106 @@ export default function Dashboard() {
     }));
   };
 
-  // Szükséglet, vágyak, megtakarítás százalékos eloszlása
+  // Szükséglet, vágyak, megtakarítás százalékos eloszlása (50/30/20 szabály)
   const getBudgetBreakdown = () => {
     if (!currentBudget?.budget_data) return [];
 
+    // Szükségletek kategóriái (50%)
+    const needsCategories = [
+      'Lakhatás', 'Lakásfenntartás', 'Rezsik', 'Gáz', 'Áram', 'Víz', 'Internet', 'Telefon',
+      'Élelmiszer', 'Élelmiszerbolt', 'Bevásárlás', 'Kaja',
+      'Közlekedés', 'Benzin', 'Tömegközlekedés', 'Autó karbantartás',
+      'Egészség', 'Orvos', 'Gyógyszer', 'Biztosítás',
+      'Alapvető ruházat', 'Munkaruha'
+    ];
+
+    // Vágyak kategóriái (30%)
+    const wantsCategories = [
+      'Szórakozás', 'Mozi', 'Étterem', 'Kávé', 'Szórakozóhely',
+      'Hobbi', 'Sport', 'Könyv', 'Játék',
+      'Utazás', 'Nyaralás', 'Kirándulás',
+      'Ruházat', 'Divat', 'Cipő', 'Kiegészítők',
+      'Elektronika', 'Gadget', 'Streaming szolgáltatások',
+      'Ajándék', 'Egyéb szórakozás'
+    ];
+
+    // Megtakarítások kategóriái (20%)
+    const savingsCategories = [
+      'Megtakarítás', 'Befektetés', 'Nyugdíj-megtakarítás', 'Tartalék',
+      'Vészhelyzeti alap', 'Hosszú távú célok', 'Lakásvásárlás megtakarítás'
+    ];
+
     const needs = currentBudget.budget_data
-      .filter((item: BudgetItem) => ['Lakhatás', 'Élelmiszer', 'Közlekedés', 'Egészség'].includes(item.category || ''))
+      .filter((item: BudgetItem) => {
+        const category = item.category || 'Egyéb';
+        return needsCategories.some(needCat => 
+          category.toLowerCase().includes(needCat.toLowerCase()) ||
+          needCat.toLowerCase().includes(category.toLowerCase())
+        );
+      })
       .reduce((sum: number, item: BudgetItem) => sum + item.amount, 0);
 
     const wants = currentBudget.budget_data
-      .filter((item: BudgetItem) => ['Szórakozás', 'Hobbi', 'Utazás', 'Ruházat'].includes(item.category || ''))
+      .filter((item: BudgetItem) => {
+        const category = item.category || 'Egyéb';
+        return wantsCategories.some(wantCat => 
+          category.toLowerCase().includes(wantCat.toLowerCase()) ||
+          wantCat.toLowerCase().includes(category.toLowerCase())
+        );
+      })
       .reduce((sum: number, item: BudgetItem) => sum + item.amount, 0);
 
-    const totalSavings = savingsGoals.reduce((sum, goal) => sum + goal.current_amount, 0);
+    const savings = currentBudget.budget_data
+      .filter((item: BudgetItem) => {
+        const category = item.category || 'Egyéb';
+        return savingsCategories.some(savingCat => 
+          category.toLowerCase().includes(savingCat.toLowerCase()) ||
+          savingCat.toLowerCase().includes(category.toLowerCase())
+        );
+      })
+      .reduce((sum: number, item: BudgetItem) => sum + item.amount, 0);
 
-    const total = needs + wants + totalSavings;
+    // Nem kategorizált tételek
+    const uncategorized = currentBudget.budget_data
+      .filter((item: BudgetItem) => {
+        const category = item.category || 'Egyéb';
+        const isNeed = needsCategories.some(needCat => 
+          category.toLowerCase().includes(needCat.toLowerCase()) ||
+          needCat.toLowerCase().includes(category.toLowerCase())
+        );
+        const isWant = wantsCategories.some(wantCat => 
+          category.toLowerCase().includes(wantCat.toLowerCase()) ||
+          wantCat.toLowerCase().includes(category.toLowerCase())
+        );
+        const isSaving = savingsCategories.some(savingCat => 
+          category.toLowerCase().includes(savingCat.toLowerCase()) ||
+          savingCat.toLowerCase().includes(category.toLowerCase())
+        );
+        return !isNeed && !isWant && !isSaving;
+      })
+      .reduce((sum: number, item: BudgetItem) => sum + item.amount, 0);
+
+    const total = needs + wants + savings + uncategorized;
     if (total === 0) return [];
 
-    return [
-      { name: 'Szükségletek', value: needs, percentage: ((needs / total) * 100).toFixed(1), color: '#10b981' },
-      { name: 'Vágyak', value: wants, percentage: ((wants / total) * 100).toFixed(1), color: '#8b5cf6' },
-      { name: 'Megtakarítások', value: totalSavings, percentage: ((totalSavings / total) * 100).toFixed(1), color: '#f59e0b' }
+    const result = [
+      { name: 'Szükségletek (50%)', value: needs, percentage: ((needs / total) * 100).toFixed(1), color: '#10b981', target: 50 },
+      { name: 'Vágyak (30%)', value: wants, percentage: ((wants / total) * 100).toFixed(1), color: '#8b5cf6', target: 30 },
+      { name: 'Megtakarítások (20%)', value: savings, percentage: ((savings / total) * 100).toFixed(1), color: '#f59e0b', target: 20 }
     ];
+
+    // Ha vannak nem kategorizált tételek, adjuk hozzá
+    if (uncategorized > 0) {
+      result.push({
+        name: 'Egyéb/Nem kategorizált',
+        value: uncategorized,
+        percentage: ((uncategorized / total) * 100).toFixed(1),
+        color: '#94a3b8',
+        target: 0
+      });
+    }
+
+    return result;
   };
 
   // Havi trend adatok (dummy data, később lehet bővíteni)
@@ -349,22 +464,30 @@ export default function Dashboard() {
               <CardTitle className="text-teal-700">Gyors műveletek</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button className="w-full bg-teal-600 hover:bg-teal-700 text-white">
-                <Calculator className="mr-2 h-4 w-4" />
-                Bérkalkulátor
-              </Button>
-              <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-                <ShoppingCart className="mr-2 h-4 w-4" />
-                Új bevásárlólista
-              </Button>
-              <Button className="w-full bg-green-600 hover:bg-green-700 text-white">
-                <ChefHat className="mr-2 h-4 w-4" />
-                Receptek
-              </Button>
-              <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white">
-                <PiggyBank className="mr-2 h-4 w-4" />
-                Megtakarítások
-              </Button>
+              <a href="/berkalkulator">
+                <Button className="w-full bg-teal-600 hover:bg-teal-700 text-white">
+                  <Calculator className="mr-2 h-4 w-4" />
+                  Bérkalkulátor
+                </Button>
+              </a>
+              <a href="/bevasarlolista">
+                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                  <ShoppingCart className="mr-2 h-4 w-4" />
+                  Új bevásárlólista
+                </Button>
+              </a>
+              <a href="/receptek">
+                <Button className="w-full bg-green-600 hover:bg-green-700 text-white">
+                  <ChefHat className="mr-2 h-4 w-4" />
+                  Receptek
+                </Button>
+              </a>
+              <a href="/jelentesek">
+                <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white">
+                  <PiggyBank className="mr-2 h-4 w-4" />
+                  Megtakarítások
+                </Button>
+              </a>
             </CardContent>
           </Card>
         </div>
@@ -386,22 +509,42 @@ export default function Dashboard() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {currentBudget.budget_data && currentBudget.budget_data.length > 0 ? (
-                  currentBudget.budget_data.map((item: BudgetItem, index: number) => (
-                    <div key={index} className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-gray-800">{item.name || 'Névtelen tétel'}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {item.category || 'Egyéb'}
-                        </Badge>
+                  currentBudget.budget_data.map((item: BudgetItem, index: number) => {
+                    // Jobb névmegjelenítés logika
+                    const getItemName = (item: BudgetItem) => {
+                      if (item.name && item.name.trim()) {
+                        return item.name.trim();
+                      }
+                      if (item.category && item.category.trim()) {
+                        return `${item.category} tétel`;
+                      }
+                      return `Költségvetési tétel #${index + 1}`;
+                    };
+
+                    const getItemCategory = (item: BudgetItem) => {
+                      if (item.category && item.category.trim()) {
+                        return item.category.trim();
+                      }
+                      return 'Egyéb';
+                    };
+
+                    return (
+                      <div key={index} className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium text-gray-800">{getItemName(item)}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {getItemCategory(item)}
+                          </Badge>
+                        </div>
+                        <div className="text-lg font-bold text-teal-600">
+                          {formatCurrency(item.amount || 0)}
+                        </div>
+                        {item.description && item.description.trim() && (
+                          <p className="text-sm text-gray-600 mt-1">{item.description.trim()}</p>
+                        )}
                       </div>
-                      <div className="text-lg font-bold text-teal-600">
-                        {formatCurrency(item.amount || 0)}
-                      </div>
-                      {item.description && (
-                        <p className="text-sm text-gray-600 mt-1">{item.description}</p>
-                      )}
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="col-span-full text-center py-8">
                     <p className="text-gray-500">A költségvetési tervben nincsenek tételek</p>
@@ -445,7 +588,7 @@ export default function Dashboard() {
               <div className="space-y-4">
                 <div className="p-4 bg-gradient-to-r from-green-50 to-teal-50 rounded-lg border border-green-200">
                   <div className="flex justify-between items-center">
-                    <span className="font-medium text-gray-800">Alapbér</span>
+                    <span className="font-medium text-gray-800">Havi alapbevétel</span>
                     <span className="text-lg font-bold text-green-600">
                       {formatCurrency(currentIncome.base_income || 0)}
                     </span>
@@ -496,20 +639,66 @@ export default function Dashboard() {
               <CardContent>
                 <div className="space-y-4">
                   {budgetBreakdown.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div 
-                          className="w-4 h-4 rounded-full"
-                          style={{ backgroundColor: item.color }}
-                        ></div>
-                        <span className="font-medium text-gray-800">{item.name}</span>
+                    <div key={index} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div 
+                            className="w-4 h-4 rounded-full"
+                            style={{ backgroundColor: item.color }}
+                          ></div>
+                          <span className="font-medium text-gray-800">{item.name}</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold text-gray-800">{item.percentage}%</div>
+                          <div className="text-sm text-gray-600">{formatCurrency(item.value)}</div>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <div className="font-bold text-gray-800">{item.percentage}%</div>
-                        <div className="text-sm text-gray-600">{formatCurrency(item.value)}</div>
-                      </div>
+                      
+                      {/* Célkitűzés vs aktuális állapot */}
+                      {'target' in item && item.target > 0 && (
+                        <div className="ml-7">
+                          <div className="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>Cél: {item.target}%</span>
+                            <span className={`font-medium ${
+                              parseFloat(item.percentage) > item.target + 5 ? 'text-red-600' :
+                              parseFloat(item.percentage) < item.target - 5 ? 'text-yellow-600' :
+                              'text-green-600'
+                            }`}>
+                              {parseFloat(item.percentage) > item.target 
+                                ? `+${(parseFloat(item.percentage) - item.target).toFixed(1)}%` 
+                                : parseFloat(item.percentage) < item.target
+                                ? `-${(item.target - parseFloat(item.percentage)).toFixed(1)}%`
+                                : 'Megfelelő'
+                              }
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className={`h-2 rounded-full transition-all duration-300 ${
+                                parseFloat(item.percentage) > item.target + 5 ? 'bg-red-400' :
+                                parseFloat(item.percentage) < item.target - 5 ? 'bg-yellow-400' :
+                                'bg-green-400'
+                              }`}
+                              style={{ 
+                                width: `${Math.min(parseFloat(item.percentage), 100)}%`,
+                                maxWidth: '100%'
+                              }}
+                            ></div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
+                </div>
+                
+                {/* Összefoglaló */}
+                <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                  <h4 className="text-sm font-semibold text-blue-800 mb-2">50/30/20 Szabály</h4>
+                  <div className="text-xs text-blue-700 space-y-1">
+                    <div>• <strong>50% Szükségletek:</strong> Lakhatás, étel, közlekedés, egészség</div>
+                    <div>• <strong>30% Vágyak:</strong> Szórakozás, hobbi, utazás, nem alapvető dolgok</div>
+                    <div>• <strong>20% Megtakarítások:</strong> Befektetések, vészhelyzeti tartalék</div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -521,25 +710,73 @@ export default function Dashboard() {
                 <CardTitle className="text-teal-700">Kategóriák szerinti bontás</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-48">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={categoryData}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={60}
-                        fill="#8884d8"
-                        dataKey="value"
-                        label={({ name, value }) => `${name}: ${formatCurrency(value || 0)}`}
-                      >
-                        {categoryData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => formatCurrency(value as number)} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Pie Chart */}
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={categoryData}
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                          label={false} // Kikapcsoljuk a label-eket a chart-on
+                        >
+                          {categoryData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          formatter={(value) => formatCurrency(value as number)} 
+                          labelStyle={{ color: '#374151', fontWeight: 'bold' }}
+                          contentStyle={{ 
+                            backgroundColor: 'white', 
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  
+                  {/* Legenda külön oszlopban */}
+                  <div className="space-y-3">
+                    <h4 className="font-semibold text-gray-800 text-sm mb-3">Kategóriák:</h4>
+                    {categoryData.map((category, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div 
+                            className="w-4 h-4 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: category.color }}
+                          ></div>
+                          <span className="text-sm font-medium text-gray-800 truncate">
+                            {category.name}
+                          </span>
+                        </div>
+                        <div className="text-right ml-2">
+                          <div className="text-sm font-bold text-gray-800">
+                            {formatCurrency(category.value)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {((category.value / categoryData.reduce((sum, cat) => sum + cat.value, 0)) * 100).toFixed(1)}%
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {/* Összesen */}
+                    <div className="mt-4 pt-3 border-t border-gray-200">
+                      <div className="flex justify-between items-center p-2 bg-teal-50 rounded-lg">
+                        <span className="text-sm font-semibold text-teal-800">Összesen:</span>
+                        <span className="text-lg font-bold text-teal-700">
+                          {formatCurrency(categoryData.reduce((sum, cat) => sum + cat.value, 0))}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -598,12 +835,16 @@ export default function Dashboard() {
                 Hozzon létre bevételi és költségvetési terveket a részletes áttekintéshez.
               </p>
               <div className="flex gap-4 justify-center">
-                <Button className="bg-teal-600 hover:bg-teal-700 text-white">
-                  Bevételi terv létrehozása
-                </Button>
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                  Költségvetési terv
-                </Button>
+                <a href="/bevetelek">
+                  <Button className="bg-teal-600 hover:bg-teal-700 text-white">
+                    Bevételi terv létrehozása
+                  </Button>
+                </a>
+                <a href="/koltsegvetes">
+                  <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                    Költségvetési terv
+                  </Button>
+                </a>
               </div>
             </CardContent>
           </Card>

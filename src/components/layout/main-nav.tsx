@@ -53,7 +53,7 @@ const MainNav = () => {
                   Befektetések
                 </Link>
                 <Link href="/jelentesek" className="text-lg hover:text-blue-600 transition-colors">
-                  Jelentések
+                  Megtakarítások
                 </Link>
                 <Link href="/receptek" className="text-lg hover:text-blue-600 transition-colors">
                   Receptek

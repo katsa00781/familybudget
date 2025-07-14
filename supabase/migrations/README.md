@@ -61,6 +61,20 @@ Ez a mappa tartalmazza az összes adatbázis migrációt a Family Budget alkalma
 -- Másold ki a fájl tartalmát és futtasd le a Supabase SQL Editor-ban
 ```
 
+### 008_create_savings_goals.sql  
+**Megtakarítási tervek és befektetési portfólió rendszer**
+- `savings_goals` tábla: Megtakarítási célok (név, célösszeg, céldátum, kategória)
+- `savings_transactions` tábla: Megtakarítási tranzakciók (befizetés/kivét)
+- `investment_portfolio` tábla: Befektetési portfólió (részvények, állampapírok, ETF-ek)
+- `investment_price_history` tábla: Árfolyam előzmények
+- Automatikus havi kalkuláció és progress tracking
+- Felhasználónkénti elkülönítés RLS-sel
+
+```sql
+-- Futtatás:
+-- Másold ki a fájl tartalmát és futtasd le a Supabase SQL Editor-ban
+```
+
 ## Migration futtatási sorrend
 
 **FONTOS:** A migrációkat a következő sorrendben kell futtatni:
@@ -70,6 +84,7 @@ Ez a mappa tartalmazza az összes adatbázis migrációt a Family Budget alkalma
 3. `005_create_shopping_lists.sql` - Bevásárlólisták
 4. `006_create_products.sql` - Termékadatbázis
 5. `007_create_recipes.sql` - Receptek
+6. `008_create_savings_goals.sql` - Megtakarítási tervek
 
 ## Hogyan futtasd a migrációkat
 
@@ -119,7 +134,8 @@ auth.users (Supabase beépített)
 ├── income_plans (bevételi tervek)  
 ├── shopping_lists (bevásárlólisták)
 ├── products (termékadatbázis)
-└── recipes (receptek)
+├── recipes (receptek)
+└── savings_goals (megtakarítási tervek)
 ```
 
 ## Következő lépések
@@ -130,11 +146,4 @@ A migrációk futtatása után az alkalmazás teljes funkcionalitással használ
 - ✅ Bevásárlólisták készítése
 - ✅ Termékadatbázis kezelés vonalkóddal
 - ✅ Receptek kezelése és bevásárlólistára vétele
-
-## Mobilalkalmazás előkészítés
-
-A `products` tábla készen áll a mobilalkalmazás integrációjára:
-- Vonalkód mező vonalkód scanner-hez
-- SKU mező termék azonosításhoz
-- `last_seen_at` mező szinkronizációhoz
-- `available` mező offline működéshez
+- ✅ Megtakarítási célok és befektetési portfólió kezelés

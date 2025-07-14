@@ -9,7 +9,7 @@ import {
 } from "../ui/sheet";
 import { 
   Menu, BarChart2, CircleDollarSign, User, ChefHat, 
-  ShoppingCart, TrendingUpIcon, Package,
+  ShoppingCart, TrendingUpIcon, Package, PiggyBank,
   Users, Home
 } from "lucide-react";
 import { useState } from "react";
@@ -29,7 +29,7 @@ export default function Sidebar({ className = "" }: SidebarProps) {
     { icon: <ShoppingCart size={20} />, label: 'Bevásárlás', href: '/bevasarlas' },
     { icon: <Package size={20} />, label: 'Termékek', href: '/termekek' },
     { icon: <TrendingUpIcon size={20} />, label: 'Befektetések', href: '/befektetesek' },
-    { icon: <BarChart2 size={20} />, label: 'Jelentések', href: '/jelentesek' },
+    { icon: <PiggyBank size={20} />, label: 'Megtakarítások', href: '/jelentesek' },
     { icon: <ChefHat size={20} />, label: 'Receptek', href: '/receptek' },
     { icon: <User size={20} />, label: 'Profil', href: '/profil' }
   ];

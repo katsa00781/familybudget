@@ -346,25 +346,25 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-3 sm:p-6">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         {/* Fejléc */}
-        <div className="text-center space-y-2 mb-8">
-          <h1 className="text-4xl font-bold text-white">Családi Költségvetés</h1>
-          <p className="text-cyan-100">
+        <div className="text-center space-y-2 mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white">Családi Költségvetés</h1>
+          <p className="text-cyan-100 text-sm sm:text-base px-4">
             {currentUser ? `Üdvözöljük, ${getUserDisplayName()}!` : 'Áttekintés a pénzügyi helyzetről'}
           </p>
         </div>
 
         {/* Főbb mutatók */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           <Card className="bg-white/90 backdrop-blur-sm hover:bg-white/95 transition-all duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Havi bevétel</CardTitle>
+              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600">Havi bevétel</CardTitle>
               <TrendingUp className="h-4 w-4 text-teal-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-teal-700">
+              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-teal-700">
                 {formatCurrency(totalIncome)}
               </div>
               <p className="text-xs text-teal-600 mt-2">
@@ -375,11 +375,11 @@ export default function Dashboard() {
 
           <Card className="bg-white/90 backdrop-blur-sm hover:bg-white/95 transition-all duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Havi kiadás</CardTitle>
+              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600">Havi kiadás</CardTitle>
               <TrendingDown className="h-4 w-4 text-red-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">
+              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-red-600">
                 {formatCurrency(totalExpenses)}
               </div>
               <p className="text-xs text-red-500 mt-2">
@@ -390,11 +390,11 @@ export default function Dashboard() {
 
           <Card className="bg-white/90 backdrop-blur-sm hover:bg-white/95 transition-all duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Egyenleg</CardTitle>
+              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600">Egyenleg</CardTitle>
               <Wallet className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <div className={`text-lg sm:text-xl lg:text-2xl font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {formatCurrency(balance)}
               </div>
               <p className="text-xs text-gray-500 mt-2">
@@ -405,11 +405,11 @@ export default function Dashboard() {
 
           <Card className="bg-white/90 backdrop-blur-sm hover:bg-white/95 transition-all duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Mai bevásárlás</CardTitle>
+              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600">Mai bevásárlás</CardTitle>
               <ShoppingCart className="h-4 w-4 text-blue-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">
+              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-600">
                 {formatCurrency(todayShoppingTotal)}
               </div>
               <p className="text-xs text-blue-500 mt-2">
@@ -420,25 +420,25 @@ export default function Dashboard() {
         </div>
 
         {/* Megtakarítási célok és gyors műveletek */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           <Card className="lg:col-span-2 bg-white/90 backdrop-blur-sm">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-teal-700">
-                <Target className="h-5 w-5" />
+              <CardTitle className="flex items-center gap-2 text-teal-700 text-base sm:text-lg">
+                <Target className="h-4 w-4 sm:h-5 sm:w-5" />
                 Megtakarítási Célok
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {savingsGoals.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">Még nincsenek megtakarítási célok</p>
+                <p className="text-gray-500 text-center py-4 text-sm sm:text-base">Még nincsenek megtakarítási célok</p>
               ) : (
                 savingsGoals.slice(0, 3).map((goal) => {
                   const progress = Math.min((goal.current_amount / goal.target_amount) * 100, 100);
                   return (
                     <div key={goal.id} className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium text-gray-800">{goal.name}</span>
-                        <span className="text-sm text-gray-600">
+                      <div className="flex justify-between items-center flex-wrap gap-2">
+                        <span className="font-medium text-gray-800 text-sm sm:text-base truncate flex-1 min-w-0">{goal.name}</span>
+                        <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">
                           {formatCurrency(goal.current_amount)} / {formatCurrency(goal.target_amount)}
                         </span>
                       </div>
@@ -461,30 +461,30 @@ export default function Dashboard() {
 
           <Card className="bg-white/90 backdrop-blur-sm">
             <CardHeader>
-              <CardTitle className="text-teal-700">Gyors műveletek</CardTitle>
+              <CardTitle className="text-teal-700 text-base sm:text-lg">Gyors műveletek</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 p-6">
+            <CardContent className="space-y-3 p-4 sm:p-6">
               <a href="/berkalkulator" className="block">
-                <Button className="w-full bg-teal-600 hover:bg-teal-700 text-white py-3">
-                  <Calculator className="mr-2 h-4 w-4" />
+                <Button className="w-full bg-teal-600 hover:bg-teal-700 text-white py-2 sm:py-3 text-sm sm:text-base">
+                  <Calculator className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                   Bérkalkulátor
                 </Button>
               </a>
               <a href="/bevasarlolista" className="block">
-                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3">
-                  <ShoppingCart className="mr-2 h-4 w-4" />
+                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 sm:py-3 text-sm sm:text-base">
+                  <ShoppingCart className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                   Új bevásárlólista
                 </Button>
               </a>
               <a href="/receptek" className="block">
-                <Button className="w-full bg-green-600 hover:bg-green-700 text-white py-3">
-                  <ChefHat className="mr-2 h-4 w-4" />
+                <Button className="w-full bg-green-600 hover:bg-green-700 text-white py-2 sm:py-3 text-sm sm:text-base">
+                  <ChefHat className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                   Receptek
                 </Button>
               </a>
               <a href="/jelentesek" className="block">
-                <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3">
-                  <PiggyBank className="mr-2 h-4 w-4" />
+                <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 sm:py-3 text-sm sm:text-base">
+                  <PiggyBank className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                   Megtakarítások
                 </Button>
               </a>
@@ -507,7 +507,7 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 {currentBudget.budget_data && currentBudget.budget_data.length > 0 ? (
                   currentBudget.budget_data.map((item: BudgetItem, index: number) => {
                     // Jobb névmegjelenítés logika
@@ -529,33 +529,33 @@ export default function Dashboard() {
                     };
 
                     return (
-                      <div key={index} className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium text-gray-800">{getItemName(item)}</span>
-                          <Badge variant="outline" className="text-xs">
+                      <div key={index} className="p-3 sm:p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between mb-2 gap-2">
+                          <span className="font-medium text-gray-800 text-sm sm:text-base truncate flex-1 min-w-0">{getItemName(item)}</span>
+                          <Badge variant="outline" className="text-xs whitespace-nowrap">
                             {getItemCategory(item)}
                           </Badge>
                         </div>
-                        <div className="text-lg font-bold text-teal-600">
+                        <div className="text-base sm:text-lg font-bold text-teal-600">
                           {formatCurrency(item.amount || 0)}
                         </div>
                         {item.description && item.description.trim() && (
-                          <p className="text-sm text-gray-600 mt-1">{item.description.trim()}</p>
+                          <p className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2">{item.description.trim()}</p>
                         )}
                       </div>
                     );
                   })
                 ) : (
                   <div className="col-span-full text-center py-8">
-                    <p className="text-gray-500">A költségvetési tervben nincsenek tételek</p>
+                    <p className="text-gray-500 text-sm sm:text-base">A költségvetési tervben nincsenek tételek</p>
                   </div>
                 )}
               </div>
               
-              <div className="mt-6 p-4 bg-gradient-to-r from-teal-50 to-green-50 rounded-lg border border-teal-200">
-                <div className="flex justify-between items-center">
+              <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-gradient-to-r from-teal-50 to-green-50 rounded-lg border border-teal-200">
+                <div className="flex justify-between items-center flex-wrap gap-2">
                   <span className="text-sm font-medium text-gray-700">Összes tervezett kiadás:</span>
-                  <span className="text-xl font-bold text-teal-700">
+                  <span className="text-lg sm:text-xl font-bold text-teal-700">
                     {formatCurrency(totalExpenses)}
                   </span>
                 </div>
@@ -585,11 +585,11 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="p-4 bg-gradient-to-r from-green-50 to-teal-50 rounded-lg border border-green-200">
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium text-gray-800">Havi alapbevétel</span>
-                    <span className="text-lg font-bold text-green-600">
+              <div className="space-y-3 sm:space-y-4">
+                <div className="p-3 sm:p-4 bg-gradient-to-r from-green-50 to-teal-50 rounded-lg border border-green-200">
+                  <div className="flex justify-between items-center flex-wrap gap-2">
+                    <span className="font-medium text-gray-800 text-sm sm:text-base">Havi alapbevétel</span>
+                    <span className="text-base sm:text-lg font-bold text-green-600">
                       {formatCurrency(currentIncome.base_income || 0)}
                     </span>
                   </div>
@@ -600,26 +600,26 @@ export default function Dashboard() {
                     <h4 className="text-sm font-medium text-gray-700">További bevételek:</h4>
                     {currentIncome.other_income.map((income: OtherIncome, index: number) => (
                       <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium text-gray-800">
+                        <div className="flex justify-between items-center flex-wrap gap-2">
+                          <span className="text-sm font-medium text-gray-800 truncate flex-1 min-w-0">
                             {income.name || 'Névtelen bevétel'}
                           </span>
-                          <span className="font-bold text-green-600">
+                          <span className="font-bold text-green-600 whitespace-nowrap">
                             {formatCurrency(income.amount || 0)}
                           </span>
                         </div>
                         {income.description && (
-                          <p className="text-xs text-gray-600 mt-1">{income.description}</p>
+                          <p className="text-xs text-gray-600 mt-1 line-clamp-2">{income.description}</p>
                         )}
                       </div>
                     ))}
                   </div>
                 )}
                 
-                <div className="mt-4 p-4 bg-gradient-to-r from-green-50 to-teal-50 rounded-lg border border-green-200">
-                  <div className="flex justify-between items-center">
+                <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gradient-to-r from-green-50 to-teal-50 rounded-lg border border-green-200">
+                  <div className="flex justify-between items-center flex-wrap gap-2">
                     <span className="text-sm font-medium text-gray-700">Összes bevétel:</span>
-                    <span className="text-xl font-bold text-green-700">
+                    <span className="text-lg sm:text-xl font-bold text-green-700">
                       {formatCurrency(totalIncome)}
                     </span>
                   </div>
@@ -630,33 +630,33 @@ export default function Dashboard() {
         )}
 
         {/* Költségvetési breakdown és kategóriák */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
           {budgetBreakdown.length > 0 && (
             <Card className="bg-white/90 backdrop-blur-sm">
               <CardHeader>
-                <CardTitle className="text-teal-700">50/30/20 Szabály</CardTitle>
+                <CardTitle className="text-teal-700 text-base sm:text-lg">50/30/20 Szabály</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {budgetBreakdown.map((item, index) => (
                     <div key={index} className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                           <div 
-                            className="w-4 h-4 rounded-full"
+                            className="w-3 h-3 sm:w-4 sm:h-4 rounded-full flex-shrink-0"
                             style={{ backgroundColor: item.color }}
                           ></div>
-                          <span className="font-medium text-gray-800">{item.name}</span>
+                          <span className="font-medium text-gray-800 text-sm sm:text-base truncate">{item.name}</span>
                         </div>
-                        <div className="text-right">
-                          <div className="font-bold text-gray-800">{item.percentage}%</div>
-                          <div className="text-sm text-gray-600">{formatCurrency(item.value)}</div>
+                        <div className="text-right ml-2">
+                          <div className="font-bold text-gray-800 text-sm sm:text-base">{item.percentage}%</div>
+                          <div className="text-xs sm:text-sm text-gray-600">{formatCurrency(item.value)}</div>
                         </div>
                       </div>
                       
                       {/* Célkitűzés vs aktuális állapot */}
                       {'target' in item && item.target > 0 && (
-                        <div className="ml-7">
+                        <div className="ml-5 sm:ml-7">
                           <div className="flex justify-between text-xs text-gray-500 mb-1">
                             <span>Cél: {item.target}%</span>
                             <span className={`font-medium ${
@@ -692,7 +692,7 @@ export default function Dashboard() {
                 </div>
                 
                 {/* Összefoglaló */}
-                <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
                   <h4 className="text-sm font-semibold text-blue-800 mb-2">50/30/20 Szabály</h4>
                   <div className="text-xs text-blue-700 space-y-1">
                     <div>• <strong>50% Szükségletek:</strong> Lakhatás, étel, közlekedés, egészség</div>
@@ -707,19 +707,19 @@ export default function Dashboard() {
           {categoryData.length > 0 && (
             <Card className="bg-white/90 backdrop-blur-sm">
               <CardHeader>
-                <CardTitle className="text-teal-700">Kategóriák szerinti bontás</CardTitle>
+                <CardTitle className="text-teal-700 text-base sm:text-lg">Kategóriák szerinti bontás</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-1 xl:grid-cols-2 lg:gap-6">
                   {/* Pie Chart */}
-                  <div className="h-64">
+                  <div className="h-48 sm:h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
                           data={categoryData}
                           cx="50%"
                           cy="50%"
-                          outerRadius={80}
+                          outerRadius={window.innerWidth < 640 ? 60 : 80}
                           fill="#8884d8"
                           dataKey="value"
                           label={false} // Kikapcsoljuk a label-eket a chart-on
@@ -743,21 +743,21 @@ export default function Dashboard() {
                   </div>
                   
                   {/* Legenda külön oszlopban */}
-                  <div className="space-y-3">
-                    <h4 className="font-semibold text-gray-800 text-sm mb-3">Kategóriák:</h4>
+                  <div className="space-y-2 sm:space-y-3">
+                    <h4 className="font-semibold text-gray-800 text-sm mb-2 sm:mb-3">Kategóriák:</h4>
                     {categoryData.map((category, index) => (
                       <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                           <div 
-                            className="w-4 h-4 rounded-full flex-shrink-0"
+                            className="w-3 h-3 sm:w-4 sm:h-4 rounded-full flex-shrink-0"
                             style={{ backgroundColor: category.color }}
                           ></div>
-                          <span className="text-sm font-medium text-gray-800 truncate">
+                          <span className="text-xs sm:text-sm font-medium text-gray-800 truncate">
                             {category.name}
                           </span>
                         </div>
                         <div className="text-right ml-2">
-                          <div className="text-sm font-bold text-gray-800">
+                          <div className="text-xs sm:text-sm font-bold text-gray-800">
                             {formatCurrency(category.value)}
                           </div>
                           <div className="text-xs text-gray-500">
@@ -768,10 +768,10 @@ export default function Dashboard() {
                     ))}
                     
                     {/* Összesen */}
-                    <div className="mt-4 pt-3 border-t border-gray-200">
+                    <div className="mt-3 sm:mt-4 pt-3 border-t border-gray-200">
                       <div className="flex justify-between items-center p-2 bg-teal-50 rounded-lg">
-                        <span className="text-sm font-semibold text-teal-800">Összesen:</span>
-                        <span className="text-lg font-bold text-teal-700">
+                        <span className="text-xs sm:text-sm font-semibold text-teal-800">Összesen:</span>
+                        <span className="text-base sm:text-lg font-bold text-teal-700">
                           {formatCurrency(categoryData.reduce((sum, cat) => sum + cat.value, 0))}
                         </span>
                       </div>
@@ -787,32 +787,38 @@ export default function Dashboard() {
         {(totalIncome > 0 || totalExpenses > 0) && (
           <Card className="bg-white/90 backdrop-blur-sm">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-teal-700">
-                <BarChart2 className="h-5 w-5" />
+              <CardTitle className="flex items-center gap-2 text-teal-700 text-base sm:text-lg">
+                <BarChart2 className="h-4 w-4 sm:h-5 sm:w-5" />
                 Havi trend
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-80">
+              <div className="h-64 sm:h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthlyData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <LineChart data={monthlyData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`} />
+                    <XAxis 
+                      dataKey="name"
+                      fontSize={window.innerWidth < 640 ? 10 : 12}
+                    />
+                    <YAxis 
+                      tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
+                      fontSize={window.innerWidth < 640 ? 10 : 12}
+                    />
                     <Tooltip formatter={(value) => formatCurrency(value as number)} />
                     <Line 
                       type="monotone" 
                       dataKey="Bevételek" 
                       stroke="#10b981" 
-                      strokeWidth={3}
-                      dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
+                      strokeWidth={window.innerWidth < 640 ? 2 : 3}
+                      dot={{ fill: '#10b981', strokeWidth: 2, r: window.innerWidth < 640 ? 3 : 4 }}
                     />
                     <Line 
                       type="monotone" 
                       dataKey="Kiadások" 
                       stroke="#ef4444" 
-                      strokeWidth={3}
-                      dot={{ fill: '#ef4444', strokeWidth: 2, r: 4 }}
+                      strokeWidth={window.innerWidth < 640 ? 2 : 3}
+                      dot={{ fill: '#ef4444', strokeWidth: 2, r: window.innerWidth < 640 ? 3 : 4 }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -824,24 +830,24 @@ export default function Dashboard() {
         {/* Üres állapot, ha nincs adat */}
         {!currentBudget && !currentIncome && savingsGoals.length === 0 && (
           <Card className="bg-white/90 backdrop-blur-sm">
-            <CardContent className="text-center py-12">
+            <CardContent className="text-center py-8 sm:py-12 px-4">
               <div className="text-gray-400 mb-4">
-                <BarChart2 className="h-16 w-16 mx-auto" />
+                <BarChart2 className="h-12 w-12 sm:h-16 sm:w-16 mx-auto" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-700 mb-2">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-700 mb-2">
                 Kezdje el a költségvetés tervezését!
               </h3>
-              <p className="text-gray-500 mb-6">
+              <p className="text-sm sm:text-base text-gray-500 mb-4 sm:mb-6">
                 Hozzon létre bevételi és költségvetési terveket a részletes áttekintéshez.
               </p>
-              <div className="flex gap-4 justify-center">
-                <a href="/bevetelek">
-                  <Button className="bg-teal-600 hover:bg-teal-700 text-white">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
+                <a href="/bevetelek" className="w-full sm:w-auto">
+                  <Button className="w-full bg-teal-600 hover:bg-teal-700 text-white py-2 text-sm sm:text-base">
                     Bevételi terv létrehozása
                   </Button>
                 </a>
-                <a href="/koltsegvetes">
-                  <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                <a href="/koltsegvetes" className="w-full sm:w-auto">
+                  <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 text-sm sm:text-base">
                     Költségvetési terv
                   </Button>
                 </a>

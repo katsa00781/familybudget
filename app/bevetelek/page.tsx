@@ -192,34 +192,34 @@ export default function BevetelTervekPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-3 sm:p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="text-white mb-6">
-          <div className="flex items-center gap-3 mb-4">
-            <TrendingUp className="text-white" size={32} />
-            <h1 className="text-3xl font-bold">Bevételi Tervek Kezelése</h1>
+        <div className="text-white mb-4 sm:mb-6">
+          <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+            <TrendingUp className="text-white" size={24} />
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">Bevételi Tervek Kezelése</h1>
           </div>
-          <p className="text-lg">
+          <p className="text-sm sm:text-base lg:text-lg px-1">
             Hozz létre és kezelj bevételi terveket a költségvetéseid pontosabb tervezéséhez.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Új bevételi terv létrehozása */}
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             <Card className="bg-white shadow-lg border-0">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Plus size={20} className="text-green-600" />
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <Plus size={16} className="text-green-600 sm:w-5 sm:h-5" />
                   Új Bevételi Terv
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-sm">
                   Hozz létre egy új bevételi tervet az alapbevétellel és egyéb jövedelmekkel
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {/* Terv neve */}
                   <div>
                     <label htmlFor="plan-name" className="block text-sm font-medium text-gray-700 mb-2">
@@ -230,7 +230,7 @@ export default function BevetelTervekPage() {
                       value={planName}
                       onChange={(e) => setPlanName(e.target.value)}
                       placeholder={`Bevételi terv ${new Date().toLocaleDateString('hu-HU')}`}
-                      className="w-full"
+                      className="w-full h-9 sm:h-10 text-sm"
                     />
                   </div>
 
@@ -244,7 +244,7 @@ export default function BevetelTervekPage() {
                       value={planDescription}
                       onChange={(e) => setPlanDescription(e.target.value)}
                       placeholder="Rövid leírás a bevételi tervről"
-                      className="w-full"
+                      className="w-full h-9 sm:h-10 text-sm"
                     />
                   </div>
 
@@ -259,7 +259,7 @@ export default function BevetelTervekPage() {
                       value={monthlyIncome || ''}
                       onChange={(e) => setMonthlyIncome(parseInt(e.target.value) || 0)}
                       placeholder="350000"
-                      className="w-full"
+                      className="w-full h-9 sm:h-10 text-sm"
                     />
                   </div>
 
@@ -273,42 +273,45 @@ export default function BevetelTervekPage() {
                         onClick={addAdditionalIncome}
                         variant="outline"
                         size="sm"
-                        className="flex items-center gap-1"
+                        className="flex items-center gap-1 h-8 text-sm"
                       >
-                        <Plus size={16} />
-                        Hozzáad
+                        <Plus size={14} />
+                        <span className="hidden sm:inline">Hozzáad</span>
+                        <span className="sm:hidden">+</span>
                       </Button>
                     </div>
                     
                     {additionalIncomes.length === 0 ? (
-                      <p className="text-sm text-gray-500 text-center py-4 border border-dashed border-gray-300 rounded-lg">
+                      <p className="text-xs sm:text-sm text-gray-500 text-center py-3 sm:py-4 border border-dashed border-gray-300 rounded-lg">
                         Még nincsenek egyéb jövedelmek hozzáadva
                       </p>
                     ) : (
                       <div className="space-y-2">
                         {additionalIncomes.map((income) => (
-                          <div key={income.id} className="flex gap-2 items-center">
+                          <div key={income.id} className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
                             <Input
                               value={income.name}
                               onChange={(e) => updateAdditionalIncome(income.id, 'name', e.target.value)}
                               placeholder="Jövedelem neve"
-                              className="flex-1"
+                              className="flex-1 h-8 sm:h-9 text-sm"
                             />
-                            <Input
-                              type="number"
-                              value={income.amount || ''}
-                              onChange={(e) => updateAdditionalIncome(income.id, 'amount', parseInt(e.target.value) || 0)}
-                              placeholder="Összeg"
-                              className="w-32"
-                            />
-                            <Button
-                              onClick={() => removeAdditionalIncome(income.id)}
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <X size={16} />
-                            </Button>
+                            <div className="flex gap-2">
+                              <Input
+                                type="number"
+                                value={income.amount || ''}
+                                onChange={(e) => updateAdditionalIncome(income.id, 'amount', parseInt(e.target.value) || 0)}
+                                placeholder="Összeg"
+                                className="w-full sm:w-32 h-8 sm:h-9 text-sm"
+                              />
+                              <Button
+                                onClick={() => removeAdditionalIncome(income.id)}
+                                variant="outline"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700 h-8 w-8 p-0 flex-shrink-0"
+                              >
+                                <X size={14} />
+                              </Button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -317,19 +320,19 @@ export default function BevetelTervekPage() {
 
                   {/* Összegzés */}
                   {(monthlyIncome > 0 || additionalIncomes.some(i => i.amount > 0)) && (
-                    <div className="p-4 bg-gray-50 rounded-lg space-y-2">
-                      <div className="flex justify-between text-sm">
+                    <div className="p-3 sm:p-4 bg-gray-50 rounded-lg space-y-2">
+                      <div className="flex justify-between text-xs sm:text-sm">
                         <span className="text-gray-600">Alapbevétel:</span>
                         <span className="font-medium">{formatCurrency(monthlyIncome)}</span>
                       </div>
                       {additionalIncomes.filter(i => i.amount > 0).map((income) => (
-                        <div key={income.id} className="flex justify-between text-sm">
-                          <span className="text-gray-600">{income.name || 'Névtelen jövedelem'}:</span>
-                          <span className="font-medium">{formatCurrency(income.amount)}</span>
+                        <div key={income.id} className="flex justify-between text-xs sm:text-sm">
+                          <span className="text-gray-600 truncate mr-2">{income.name || 'Névtelen jövedelem'}:</span>
+                          <span className="font-medium whitespace-nowrap">{formatCurrency(income.amount)}</span>
                         </div>
                       ))}
                       <Separator />
-                      <div className="flex justify-between font-bold text-green-600">
+                      <div className="flex justify-between font-bold text-green-600 text-sm sm:text-base">
                         <span>Összes havi bevétel:</span>
                         <span>{formatCurrency(calculateTotal())}</span>
                       </div>
@@ -340,13 +343,13 @@ export default function BevetelTervekPage() {
                   <Button 
                     onClick={savePlan} 
                     disabled={isLoading || !currentUser || !planName.trim() || monthlyIncome <= 0}
-                    className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white shadow-lg flex items-center gap-2"
+                    className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white shadow-lg flex items-center justify-center gap-2 h-9 sm:h-10 text-sm sm:text-base"
                   >
-                    <Save size={20} />
+                    <Save size={16} className="sm:w-5 sm:h-5" />
                     {isLoading ? 'Mentés...' : 'Bevételi Terv Mentése'}
                   </Button>
                   {!currentUser && (
-                    <p className="text-sm text-gray-500 text-center">A mentéshez be kell jelentkezned!</p>
+                    <p className="text-xs sm:text-sm text-gray-500 text-center">A mentéshez be kell jelentkezned!</p>
                   )}
                 </div>
               </CardContent>
@@ -357,28 +360,28 @@ export default function BevetelTervekPage() {
           <div>
             <Card className="bg-white shadow-lg border-0">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign size={20} className="text-blue-600" />
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <DollarSign size={16} className="text-blue-600 sm:w-5 sm:h-5" />
                   Mentett Bevételi Tervek
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-sm">
                   A korábban létrehozott bevételi terveid
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {savedPlans.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">
+                  <p className="text-center text-gray-500 py-6 sm:py-8 text-sm">
                     Még nincsenek mentett bevételi tervek
                   </p>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3 sm:space-y-4">
                     {savedPlans.map((plan) => (
-                      <div key={plan.id} className="p-4 border border-gray-200 rounded-lg">
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <h3 className="font-semibold text-gray-900">{plan.name}</h3>
+                      <div key={plan.id} className="p-3 sm:p-4 border border-gray-200 rounded-lg">
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-2 sm:gap-0 mb-3">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{plan.name}</h3>
                             {plan.description && (
-                              <p className="text-sm text-gray-600">{plan.description}</p>
+                              <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">{plan.description}</p>
                             )}
                             <p className="text-xs text-gray-500">
                               Létrehozva: {new Date(plan.created_at).toLocaleDateString('hu-HU')}
@@ -388,14 +391,14 @@ export default function BevetelTervekPage() {
                             onClick={() => deletePlan(plan.id)}
                             variant="outline"
                             size="sm"
-                            className="text-red-600 hover:text-red-700"
+                            className="text-red-600 hover:text-red-700 h-8 w-8 p-0 flex-shrink-0"
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={14} />
                           </Button>
                         </div>
                         
                         <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
+                          <div className="flex justify-between text-xs sm:text-sm">
                             <span className="text-gray-600">Alapbevétel:</span>
                             <span className="font-medium">{formatCurrency(plan.monthly_income)}</span>
                           </div>
@@ -403,16 +406,16 @@ export default function BevetelTervekPage() {
                           {plan.additional_incomes && plan.additional_incomes.length > 0 && (
                             <>
                               {plan.additional_incomes.map((income) => (
-                                <div key={income.id} className="flex justify-between text-sm">
-                                  <span className="text-gray-600">{income.name}:</span>
-                                  <span className="font-medium">{formatCurrency(income.amount)}</span>
+                                <div key={income.id} className="flex justify-between text-xs sm:text-sm">
+                                  <span className="text-gray-600 truncate mr-2">{income.name}:</span>
+                                  <span className="font-medium whitespace-nowrap">{formatCurrency(income.amount)}</span>
                                 </div>
                               ))}
                             </>
                           )}
                           
                           <Separator />
-                          <div className="flex justify-between font-bold text-green-600">
+                          <div className="flex justify-between font-bold text-green-600 text-sm sm:text-base">
                             <span>Összes bevétel:</span>
                             <span>{formatCurrency(plan.total_income)}</span>
                           </div>

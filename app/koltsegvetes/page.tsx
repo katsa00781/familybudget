@@ -500,47 +500,47 @@ export default function KoltsegvetesPage() {
   const totals = calculateTotals()
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-3 sm:p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="text-white mb-6">
-          <div className="flex items-center gap-3 mb-4">
-            <PiggyBank className="text-white" size={32} />
-            <h1 className="text-3xl font-bold">Költségvetés Tervező 2025</h1>
+        <div className="text-white mb-4 sm:mb-6">
+          <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+            <PiggyBank className="text-white" size={24} />
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">Költségvetés Tervező 2025</h1>
           </div>
-          <p className="text-lg">
+          <p className="text-sm sm:text-base lg:text-lg px-1">
             Tervezd meg havi költségvetésedet kategóriák szerint és tartsd kézben a pénzügyeidet.
           </p>
         </div>
 
         {/* Mentett költségvetések betöltése és bevétel kezelése */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {/* Mentett költségvetések */}
           <Card className="bg-white shadow-lg border-0">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign size={20} className="text-green-600" />
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <DollarSign size={16} className="text-green-600 sm:w-5 sm:h-5" />
                 Mentett Költségvetések
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-sm">
                 Töltsd be egy korábban elmentett költségvetésedet
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 <div>
                   <label htmlFor="saved-budgets" className="block text-sm font-medium text-gray-700 mb-2">
                     Válassz egy költségvetést
                   </label>
                   <Select value={selectedBudgetId} onValueChange={(value) => loadBudget(value)}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-9 sm:h-10">
                       <SelectValue placeholder="Válassz egy mentett költségvetést..." />
                     </SelectTrigger>
                     <SelectContent>
                       {savedBudgets.map((budget) => (
                         <SelectItem key={budget.id} value={budget.id}>
                           <div className="flex flex-col">
-                            <span className="font-medium">{budget.name}</span>
+                            <span className="font-medium text-sm">{budget.name}</span>
                             <span className="text-xs text-gray-500">
                               {new Date(budget.created_at).toLocaleDateString('hu-HU')} - 
                               {budget.total_amount.toLocaleString('hu-HU')} HUF
@@ -552,19 +552,19 @@ export default function KoltsegvetesPage() {
                   </Select>
                 </div>
                 
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Button
                     onClick={() => loadBudget('')}
                     variant="outline"
-                    className="flex-1 flex items-center gap-2"
+                    className="flex-1 flex items-center gap-2 h-9 text-sm"
                   >
-                    <Plus size={16} />
+                    <Plus size={14} />
                     Új költségvetés
                   </Button>
                   {selectedBudgetId && (
-                    <div className="flex-1 text-sm text-gray-600 flex items-center">
+                    <div className="flex-1 text-xs sm:text-sm text-gray-600 flex items-center">
                       <span className="font-medium">Módosítás alatt: </span>
-                      <span className="ml-1 text-blue-600 font-semibold">
+                      <span className="ml-1 text-blue-600 font-semibold truncate">
                         {savedBudgets.find(b => b.id === selectedBudgetId)?.name}
                       </span>
                     </div>
@@ -572,7 +572,7 @@ export default function KoltsegvetesPage() {
                 </div>
                 
                 {savedBudgets.length === 0 && (
-                  <p className="text-sm text-gray-500 text-center py-4">
+                  <p className="text-sm text-gray-500 text-center py-3 sm:py-4">
                     Még nincsenek mentett költségvetések
                   </p>
                 )}
@@ -583,29 +583,29 @@ export default function KoltsegvetesPage() {
           {/* Tervezett bevétel és összehasonlítás */}
           <Card className="bg-white shadow-lg border-0">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp size={20} className="text-blue-600" />
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <TrendingUp size={16} className="text-blue-600 sm:w-5 sm:h-5" />
                 Bevétel vs Költségvetés
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-sm">
                 Hasonlítsd össze a tervezett bevételed a költségvetéseddel
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 <div>
                   <label htmlFor="income-plan" className="block text-sm font-medium text-gray-700 mb-2">
                     Válassz egy bevételi tervet
                   </label>
                   <Select value={selectedIncomeId} onValueChange={(value) => selectIncomePlan(value)}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-9 sm:h-10">
                       <SelectValue placeholder="Válassz egy bevételi tervet..." />
                     </SelectTrigger>
                     <SelectContent>
                       {incomePlans.map((plan) => (
                         <SelectItem key={plan.id} value={plan.id}>
                           <div className="flex flex-col">
-                            <span className="font-medium">{plan.name}</span>
+                            <span className="font-medium text-sm">{plan.name}</span>
                             <span className="text-xs text-gray-500">
                               {new Date(plan.created_at).toLocaleDateString('hu-HU')} - 
                               {plan.total_income.toLocaleString('hu-HU')} HUF
@@ -622,7 +622,7 @@ export default function KoltsegvetesPage() {
                   )}
                 </div>
                 
-                <div className="text-sm text-gray-600">
+                <div className="text-xs sm:text-sm text-gray-600">
                   <span className="font-medium">Jelenleg kiválasztott bevétel: </span>
                   <span className="font-bold text-blue-600">
                     {expectedIncome > 0 ? `${expectedIncome.toLocaleString('hu-HU')} HUF` : 'Nincs kiválasztva'}
@@ -630,40 +630,40 @@ export default function KoltsegvetesPage() {
                 </div>
                 
                 {expectedIncome > 0 && (
-                  <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
+                  <div className="space-y-2 sm:space-y-3 p-3 sm:p-4 bg-gray-50 rounded-lg">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-gray-600">Tervezett bevétel:</span>
-                      <span className="font-bold text-green-600">
+                      <span className="text-xs sm:text-sm font-medium text-gray-600">Tervezett bevétel:</span>
+                      <span className="font-bold text-green-600 text-sm">
                         {expectedIncome.toLocaleString('hu-HU')} HUF
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-gray-600">Összes költség:</span>
-                      <span className="font-bold text-red-600">
+                      <span className="text-xs sm:text-sm font-medium text-gray-600">Összes költség:</span>
+                      <span className="font-bold text-red-600 text-sm">
                         {calculateTotals().total.toLocaleString('hu-HU')} HUF
                       </span>
                     </div>
                     <Separator />
                     <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-gray-600">Különbség:</span>
-                      <span className={`font-bold ${expectedIncome - calculateTotals().total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <span className="text-xs sm:text-sm font-medium text-gray-600">Különbség:</span>
+                      <span className={`font-bold text-sm ${expectedIncome - calculateTotals().total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {(expectedIncome - calculateTotals().total).toLocaleString('hu-HU')} HUF
                       </span>
                     </div>
                     
                     {expectedIncome - calculateTotals().total < 0 && (
-                      <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                        <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                        <span className="text-sm text-red-700 font-medium">
+                      <div className="flex items-center gap-2 p-2 sm:p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></div>
+                        <span className="text-xs sm:text-sm text-red-700 font-medium">
                           Figyelem! A költségvetés meghaladja a bevételt!
                         </span>
                       </div>
                     )}
                     
                     {expectedIncome - calculateTotals().total >= 0 && (
-                      <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <span className="text-sm text-green-700 font-medium">
+                      <div className="flex items-center gap-2 p-2 sm:p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></div>
+                        <span className="text-xs sm:text-sm text-green-700 font-medium">
                           Kiváló! A költségvetés belefér a bevételbe.
                         </span>
                       </div>
@@ -676,70 +676,70 @@ export default function KoltsegvetesPage() {
         </div>
 
         {/* Összesítő kártyák */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
           <Card className="bg-white shadow-lg border-0">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-                <Calculator size={16} className="text-gray-600" />
-                Összes költség
+              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1 sm:gap-2">
+                <Calculator size={14} className="text-gray-600 sm:w-4 sm:h-4" />
+                <span className="truncate">Összes költség</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gray-900">{formatCurrency(totals.total)}</div>
+              <div className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900">{formatCurrency(totals.total)}</div>
             </CardContent>
           </Card>
 
           <Card className="bg-gradient-to-br from-red-400 to-red-600 text-white shadow-lg border-0">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-red-100 flex items-center gap-2">
-                <Target size={16} className="text-red-100" />
-                Szükségletek
+              <CardTitle className="text-xs sm:text-sm font-medium text-red-100 flex items-center gap-1 sm:gap-2">
+                <Target size={14} className="text-red-100 sm:w-4 sm:h-4" />
+                <span className="truncate">Szükségletek</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">{formatCurrency(totals.szuksegletTotal)}</div>
+              <div className="text-base sm:text-xl lg:text-2xl font-bold text-white">{formatCurrency(totals.szuksegletTotal)}</div>
             </CardContent>
           </Card>
 
           <Card className="bg-gradient-to-br from-blue-400 to-blue-600 text-white shadow-lg border-0">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-blue-100 flex items-center gap-2">
-                <Gift size={16} className="text-blue-100" />
-                Vágyak
+              <CardTitle className="text-xs sm:text-sm font-medium text-blue-100 flex items-center gap-1 sm:gap-2">
+                <Gift size={14} className="text-blue-100 sm:w-4 sm:h-4" />
+                <span className="truncate">Vágyak</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">{formatCurrency(totals.vagyakTotal)}</div>
+              <div className="text-base sm:text-xl lg:text-2xl font-bold text-white">{formatCurrency(totals.vagyakTotal)}</div>
             </CardContent>
           </Card>
 
           <Card className="bg-gradient-to-br from-green-400 to-green-600 text-white shadow-lg border-0">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-green-100 flex items-center gap-2">
-                <PiggyBank size={16} className="text-green-100" />
-                Megtakarítás
+              <CardTitle className="text-xs sm:text-sm font-medium text-green-100 flex items-center gap-1 sm:gap-2">
+                <PiggyBank size={14} className="text-green-100 sm:w-4 sm:h-4" />
+                <span className="truncate">Megtakarítás</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">{formatCurrency(totals.megtakaritasTotal)}</div>
+              <div className="text-base sm:text-xl lg:text-2xl font-bold text-white">{formatCurrency(totals.megtakaritasTotal)}</div>
             </CardContent>
           </Card>
         </div>
 
         {/* Mentés gomb */}
-        <div className="mb-6">
+        <div className="mb-4 sm:mb-6">
           <Card className="bg-white shadow-lg border-0 mb-4">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Save size={20} className="text-green-600" />
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <Save size={16} className="text-green-600 sm:w-5 sm:h-5" />
                 Költségvetés Mentése
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-sm">
                 Add meg a költségvetés nevét és leírását a mentés előtt
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 mb-4">
                 <div>
                   <label htmlFor="budget-name" className="block text-sm font-medium text-gray-700 mb-2">
                     Költségvetés neve
@@ -749,7 +749,7 @@ export default function KoltsegvetesPage() {
                     value={budgetName}
                     onChange={(e) => setBudgetName(e.target.value)}
                     placeholder={`Költségvetés ${new Date().toLocaleDateString('hu-HU')}`}
-                    className="w-full"
+                    className="w-full h-9 sm:h-10 text-sm"
                   />
                 </div>
                 <div>
@@ -761,20 +761,20 @@ export default function KoltsegvetesPage() {
                     value={budgetDescription}
                     onChange={(e) => setBudgetDescription(e.target.value)}
                     placeholder="Rövid leírás a költségvetésről"
-                    className="w-full"
+                    className="w-full h-9 sm:h-10 text-sm"
                   />
                 </div>
               </div>
               <Button 
                 onClick={saveBudget} 
                 disabled={isLoading || !currentUser}
-                className="bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white shadow-lg px-6 py-3 flex items-center gap-2"
+                className="w-full sm:w-auto bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white shadow-lg px-4 sm:px-6 py-2 sm:py-3 flex items-center justify-center gap-2 text-sm sm:text-base"
               >
-                <Save size={20} />
+                <Save size={16} className="sm:w-5 sm:h-5" />
                 {isLoading ? 'Mentés...' : selectedBudgetId ? 'Költségvetés Frissítése' : 'Új Költségvetés Mentése'}
               </Button>
               {!currentUser && (
-                <p className="text-sm text-gray-500 mt-2">A mentéshez be kell jelentkezned!</p>
+                <p className="text-xs sm:text-sm text-gray-500 mt-2">A mentéshez be kell jelentkezned!</p>
               )}
             </CardContent>
           </Card>
@@ -783,100 +783,164 @@ export default function KoltsegvetesPage() {
         {/* Költségvetési táblázat */}
         <Card className="bg-white shadow-lg border-0">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard size={24} className="text-purple-600" />
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <CreditCard size={20} className="text-purple-600 sm:w-6 sm:h-6" />
               Költségvetési Tételek
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-sm">
               Módosítsd az összegeket a kategóriák szerint
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               {budgetData.map((category, categoryIndex) => (
-                <div key={category.name} className="border-2 border-gray-100 rounded-xl p-6 bg-gradient-to-r from-gray-50 to-gray-100">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-lg text-gray-900 flex items-center gap-3">
+                <div key={category.name} className="border-2 border-gray-100 rounded-xl p-4 sm:p-6 bg-gradient-to-r from-gray-50 to-gray-100">
+                  <div className="flex items-center justify-between mb-3 sm:mb-4">
+                    <h3 className="font-semibold text-base sm:text-lg text-gray-900 flex items-center gap-2 sm:gap-3">
                       {getCategoryIcon(category.name)}
                       {category.name}
                     </h3>
-                    <div className="flex items-center gap-4">
-                      <div className="text-sm font-medium text-gray-600">
-                        Kategória összesen: <span className="text-lg font-bold text-gray-900">{formatCurrency(getCategoryTotal(category))}</span>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+                      <div className="text-xs sm:text-sm font-medium text-gray-600">
+                        Kategória összesen: <span className="text-sm sm:text-lg font-bold text-gray-900">{formatCurrency(getCategoryTotal(category))}</span>
                       </div>
                       <Button
                         onClick={() => addItem(categoryIndex)}
                         variant="outline"
                         size="sm"
-                        className="flex items-center gap-1 text-green-600 border-green-300 hover:bg-green-50"
+                        className="w-full sm:w-auto flex items-center justify-center gap-1 text-green-600 border-green-300 hover:bg-green-50 text-sm h-8"
                       >
-                        <Plus size={16} />
-                        Tétel hozzáadása
+                        <Plus size={14} />
+                        <span className="sm:hidden">Új tétel</span>
+                        <span className="hidden sm:inline">Tétel hozzáadása</span>
                       </Button>
                     </div>
                   </div>
                   <div className="space-y-3">
                     {category.items.map((item, itemIndex) => (
-                      <div key={item.id} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center bg-white rounded-lg p-4 shadow-sm">
-                        {/* Típus választó */}
-                        <div className="flex items-center gap-2">
-                          <Select value={item.type || "none"} onValueChange={(value) => updateItemType(categoryIndex, itemIndex, value === "none" ? '' : value as 'Szükséglet' | 'Vágyak' | 'Megtakarítás')}>
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Típus" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Nincs</SelectItem>
-                              <SelectItem value="Szükséglet">Szükséglet</SelectItem>
-                              <SelectItem value="Vágyak">Vágyak</SelectItem>
-                              <SelectItem value="Megtakarítás">Megtakarítás</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        
-                        {/* Címke */}
-                        <div className="flex items-center gap-2">
-                          {item.type && (
-                            <Badge variant="outline" className={getTypeColor(item.type)}>
-                              {item.type}
-                            </Badge>
-                          )}
-                        </div>
-                        
-                        {/* Tétel neve (szerkeszthető) */}
-                        <div className="md:col-span-2">
-                          <Input
-                            value={item.subcategory}
-                            onChange={(e) => updateItemName(categoryIndex, itemIndex, e.target.value)}
-                            className="font-medium text-gray-700 border-gray-300"
-                            placeholder="Tétel neve"
-                          />
-                        </div>
-                        
-                        {/* Összeg */}
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="text"
-                            value={item.amount.toLocaleString('hu-HU')}
-                            onChange={(e) => updateAmount(categoryIndex, itemIndex, e.target.value)}
-                            className="text-right border-2 focus:border-green-400"
-                            placeholder="0"
-                          />
-                          <span className="text-sm text-gray-500 font-medium">Ft</span>
-                        </div>
-                        
-                        {/* Formázott összeg és törlés gomb */}
-                        <div className="flex items-center justify-between">
-                          <div className="text-right font-bold text-gray-900 text-lg">
-                            {formatCurrency(item.amount)}
+                      <div key={item.id} className="grid grid-cols-1 gap-3 sm:gap-4 bg-white rounded-lg p-3 sm:p-4 shadow-sm">
+                        {/* Mobile layout */}
+                        <div className="sm:hidden space-y-3">
+                          {/* Row 1: Type and Badge */}
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1">
+                              <Select value={item.type || "none"} onValueChange={(value) => updateItemType(categoryIndex, itemIndex, value === "none" ? '' : value as 'Szükséglet' | 'Vágyak' | 'Megtakarítás')}>
+                                <SelectTrigger className="w-full h-8 text-sm">
+                                  <SelectValue placeholder="Típus" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">Nincs</SelectItem>
+                                  <SelectItem value="Szükséglet">Szükséglet</SelectItem>
+                                  <SelectItem value="Vágyak">Vágyak</SelectItem>
+                                  <SelectItem value="Megtakarítás">Megtakarítás</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {item.type && (
+                              <Badge variant="outline" className={`${getTypeColor(item.type)} text-xs`}>
+                                {item.type}
+                              </Badge>
+                            )}
                           </div>
-                          <Button
-                            onClick={() => removeItem(categoryIndex, itemIndex)}
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50 ml-2"
-                          >
-                            <X size={16} />
-                          </Button>
+                          
+                          {/* Row 2: Name */}
+                          <div>
+                            <Input
+                              value={item.subcategory}
+                              onChange={(e) => updateItemName(categoryIndex, itemIndex, e.target.value)}
+                              className="font-medium text-gray-700 border-gray-300 h-8 text-sm"
+                              placeholder="Tétel neve"
+                            />
+                          </div>
+                          
+                          {/* Row 3: Amount and Delete */}
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 flex items-center gap-2">
+                              <Input
+                                type="text"
+                                value={item.amount.toLocaleString('hu-HU')}
+                                onChange={(e) => updateAmount(categoryIndex, itemIndex, e.target.value)}
+                                className="text-right border-2 focus:border-green-400 h-8 text-sm"
+                                placeholder="0"
+                              />
+                              <span className="text-xs text-gray-500 font-medium">Ft</span>
+                            </div>
+                            <div className="text-right font-bold text-gray-900 text-sm min-w-0">
+                              {formatCurrency(item.amount)}
+                            </div>
+                            <Button
+                              onClick={() => removeItem(categoryIndex, itemIndex)}
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0 flex-shrink-0"
+                            >
+                              <X size={14} />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Desktop layout */}
+                        <div className="hidden sm:grid sm:grid-cols-6 gap-4 items-center">
+                          {/* Típus választó */}
+                          <div className="flex items-center gap-2">
+                            <Select value={item.type || "none"} onValueChange={(value) => updateItemType(categoryIndex, itemIndex, value === "none" ? '' : value as 'Szükséglet' | 'Vágyak' | 'Megtakarítás')}>
+                              <SelectTrigger className="w-full h-9">
+                                <SelectValue placeholder="Típus" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Nincs</SelectItem>
+                                <SelectItem value="Szükséglet">Szükséglet</SelectItem>
+                                <SelectItem value="Vágyak">Vágyak</SelectItem>
+                                <SelectItem value="Megtakarítás">Megtakarítás</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          {/* Címke */}
+                          <div className="flex items-center gap-2">
+                            {item.type && (
+                              <Badge variant="outline" className={getTypeColor(item.type)}>
+                                {item.type}
+                              </Badge>
+                            )}
+                          </div>
+                          
+                          {/* Tétel neve (szerkeszthető) */}
+                          <div className="md:col-span-2">
+                            <Input
+                              value={item.subcategory}
+                              onChange={(e) => updateItemName(categoryIndex, itemIndex, e.target.value)}
+                              className="font-medium text-gray-700 border-gray-300 h-9"
+                              placeholder="Tétel neve"
+                            />
+                          </div>
+                          
+                          {/* Összeg */}
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="text"
+                              value={item.amount.toLocaleString('hu-HU')}
+                              onChange={(e) => updateAmount(categoryIndex, itemIndex, e.target.value)}
+                              className="text-right border-2 focus:border-green-400 h-9"
+                              placeholder="0"
+                            />
+                            <span className="text-sm text-gray-500 font-medium">Ft</span>
+                          </div>
+                          
+                          {/* Formázott összeg és törlés gomb */}
+                          <div className="flex items-center justify-between">
+                            <div className="text-right font-bold text-gray-900 text-lg">
+                              {formatCurrency(item.amount)}
+                            </div>
+                            <Button
+                              onClick={() => removeItem(categoryIndex, itemIndex)}
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 ml-2"
+                            >
+                              <X size={16} />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -885,17 +949,17 @@ export default function KoltsegvetesPage() {
               ))}
             </div>
 
-            <Separator className="my-6" />
+            <Separator className="my-4 sm:my-6" />
             
             {/* Összesítő sor */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center bg-gradient-to-r from-green-50 to-teal-50 p-6 rounded-xl border-2 border-green-200">
-              <div></div>
-              <div className="font-bold text-lg flex items-center gap-2">
-                <TrendingUp size={20} className="text-green-600" />
+            <div className="flex flex-col sm:grid sm:grid-cols-4 gap-3 sm:gap-4 items-center bg-gradient-to-r from-green-50 to-teal-50 p-4 sm:p-6 rounded-xl border-2 border-green-200">
+              <div className="hidden sm:block"></div>
+              <div className="font-bold text-base sm:text-lg flex items-center justify-center sm:justify-start gap-2">
+                <TrendingUp size={16} className="text-green-600 sm:w-5 sm:h-5" />
                 Összesen:
               </div>
-              <div></div>
-              <div className="text-right font-bold text-2xl text-green-900">
+              <div className="hidden sm:block"></div>
+              <div className="text-center sm:text-right font-bold text-xl sm:text-2xl text-green-900">
                 {formatCurrency(totals.total)}
               </div>
             </div>
@@ -904,22 +968,22 @@ export default function KoltsegvetesPage() {
 
         {/* Mentett költségvetések */}
         {savedBudgets.length > 0 && (
-          <Card className="mt-8 bg-white shadow-lg border-0">
+          <Card className="mt-6 sm:mt-8 bg-white shadow-lg border-0">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Save size={24} className="text-green-600" />
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <Save size={20} className="text-green-600 sm:w-6 sm:h-6" />
                 Mentett Költségvetések
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-sm">
                 Korábban elmentett költségvetési terveid
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
+              <div className="space-y-2 sm:space-y-3">
                 {savedBudgets.slice(0, 5).map((budget) => (
-                  <div key={budget.id} className="flex justify-between items-center p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                  <div key={budget.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 p-3 sm:p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
                     <div>
-                      <div className="font-medium text-gray-900">
+                      <div className="font-medium text-gray-900 text-sm sm:text-base">
                         {new Date(budget.created_at).toLocaleDateString('hu-HU', {
                           year: 'numeric',
                           month: 'long',
@@ -929,7 +993,7 @@ export default function KoltsegvetesPage() {
                         })}
                       </div>
                     </div>
-                    <div className="font-bold text-green-700 text-lg">
+                    <div className="font-bold text-green-700 text-base sm:text-lg">
                       {formatCurrency(budget.total_amount)}
                     </div>
                   </div>

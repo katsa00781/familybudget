@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/utils/supabase/client'
+import { savePriceHistory } from '@/lib/priceHistory'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/src/components/ui/card'
 import { Input } from '@/src/components/ui/input'
 import { Button } from '@/src/components/ui/button'
 import { Badge } from '@/src/components/ui/badge'
 import { Textarea } from '@/src/components/ui/textarea'
 import { 
-  Package, Plus, Upload, Search, Edit, Trash2, QrCode, Store, DollarSign
+  Package, Plus, Upload, Search, Edit, Trash2, QrCode, Store, Coins
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -419,11 +420,58 @@ export default function TermekekPage() {
 
       // Import végrehajtása
       if (productsToInsert.length > 0) {
-        const { error } = await supabase
+        const { data: insertedProducts, error } = await supabase
           .from('products')
           .insert(productsToInsert)
+          .select()
 
         if (error) throw error
+
+        // Price history mentése az importált termékekhez (ha van áruk)
+        if (insertedProducts) {
+          const currentDate = new Date().toISOString().split('T')[0]
+          
+          // 1. Price history mentése (árfigyeléshez)
+          const priceHistoryPromises = insertedProducts
+            .filter(product => product.price && product.price > 0)
+            .map(product => 
+              savePriceHistory(
+                currentUser.id,
+                product.name,
+                product.price,
+                {
+                  productId: product.id,
+                  productCategory: product.category,
+                  storeName: product.store_name,
+                  unit: product.unit,
+                  source: 'import',
+                  priceDate: currentDate
+                }
+              )
+            );
+
+          // 2. Shopping statistics mentése (statisztikákhoz)
+          const shoppingStatsToInsert = insertedProducts
+            .filter(product => product.price && product.price > 0)
+            .map(product => ({
+              user_id: currentUser.id,
+              shopping_date: currentDate,
+              product_name: product.name,
+              product_category: product.category,
+              brand: product.brand,
+              store_name: product.store_name,
+              quantity: 1,
+              unit: product.unit,
+              unit_price: product.price,
+              total_price: product.price
+            }))
+
+          // Párhuzamosan mentjük az összes árat és statisztikát
+          await Promise.allSettled([
+            ...priceHistoryPromises,
+            supabase.from('shopping_statistics').insert(shoppingStatsToInsert)
+          ]);
+        }
       }
 
       // Eredmény kijelzése
@@ -629,45 +677,71 @@ export default function TermekekPage() {
 
             {/* JSON Import */}
             <Card className="bg-white shadow-lg border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload size={20} className="text-blue-600" />
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <Upload size={18} className="text-blue-600 sm:w-5 sm:h-5" />
                   Tömeges import
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-4 sm:p-6">
                 <Dialog open={showJsonDialog} onOpenChange={setShowJsonDialog}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" className="w-full">
+                    <Button variant="outline" className="w-full h-10 sm:h-11 text-sm sm:text-base">
                       <Upload size={16} className="mr-2" />
                       JSON importálás
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-                    <DialogHeader className="flex-shrink-0">
-                      <DialogTitle>Termékek importálása JSON-ból</DialogTitle>
-                      <DialogDescription>
-                        Illessz be egy JSON tömböt a termékekkel. Példa formátum:
+                  <DialogContent className="w-[95vw] max-w-2xl h-[90vh] sm:h-auto sm:max-h-[85vh] flex flex-col p-0 gap-0">
+                    <DialogHeader className="flex-shrink-0 p-4 sm:p-6 pb-3 sm:pb-4">
+                      <DialogTitle className="text-lg sm:text-xl">Termékek importálása JSON-ból</DialogTitle>
+                      <DialogDescription className="text-xs sm:text-sm mt-2">
+                        Illessz be egy JSON tömböt a termékekkel (blokkból másolt adatok).
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="flex-1 overflow-hidden flex flex-col space-y-4">
-                      <div className="bg-gray-100 p-3 rounded text-sm font-mono text-gray-700 max-h-32 overflow-y-auto flex-shrink-0">
-                        <pre>{jsonExample}</pre>
-                      </div>
-                      <div className="flex-1 min-h-0">
+                    <div className="flex-1 overflow-hidden flex flex-col px-4 sm:px-6 pb-4 sm:pb-6 space-y-3 sm:space-y-4">
+                      {/* Példa formátum - összecsukható mobilon */}
+                      <details className="bg-gray-50 rounded-lg border border-gray-200">
+                        <summary className="px-3 py-2 text-xs sm:text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 rounded-lg">
+                          📄 Példa formátum
+                        </summary>
+                        <div className="px-3 pb-3 pt-2">
+                          <div className="bg-white p-2 sm:p-3 rounded border text-xs font-mono text-gray-700 max-h-32 overflow-y-auto">
+                            <pre>{jsonExample}</pre>
+                          </div>
+                        </div>
+                      </details>
+                      
+                      {/* JSON beviteli mező */}
+                      <div className="flex-1 min-h-0 flex flex-col">
+                        <label className="text-xs sm:text-sm font-medium text-gray-700 mb-2 px-1">
+                          JSON adatok:
+                        </label>
                         <Textarea
-                          placeholder="Illeszd be a JSON adatokat ide..."
+                          placeholder="Illeszd be a JSON adatokat ide (blokkból másolt termékek)..."
                           value={jsonInput}
                           onChange={(e) => setJsonInput(e.target.value)}
-                          className="font-mono text-sm h-full resize-none"
+                          className="font-mono text-xs sm:text-sm h-full resize-none flex-1 min-h-[200px] sm:min-h-[250px]"
                         />
+                        <p className="text-xs text-gray-500 mt-2 px-1">
+                          💡 Tipp: Másold ki a blokkból az összes terméket, és illeszd be ide.
+                        </p>
                       </div>
-                      <div className="flex gap-2 flex-shrink-0">
-                        <Button onClick={importFromJson} disabled={isLoading} className="flex-1">
+                      
+                      {/* Gombok */}
+                      <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                        <Button 
+                          onClick={importFromJson} 
+                          disabled={isLoading || !jsonInput.trim()} 
+                          className="flex-1 h-11 sm:h-10 text-sm sm:text-base"
+                        >
                           <Upload size={16} className="mr-2" />
-                          {isLoading ? 'Importálás...' : 'Importálás'}
+                          {isLoading ? 'Importálás...' : 'Termékek importálása'}
                         </Button>
-                        <Button variant="outline" onClick={() => setShowJsonDialog(false)}>
+                        <Button 
+                          variant="outline" 
+                          onClick={() => setShowJsonDialog(false)}
+                          className="h-11 sm:h-10 text-sm sm:text-base sm:w-24"
+                        >
                           Mégse
                         </Button>
                       </div>
@@ -777,7 +851,7 @@ export default function TermekekPage() {
                             <TableCell>
                               {product.price ? (
                                 <div className="flex items-center gap-1">
-                                  <DollarSign size={14} className="text-green-600" />
+                                  <Coins size={14} className="text-green-600" />
                                   <span className="font-medium">{formatCurrency(product.price)}</span>
                                   <span className="text-xs text-gray-500">/{product.unit}</span>
                                 </div>

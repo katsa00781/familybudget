@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select'
+import { getUserPreferences, setActiveIncomePlan, setActiveBudgetPlan } from '@/lib/userPreferences'
 
 interface BudgetItem {
   id: string
@@ -158,6 +159,8 @@ export default function KoltsegvetesPage() {
   const [expectedIncome, setExpectedIncome] = useState<number>(0)
   const [incomePlans, setIncomePlans] = useState<IncomePlan[]>([])
   const [selectedIncomeId, setSelectedIncomeId] = useState<string>('')
+  const [activeIncomeId, setActiveIncomeId] = useState<string | null>(null)
+  const [activeBudgetId, setActiveBudgetId] = useState<string | null>(null)
   const supabase = createClient()
 
   // Felhasználó betöltése
@@ -295,12 +298,11 @@ export default function KoltsegvetesPage() {
         data = insertResult.data
         error = insertResult.error
         
-        if (!error) {
+        if (!error && data && data[0]) {
           toast.success("Új költségvetés sikeresen elmentve!")
-          // Ha új költségvetést mentünk, automatikusan kiválasztjuk
-          if (data && data[0]) {
-            setSelectedBudgetId(data[0].id)
-          }
+          // Ha új költségvetést mentünk, automatikusan kiválasztjuk ÉS aktívvá tesszük
+          setSelectedBudgetId(data[0].id)
+          await setActiveBudgetPlan(currentUser.id, data[0].id)
         }
       }
 
@@ -324,6 +326,10 @@ export default function KoltsegvetesPage() {
     if (!currentUser) return
     
     try {
+      // Aktív költségvetés ID betöltése
+      const preferences = await getUserPreferences(currentUser.id)
+      setActiveBudgetId(preferences?.active_budget_plan_id || null)
+      
       const { data, error } = await supabase
         .from('budget_plans')
         .select('*')
@@ -332,6 +338,8 @@ export default function KoltsegvetesPage() {
       
       if (error) throw error
       setSavedBudgets(data || [])
+      
+      console.log('Active budget ID:', preferences?.active_budget_plan_id)
     } catch (error) {
       console.error('Hiba a költségvetések betöltésekor:', error)
       toast.error('Hiba történt a költségvetések betöltésekor!')
@@ -384,6 +392,12 @@ export default function KoltsegvetesPage() {
         setBudgetDescription(data.description || '')
         setSelectedBudgetId(budgetId)
         
+        // Aktívvá tesszük a kiválasztott költségvetést
+        if (currentUser) {
+          await setActiveBudgetPlan(currentUser.id, budgetId)
+          setActiveBudgetId(budgetId)
+        }
+        
         toast.success(`Költségvetés betöltve: ${data.name}`)
       }
     } catch (error) {
@@ -392,7 +406,7 @@ export default function KoltsegvetesPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [supabase])
+  }, [supabase, currentUser])
 
   // Legutolsó költségvetés automatikus betöltése
   const loadLatestBudget = useCallback(async () => {
@@ -419,6 +433,19 @@ export default function KoltsegvetesPage() {
       
       if (error) throw error
       setIncomePlans(data || [])
+      
+      // Aktív bevételi terv betöltése
+      const prefs = await getUserPreferences(currentUser.id)
+      if (prefs?.active_income_plan_id) {
+        setActiveIncomeId(prefs.active_income_plan_id)
+        setSelectedIncomeId(prefs.active_income_plan_id)
+        
+        // Beállítjuk az aktív terv összegét
+        const activePlan = data?.find(plan => plan.id === prefs.active_income_plan_id)
+        if (activePlan) {
+          setExpectedIncome(activePlan.total_income)
+        }
+      }
     } catch (error) {
       console.error('Hiba a bevételi tervek betöltésekor:', error)
       toast.error('Hiba történt a bevételi tervek betöltésekor!')
@@ -426,7 +453,7 @@ export default function KoltsegvetesPage() {
   }, [currentUser, supabase])
 
   // Bevételi terv kiválasztása
-  const selectIncomePlan = useCallback((incomeId: string) => {
+  const selectIncomePlan = useCallback(async (incomeId: string) => {
     if (!incomeId || incomeId === '') {
       setSelectedIncomeId('')
       setExpectedIncome(0)
@@ -437,9 +464,19 @@ export default function KoltsegvetesPage() {
     if (selectedPlan) {
       setSelectedIncomeId(incomeId)
       setExpectedIncome(selectedPlan.total_income)
-      toast.success(`Bevételi terv betöltve: ${selectedPlan.name}`)
+      
+      // Beállítjuk aktívként
+      if (currentUser) {
+        const result = await setActiveIncomePlan(currentUser.id, incomeId)
+        if (result.success) {
+          setActiveIncomeId(incomeId)
+          toast.success(`Bevételi terv betöltve és aktívként beállítva: ${selectedPlan.name}`)
+        } else {
+          toast.error('Nem sikerült aktívként beállítani a tervet')
+        }
+      }
     }
-  }, [incomePlans])
+  }, [incomePlans, currentUser])
 
   // Felhasználó és mentett költségvetések betöltése
   useEffect(() => {
@@ -539,9 +576,14 @@ export default function KoltsegvetesPage() {
                     <SelectContent>
                       {savedBudgets.map((budget) => (
                         <SelectItem key={budget.id} value={budget.id}>
-                          <div className="flex flex-col">
-                            <span className="font-medium text-sm">{budget.name}</span>
-                            <span className="text-xs text-gray-500">
+                          <div className="flex flex-col w-full">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-sm">{budget.name}</span>
+                              {activeBudgetId === budget.id && (
+                                <Badge className="text-xs bg-green-500 text-white border-0 px-2 py-0 h-5">Aktív</Badge>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-500 mt-1">
                               {new Date(budget.created_at).toLocaleDateString('hu-HU')} - 
                               {budget.total_amount.toLocaleString('hu-HU')} HUF
                             </span>
@@ -604,9 +646,14 @@ export default function KoltsegvetesPage() {
                     <SelectContent>
                       {incomePlans.map((plan) => (
                         <SelectItem key={plan.id} value={plan.id}>
-                          <div className="flex flex-col">
-                            <span className="font-medium text-sm">{plan.name}</span>
-                            <span className="text-xs text-gray-500">
+                          <div className="flex flex-col w-full">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-sm">{plan.name}</span>
+                              {plan.id === activeIncomeId && (
+                                <Badge className="text-xs bg-green-500 text-white border-0 px-2 py-0 h-5">Aktív</Badge>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-500 mt-1">
                               {new Date(plan.created_at).toLocaleDateString('hu-HU')} - 
                               {plan.total_income.toLocaleString('hu-HU')} HUF
                             </span>

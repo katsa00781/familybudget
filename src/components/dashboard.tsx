@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/utils/supabase/client';
 import { useUserProfile } from '@/src/hooks/useUserProfile';
+import { getActiveIncomePlan } from '@/lib/userPreferences';
 import { Button } from "@/src/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/src/components/ui/card";
 import { Badge } from "@/src/components/ui/badge";
@@ -90,13 +91,11 @@ export default function Dashboard() {
         .order('created_at', { ascending: false })
         .limit(1);
 
-      // Bevételi tervek betöltése az income_plans táblából
-      const { data: incomeData } = await supabase
-        .from('income_plans')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
+      // Bevételi tervek betöltése az income_plans táblából - AKTÍV terv
+      const activeIncomePlan = await getActiveIncomePlan(currentUser.id);
+      
+      // Ha van aktív terv, használjuk azt, különben az utolsót
+      const incomeDataToUse = activeIncomePlan ? [activeIncomePlan] : null;
 
       // Megtakarítási célok betöltése
       const { data: savingsData } = await supabase
@@ -116,9 +115,9 @@ export default function Dashboard() {
 
       setBudgetPlans(budgetData || []);
       
-      // Income plans feldolgozása - az income_plans tábla sémája szerint
-      if (incomeData && incomeData.length > 0) {
-        const latestIncome = incomeData[0];
+      // Income plans feldolgozása - az aktív income_plan használata
+      if (incomeDataToUse && incomeDataToUse.length > 0) {
+        const latestIncome = incomeDataToUse[0];
         
         // Additional incomes parse-olása
         let additionalIncomes: OtherIncome[] = [];
@@ -158,7 +157,7 @@ export default function Dashboard() {
       
       console.log('Dashboard data loaded:', {
         budgetData,
-        incomeData,
+        incomeData: incomeDataToUse,
         savingsData,
         shoppingData
       });
@@ -470,14 +469,20 @@ export default function Dashboard() {
                   Bérkalkulátor
                 </Button>
               </a>
-              <a href="/bevasarlolista" className="block">
+              <a href="/bevasarlas" className="block">
                 <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 sm:py-3 text-sm sm:text-base">
                   <ShoppingCart className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-                  Új bevásárlólista
+                  Bevásárlólista
+                </Button>
+              </a>
+              <a href="/statisztika" className="block">
+                <Button className="w-full bg-green-600 hover:bg-green-700 text-white py-2 sm:py-3 text-sm sm:text-base">
+                  <BarChart2 className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                  Statisztika
                 </Button>
               </a>
               <a href="/receptek" className="block">
-                <Button className="w-full bg-green-600 hover:bg-green-700 text-white py-2 sm:py-3 text-sm sm:text-base">
+                <Button className="w-full bg-orange-600 hover:bg-orange-700 text-white py-2 sm:py-3 text-sm sm:text-base">
                   <ChefHat className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                   Receptek
                 </Button>

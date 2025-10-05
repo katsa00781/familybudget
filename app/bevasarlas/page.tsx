@@ -122,7 +122,15 @@ export default function BevasarlasPage() {
         }
         throw error
       }
-      setSavedLists(data || [])
+      
+      // Biztosítjuk, hogy az items mező mindig array legyen
+      const processedData = (data || []).map(list => ({
+        ...list,
+        items: Array.isArray(list.items) ? list.items : 
+               (typeof list.items === 'string' ? JSON.parse(list.items || '[]') : [])
+      }))
+      
+      setSavedLists(processedData)
     } catch (error) {
       console.error('Hiba a bevásárlólisták betöltésekor:', error)
       toast.error('Hiba történt a bevásárlólisták betöltésekor!')
@@ -135,6 +143,15 @@ export default function BevasarlasPage() {
       loadSavedLists()
     }
   }, [currentUser, loadSavedLists])
+
+  // Automatikus betöltés: ha van mentett lista és nincs kiválasztva, betöltjük a legutolsót
+  useEffect(() => {
+    if (savedLists.length > 0 && !selectedListId && currentUser) {
+      const latestList = savedLists[0] // Már created_at szerint csökkenő sorrendben van
+      console.log('Automatikusan betöltöm a legutolsó bevásárlólistát:', latestList.name)
+      loadList(latestList.id)
+    }
+  }, [savedLists, selectedListId, currentUser]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Termékkeresés
   const searchProducts = useCallback(async (searchText: string) => {
@@ -428,7 +445,11 @@ export default function BevasarlasPage() {
       if (error) throw error
       
       if (data) {
-        setCurrentItems(data.items as ShoppingItem[])
+        // Biztosítjuk, hogy az items mező mindig array legyen
+        const items = Array.isArray(data.items) ? data.items : 
+                     (typeof data.items === 'string' ? JSON.parse(data.items || '[]') : [])
+        
+        setCurrentItems(items as ShoppingItem[])
         setNewListName(data.name || '')
         setSelectedDate(data.date || new Date().toISOString().split('T')[0])
         setSelectedListId(listId)
@@ -640,23 +661,38 @@ export default function BevasarlasPage() {
                             {new Date(list.date).toLocaleDateString('hu-HU')}
                           </div>
                           <div className="text-xs text-gray-600">
-                            {list.items?.length || 0} tétel • {formatCurrency(list.total_amount)}
+                            {Array.isArray(list.items) ? list.items.length : 0} tétel • {formatCurrency(list.total_amount)}
                           </div>
                           <div className="flex items-center gap-1 mt-1">
                             <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></div>
                             <span className="text-xs text-green-600">
-                              {list.items?.filter((item: ShoppingItem) => item.checked).length || 0}/{list.items?.length || 0}
+                              {Array.isArray(list.items) ? list.items.filter((item: ShoppingItem) => item.checked).length : 0}/{Array.isArray(list.items) ? list.items.length : 0}
                             </span>
                           </div>
                         </div>
-                        <Button
-                          onClick={() => deleteList(list.id)}
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700 p-1 md:p-2 flex-shrink-0"
-                        >
-                          <MoreVertical size={14} />
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-gray-600 hover:text-gray-700 p-1 md:p-2 flex-shrink-0"
+                            >
+                              <MoreVertical size={14} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteList(list.id);
+                              }}
+                              className="text-red-600 focus:text-red-700"
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Törlés
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     ))}
                   </div>

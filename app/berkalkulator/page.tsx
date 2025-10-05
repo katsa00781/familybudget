@@ -8,6 +8,7 @@ import { Label } from "@/src/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/src/components/ui/select";
 import { Calculator, Clock, Plus, TrendingUp, Info, Trash2 } from 'lucide-react';
 import { createClient } from "@/src/lib/utils/supabase/client";
+import { setActiveIncomePlan } from "@/lib/userPreferences";
 
 interface SavedCalculation {
   id: string;
@@ -57,7 +58,6 @@ const KULCSOK = {
   UNNEPNAPI_SZORZO: 2.0, // 200% ünnepnapi munka
   
   // Egyéb konstansok
-  TER_KIEGESZITO: 26736, // Tér kiegészítő bér fix összeg
   GYEREKEK_UTAN_KEDVEZMENY: 333330, // 2 gyermek utáni adókedvezmény
   BETEGSZABADSAG_SZAZALEK: 0.70, // 70% betegszabadság
   GYED_NAPI: 13570, // GYED napi összeg
@@ -74,22 +74,22 @@ export default function BerkalkulatorPage() {
   const [calculationName, setCalculationName] = useState(""); // Kalkuláció neve
   const [alapber, setAlapber] = useState(986400); // Alapbér a bérpapírból
   const [munkarendNapok, setMunkarendNapok] = useState(20); // Munkarend szerinti napok
-  const [ledolgozottNapok, setLedolgozottNapok] = useState(13); // Ledolgozott idő: 13 nap
-  const [szabadsagNapok, setSzabadsagNapok] = useState(7); // Fizetett szabadság: 7 nap
-  const [tuloraOrak, setTuloraOrak] = useState(8.22); // Túlóra: 8,22 óra
-  const [unnepnapiOrak, setUnnepnapiOrak] = useState(8.17); // Munkaszüneti munkavégzés: 8,17 óra
+  const [szabadsagNapok, setSzabadsagNapok] = useState(0); // Fizetett szabadság: 0 nap (default)
+  const [tuloraOrak, setTuloraOrak] = useState(0); // Túlóra: 0 óra (default)
+  const [unnepnapiOrak, setUnnepnapiOrak] = useState(0); // Munkaszüneti munkavégzés: 0 óra (default)
   const [additionalIncomes, setAdditionalIncomes] = useState<AdditionalIncome[]>([]);
   
   // Számított értékek a munkarend alapján
+  const ledolgozottNapok = munkarendNapok - szabadsagNapok; // Ledolgozott napok = munkanapok - szabadság
   const munkarendSzerintiOrak = munkarendNapok * 8.1; // Munkarend szerinti idő: napok * 8,1 óra
-  const ledolgozottOrak = munkarendSzerintiOrak - (szabadsagNapok * 8.1); // Ledolgozott idő: munkarend - szabadság
+  const ledolgozottOrak = ledolgozottNapok * 8.1; // Ledolgozott órák: ledolgozott napok * 8,1
   const muszakpotlekOrak = ledolgozottOrak; // Mindig megegyezik a ledolgozott órákkal
   const szabadsagOrak = szabadsagNapok * 8.1; // Fizetett szabadság órák
   const [betegszabadsagNapok, setBetegszabadsagNapok] = useState(0);
   const [kikuldetesNapok, setKikuldetesNapok] = useState(0);
-  const [gyedMellett, setGyedMellett] = useState(30);
+  const [gyedMellett, setGyedMellett] = useState(0); // GYED munkavégzés mellett: 0 nap (default)
   const [formaruhakompenzacio, setFormaruhakompenzacio] = useState(0);
-  const [családiAdókedvezmény, setCsaládiAdókedvezmény] = useState(333330);
+  const [családiAdókedvezmény, setCsaládiAdókedvezmény] = useState(500000); // Családi adókedvezmény: 500,000 Ft (default)
   interface SalaryResult {
     alapber: number;
     oraber: number;
@@ -183,17 +183,14 @@ export default function BerkalkulatorPage() {
     // Munkaszüneti munkavégzés: 8,17 óra × 8750 Ft/óra = 71488 Ft (200% szorzó)
     const unnepnapiMunka = Math.round(unnepnapiOrak * oraber * KULCSOK.MUNKASZUNETI_POTLEK);
     
-    // Tér kiegészítő bér: fix 26736 Ft (bérpapírból)
-    const terKiegeszito = KULCSOK.TER_KIEGESZITO;
-    
     // Betegszabadság, kiküldetés, GYED - ezek nem szerepelnek a példa bérpapíron
     const betegszabadsag = Math.round(betegszabadsagNapok * (oraber * 8) * KULCSOK.BETEGSZABADSAG_SZAZALEK);
     const kikuldetesTobblet = Math.round(kikuldetesNapok * KULCSOK.KIKULDETESI_POTLEK);
     const gyedMunkavMellett = Math.round(gyedMellett * KULCSOK.GYED_NAPI);
     
-    // Bruttó bér összesen (bérpapír szerint: 1 614 185 Ft)
+    // Bruttó bér összesen
     const bruttoBer = haviberesIdober + fizetettSzabadsag + tuloraAlapossszeg + tuloraPotlek +
-                     muszakpotlek + tuloraMuszakpotlek + unnepnapiMunka + terKiegeszito +
+                     muszakpotlek + tuloraMuszakpotlek + unnepnapiMunka +
                      betegszabadsag + kikuldetesTobblet;
     
     // Összes járandóság (bruttó + GYED + formaruha)
@@ -542,7 +539,23 @@ export default function BerkalkulatorPage() {
         alert('Hiba történt a bevételi terv mentésekor: ' + error.message);
       } else {
         console.log('Income plan saved:', data);
-        alert('Bevételi terv sikeresen elmentve!');
+        
+        // Az újonnan mentett tervet aktívként állítjuk be
+        if (data && data[0]) {
+          const savedPlanId = data[0].id;
+          console.log('Setting active income plan:', { userId: user.id, planId: savedPlanId });
+          const result = await setActiveIncomePlan(user.id, savedPlanId);
+          console.log('Set active income plan result:', result);
+          
+          if (result.success) {
+            alert('Bevételi terv sikeresen elmentve és aktívként beállítva!');
+          } else {
+            console.error('Failed to set active income plan:', result.error);
+            alert(`Bevételi terv elmentve, de nem sikerült aktívként beállítani. Hiba: ${result.error || 'Ismeretlen hiba'}`);
+          }
+        } else {
+          alert('Bevételi terv sikeresen elmentve!');
+        }
       }
     } catch (error) {
       console.error('Error:', error);
@@ -713,13 +726,14 @@ export default function BerkalkulatorPage() {
                         type="number"
                         step="0.01"
                         value={ledolgozottNapok || ''}
-                        onChange={handleInputChange(setLedolgozottNapok)}
-                        onFocus={handleInputFocus}
-                        placeholder="13"
-                        className="mt-1 h-9 md:h-10 text-sm"
+                        readOnly
+                        className="mt-1 h-9 md:h-10 text-sm bg-gray-50 cursor-not-allowed"
                       />
                       <p className="text-xs text-gray-500 mt-1">
-                        Ledolgozott órák: {ledolgozottOrak.toFixed(2)} óra (munkarend - szabadság)
+                        Automatikusan számított: munkanapok ({munkarendNapok}) - szabadság ({szabadsagNapok}) = {ledolgozottNapok} nap
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Ledolgozott órák: {ledolgozottOrak.toFixed(2)} óra
                       </p>
                     </div>
                     
@@ -733,7 +747,7 @@ export default function BerkalkulatorPage() {
                         value={szabadsagNapok || ''}
                         onChange={handleInputChange(setSzabadsagNapok)}
                         onFocus={handleInputFocus}
-                        placeholder="7"
+                        placeholder="0"
                         className="mt-1 h-9 md:h-10 text-sm"
                       />
                       <p className="text-xs text-gray-500 mt-1">
@@ -751,7 +765,7 @@ export default function BerkalkulatorPage() {
                         value={tuloraOrak || ''}
                         onChange={handleInputChange(setTuloraOrak)}
                         onFocus={handleInputFocus}
-                        placeholder="8.22"
+                        placeholder="0"
                         className="mt-1 h-9 md:h-10 text-sm"
                       />
                       <p className="text-xs text-gray-500 mt-1">+150% pótlék</p>
@@ -767,7 +781,7 @@ export default function BerkalkulatorPage() {
                         value={unnepnapiOrak || ''}
                         onChange={handleInputChange(setUnnepnapiOrak)}
                         onFocus={handleInputFocus}
-                        placeholder="8.17"
+                        placeholder="0"
                         className="mt-1 h-9 md:h-10 text-sm"
                       />
                       <p className="text-xs text-gray-500 mt-1">+200% pótlék</p>
@@ -820,7 +834,7 @@ export default function BerkalkulatorPage() {
                         value={gyedMellett || ''}
                         onChange={handleInputChange(setGyedMellett)}
                         onFocus={handleInputFocus}
-                        placeholder="30"
+                        placeholder="0"
                         className="mt-1 h-9 md:h-10 text-sm"
                       />
                     </div>
@@ -848,7 +862,6 @@ export default function BerkalkulatorPage() {
                         <div>• Szabadság órák: {szabadsagOrak.toFixed(2)} óra</div>
                         <div>• Túlóra alap: {tuloraOrak} óra</div>
                         <div>• Munkaszüneti munka: {unnepnapiOrak} óra</div>
-                        <div>• Tér kiegészítő: 26.736 Ft</div>
                       </div>
                     </div>
                   </div>
@@ -929,10 +942,6 @@ export default function BerkalkulatorPage() {
                       <div className="flex justify-between">
                         <span className="truncate pr-2">Munkaszüneti munkavégzés:</span>
                         <span className="font-medium whitespace-nowrap">{formatCurrency(eredmény.unnepnapiMunka)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="truncate pr-2">Tér kiegészítő bér:</span>
-                        <span className="font-medium whitespace-nowrap">{formatCurrency(KULCSOK.TER_KIEGESZITO)}</span>
                       </div>
                     </div>
                   </div>

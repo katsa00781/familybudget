@@ -68,7 +68,15 @@ export default function BevetelTervekPage() {
         .order('created_at', { ascending: false })
       
       if (error) throw error
-      setSavedPlans(data || [])
+      
+      // Biztosítjuk, hogy az additional_incomes mező mindig array legyen
+      const processedData = (data || []).map(plan => ({
+        ...plan,
+        additional_incomes: Array.isArray(plan.additional_incomes) ? plan.additional_incomes : 
+                           (typeof plan.additional_incomes === 'string' ? JSON.parse(plan.additional_incomes || '[]') : [])
+      }))
+      
+      setSavedPlans(processedData)
     } catch (error) {
       console.error('Hiba a bevételi tervek betöltésekor:', error)
       toast.error('Hiba történt a bevételi tervek betöltésekor!')
@@ -403,7 +411,7 @@ export default function BevetelTervekPage() {
                             <span className="font-medium">{formatCurrency(plan.monthly_income)}</span>
                           </div>
                           
-                          {plan.additional_incomes && plan.additional_incomes.length > 0 && (
+                          {plan.additional_incomes && Array.isArray(plan.additional_incomes) && plan.additional_incomes.length > 0 && (
                             <>
                               {plan.additional_incomes.map((income) => (
                                 <div key={income.id} className="flex justify-between text-xs sm:text-sm">

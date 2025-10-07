@@ -256,10 +256,18 @@ export default function KoltsegvetesPage() {
       return
     }
 
+    console.log('=== KÖLTSÉGVETÉS MENTÉS KEZDÉSE ===')
+    console.log('currentUser:', currentUser?.id)
+    console.log('selectedBudgetId:', selectedBudgetId)
+    console.log('budgetName:', budgetName)
+
     setIsLoading(true)
     try {
       const allItems = budgetData.flatMap(category => category.items)
       const { total } = calculateTotals()
+
+      console.log('allItems count:', allItems.length)
+      console.log('total:', total)
 
       const budgetToSave = {
         user_id: currentUser.id,
@@ -269,10 +277,13 @@ export default function KoltsegvetesPage() {
         description: budgetDescription || null
       }
 
+      console.log('budgetToSave:', budgetToSave)
+
       let data, error
 
       if (selectedBudgetId) {
         // Meglévő költségvetés frissítése
+        console.log('UPDATE módban')
         const updateResult = await supabase
           .from('budget_plans')
           .update(budgetToSave)
@@ -282,11 +293,14 @@ export default function KoltsegvetesPage() {
         data = updateResult.data
         error = updateResult.error
         
+        console.log('UPDATE result:', { data, error })
+        
         if (!error) {
           toast.success("Költségvetés sikeresen frissítve!")
         }
       } else {
         // Új költségvetés létrehozása
+        console.log('INSERT módban')
         const insertResult = await supabase
           .from('budget_plans')
           .insert({
@@ -298,20 +312,27 @@ export default function KoltsegvetesPage() {
         data = insertResult.data
         error = insertResult.error
         
+        console.log('INSERT result:', { data, error })
+        
         if (!error && data && data[0]) {
-          toast.success("Új költségvetés sikeresen elmentve!")
-          // Ha új költségvetést mentünk, automatikusan kiválasztjuk ÉS aktívvá tesszük
+          toast.success("Új költségvetés sikeresen elmentve! Mostantól frissíteni fogod ezt a költségvetést.")
+          // Automatikusan kiválasztjuk ÉS aktívvá tesszük az új költségvetést
           setSelectedBudgetId(data[0].id)
+          console.log('setActiveBudgetPlan hívása:', currentUser.id, data[0].id)
           await setActiveBudgetPlan(currentUser.id, data[0].id)
         }
       }
 
-      if (error) throw error
+      if (error) {
+        console.error('Supabase hiba:', error)
+        throw error
+      }
 
       // Frissítjük a mentett költségvetések listáját
-      loadSavedBudgets()
+      await loadSavedBudgets()
       
       console.log('Saved budget:', data)
+      console.log('=== KÖLTSÉGVETÉS MENTÉS VÉGE ===')
     } catch (error: unknown) {
       console.error('Error saving budget:', error)
       const errorMessage = error instanceof Error ? error.message : 'Ismeretlen hiba történt'
@@ -346,14 +367,23 @@ export default function KoltsegvetesPage() {
     }
   }, [currentUser, supabase])
 
-  // Költségvetés betöltése
+  // ÚJ költségvetés létrehozása (üres form)
+  const createNewBudget = () => {
+    console.log('=== ÚJ KÖLTSÉGVETÉS LÉTREHOZÁSA ===')
+    setBudgetName('')
+    setBudgetDescription('')
+    setSelectedBudgetId('') // Ürítjük a kiválasztást
+    setBudgetData(createInitialBudgetData())
+    console.log('selectedBudgetId törölve, új üres költségvetés')
+    toast.success('Új költségvetés indítva! Töltsd ki az adatokat és mentsd el.')
+  }
+
+  // Meglévő költségvetés betöltése
   const loadBudget = useCallback(async (budgetId: string) => {
+    console.log('=== KÖLTSÉGVETÉS BETÖLTÉSE ===', budgetId)
+    
     if (!budgetId || budgetId === '') {
-      // Ha nincs kiválasztva költségvetés, töröljük a form adatokat
-      setBudgetName('')
-      setBudgetDescription('')
-      setSelectedBudgetId('')
-      setBudgetData(createInitialBudgetData())
+      // Ha üres érték jön, ne csináljunk semmit (ez csak a Select reset esetén fordulhat elő)
       return
     }
     
@@ -392,12 +422,7 @@ export default function KoltsegvetesPage() {
         setBudgetDescription(data.description || '')
         setSelectedBudgetId(budgetId)
         
-        // Aktívvá tesszük a kiválasztott költségvetést
-        if (currentUser) {
-          await setActiveBudgetPlan(currentUser.id, budgetId)
-          setActiveBudgetId(budgetId)
-        }
-        
+        console.log('Költségvetés betöltve:', data.name, 'ID:', budgetId)
         toast.success(`Költségvetés betöltve: ${data.name}`)
       }
     } catch (error) {
@@ -406,7 +431,7 @@ export default function KoltsegvetesPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [supabase, currentUser])
+  }, [supabase])
 
   // Legutolsó költségvetés automatikus betöltése
   const loadLatestBudget = useCallback(async () => {
@@ -569,7 +594,7 @@ export default function KoltsegvetesPage() {
                   <label htmlFor="saved-budgets" className="block text-sm font-medium text-gray-700 mb-2">
                     Válassz egy költségvetést
                   </label>
-                  <Select value={selectedBudgetId} onValueChange={(value) => loadBudget(value)}>
+                  <Select key={selectedBudgetId} value={selectedBudgetId || undefined} onValueChange={(value) => loadBudget(value)}>
                     <SelectTrigger className="h-9 sm:h-10">
                       <SelectValue placeholder="Válassz egy mentett költségvetést..." />
                     </SelectTrigger>
@@ -596,9 +621,9 @@ export default function KoltsegvetesPage() {
                 
                 <div className="flex flex-col sm:flex-row gap-2">
                   <Button
-                    onClick={() => loadBudget('')}
+                    onClick={createNewBudget}
                     variant="outline"
-                    className="flex-1 flex items-center gap-2 h-9 text-sm"
+                    className="flex-1 flex items-center gap-2 h-9 text-sm bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
                   >
                     <Plus size={14} />
                     Új költségvetés

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/utils/supabase/client'
+import { savePriceHistory } from '@/lib/priceHistory'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/src/components/ui/card'
 import { Input } from '@/src/components/ui/input'
 import { Button } from '@/src/components/ui/button'
@@ -406,6 +407,59 @@ export default function BevasarlasPage() {
       }
 
       if (error) throw error
+
+      // Mentjük a statisztikákat - csak az áras tételeket
+      const itemsWithPrice = currentItems.filter(item => item.price && item.price > 0)
+      
+      if (itemsWithPrice.length > 0) {
+        console.log(`📊 ${itemsWithPrice.length} áras tétel mentése shopping_statistics-ba...`)
+        
+        // 1. Shopping statistics mentése (bevásárlási statisztikákhoz)
+        const shoppingStatsData = itemsWithPrice.map(item => ({
+          user_id: currentUser.id,
+          shopping_date: selectedDate,
+          product_name: item.name,
+          product_category: item.category,
+          brand: null, // A shopping item-ben nincs brand
+          store_name: null, // A shopping item-ben nincs store
+          quantity: item.quantity,
+          unit: item.unit,
+          unit_price: item.price,
+          total_price: (item.price || 0) * item.quantity,
+          source: 'list'
+        }))
+
+        const { error: statsError } = await supabase
+          .from('shopping_statistics')
+          .insert(shoppingStatsData)
+
+        if (statsError) {
+          console.error('⚠️ Shopping statistics mentési hiba:', statsError)
+          toast.warning('A lista mentve, de a statisztikák mentése sikertelen volt.')
+        } else {
+          console.log('✅ Shopping statistics sikeresen mentve!')
+        }
+
+        // 2. Price history mentése (árfigyeléshez és inflációhoz)
+        const priceHistoryPromises = itemsWithPrice.map(item => 
+          savePriceHistory(
+            currentUser.id,
+            item.name,
+            item.price!,
+            {
+              productCategory: item.category,
+              unit: item.unit,
+              quantity: item.quantity,
+              totalPrice: (item.price || 0) * item.quantity,
+              source: 'list',
+              priceDate: selectedDate
+            }
+          )
+        )
+
+        await Promise.allSettled(priceHistoryPromises)
+        console.log('✅ Price history sikeresen mentve!')
+      }
 
       // Frissítjük a mentett listák listáját
       loadSavedLists()

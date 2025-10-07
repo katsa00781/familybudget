@@ -207,11 +207,58 @@ export default function TermekekPage() {
         available: true
       }
 
-      const { error } = await supabase
+      const { data: insertedProduct, error } = await supabase
         .from('products')
         .insert([productData])
+        .select()
+        .single()
 
       if (error) throw error
+
+      // Ha van ár, mentjük a price history és shopping statistics táblákba is
+      if (insertedProduct && insertedProduct.price && insertedProduct.price > 0) {
+        const currentDate = new Date().toISOString().split('T')[0]
+        
+        // 1. Price history mentése (árfigyeléshez és inflációhoz)
+        const priceHistoryResult = await savePriceHistory(
+          currentUser.id,
+          insertedProduct.name,
+          insertedProduct.price,
+          {
+            productId: insertedProduct.id,
+            productCategory: insertedProduct.category,
+            storeName: insertedProduct.store_name,
+            unit: insertedProduct.unit,
+            source: 'manual',
+            priceDate: currentDate
+          }
+        )
+
+        // 2. Shopping statistics mentése (bevásárlási statisztikákhoz)
+        const shoppingStatData = {
+          user_id: currentUser.id,
+          shopping_date: currentDate,
+          product_name: insertedProduct.name,
+          product_category: insertedProduct.category,
+          brand: insertedProduct.brand,
+          store_name: insertedProduct.store_name,
+          quantity: 1,
+          unit: insertedProduct.unit,
+          unit_price: insertedProduct.price,
+          total_price: insertedProduct.price,
+          source: 'manual'
+        }
+
+        const { error: statsError } = await supabase
+          .from('shopping_statistics')
+          .insert([shoppingStatData])
+
+        if (priceHistoryResult.success && !statsError) {
+          console.log('✅ Termék és statisztikák sikeresen mentve!')
+        } else {
+          console.warn('⚠️ Termék mentve, de statisztikák mentése részben sikertelen')
+        }
+      }
 
       toast.success('Termék sikeresen hozzáadva!')
       
@@ -335,6 +382,16 @@ export default function TermekekPage() {
       }> = []
       const skippedProducts: string[] = []
       const existingProductsSet = new Set()
+      
+      // ÚJ: Minden JSON elemet statisztikába mentünk (duplikáltakat is)
+      const allItemsForStats: Array<{
+        name: string;
+        brand: string | null;
+        category: string;
+        store_name: string | null;
+        price: number | null;
+        unit: string;
+      }> = []
 
       // Meglévő termékek indexelése
       existingProducts?.forEach(product => {
@@ -377,7 +434,24 @@ export default function TermekekPage() {
           return
         }
 
-        // Duplikáció ellenőrzés
+        const productCategory = item.category || item.kategoria || 'Egyéb'
+        const productStoreName = item.store_name || item.bolt || null
+        const productPrice = item.price || item.ar || null
+        const productUnit = item.unit || item.egyseg || 'db'
+
+        // ÚJ: MINDEN terméket hozzáadunk a statisztikához (árral rendelkezőket)
+        if (productPrice && productPrice > 0) {
+          allItemsForStats.push({
+            name: productName,
+            brand: productBrand,
+            category: productCategory,
+            store_name: productStoreName,
+            price: productPrice,
+            unit: productUnit
+          })
+        }
+
+        // Duplikáció ellenőrzés CSAK a products táblához
         let isDuplicate = false
         
         // 1. Vonalkód alapú ellenőrzés (ha van)
@@ -393,18 +467,18 @@ export default function TermekekPage() {
 
         if (isDuplicate) {
           skippedProducts.push(productName)
-          return
+          return // Csak a products táblából hagyjuk ki, statisztika már mentve
         }
 
-        // Új termék hozzáadása a listához és az indexhez
+        // Új termék hozzáadása a products táblához
         productsToInsert.push({
           user_id: currentUser.id,
           name: productName,
           brand: productBrand,
-          category: item.category || item.kategoria || 'Egyéb',
-          store_name: item.store_name || item.bolt || null,
-          price: item.price || item.ar || null,
-          unit: item.unit || item.egyseg || 'db',
+          category: productCategory,
+          store_name: productStoreName,
+          price: productPrice,
+          unit: productUnit,
           barcode: productBarcode,
           sku: item.sku || item.termek_kod || null,
           description: item.description || item.leiras || null,
@@ -427,11 +501,8 @@ export default function TermekekPage() {
 
         if (error) throw error
 
-        // Price history mentése az importált termékekhez (ha van áruk)
+        // Price history mentése CSAK az új termékekhez (árfigyeléshez)
         if (insertedProducts) {
-          const currentDate = new Date().toISOString().split('T')[0]
-          
-          // 1. Price history mentése (árfigyeléshez)
           const priceHistoryPromises = insertedProducts
             .filter(product => product.price && product.price > 0)
             .map(product => 
@@ -445,45 +516,58 @@ export default function TermekekPage() {
                   storeName: product.store_name,
                   unit: product.unit,
                   source: 'import',
-                  priceDate: currentDate
+                  priceDate: new Date().toISOString().split('T')[0]
                 }
               )
             );
 
-          // 2. Shopping statistics mentése (statisztikákhoz)
-          const shoppingStatsToInsert = insertedProducts
-            .filter(product => product.price && product.price > 0)
-            .map(product => ({
-              user_id: currentUser.id,
-              shopping_date: currentDate,
-              product_name: product.name,
-              product_category: product.category,
-              brand: product.brand,
-              store_name: product.store_name,
-              quantity: 1,
-              unit: product.unit,
-              unit_price: product.price,
-              total_price: product.price
-            }))
+          await Promise.allSettled(priceHistoryPromises);
+        }
+      }
 
-          // Párhuzamosan mentjük az összes árat és statisztikát
-          await Promise.allSettled([
-            ...priceHistoryPromises,
-            supabase.from('shopping_statistics').insert(shoppingStatsToInsert)
-          ]);
+      // ÚJ LOGIKA: Shopping statistics mentése MINDEN JSON elemből (duplikáltakkal együtt)
+      if (allItemsForStats.length > 0) {
+        const currentDate = new Date().toISOString().split('T')[0]
+        
+        const shoppingStatsToInsert = allItemsForStats.map(item => ({
+          user_id: currentUser.id,
+          shopping_date: currentDate,
+          product_name: item.name,
+          product_category: item.category,
+          brand: item.brand,
+          store_name: item.store_name,
+          quantity: 1,
+          unit: item.unit,
+          unit_price: item.price,
+          total_price: item.price,
+          source: 'manual' // Ideiglenes: 'import' nem engedélyezett a CHECK constraint-ben
+        }))
+
+        // Statisztikák mentése
+        const { error: statsError } = await supabase
+          .from('shopping_statistics')
+          .insert(shoppingStatsToInsert)
+
+        if (statsError) {
+          // Ne állítsuk meg az importot statisztika hiba esetén
+          toast.error(`Figyelem: ${allItemsForStats.length} termék importálva, de a statisztika mentése sikertelen.`)
         }
       }
 
       // Eredmény kijelzése
       let message = ''
+      
       if (productsToInsert.length > 0) {
-        message += `${productsToInsert.length} termék sikeresen importálva!`
+        message += `${productsToInsert.length} új termék hozzáadva! `
+      }
+      if (allItemsForStats.length > 0) {
+        message += `${allItemsForStats.length} termék statisztikába mentve! `
       }
       if (skippedProducts.length > 0) {
-        message += ` ${skippedProducts.length} termék kihagyva (már létezik).`
+        message += `${skippedProducts.length} termék már létezett (csak statisztikába került).`
       }
-      if (productsToInsert.length === 0 && skippedProducts.length === 0) {
-        message = 'Nincs importálható termék!'
+      if (productsToInsert.length === 0 && allItemsForStats.length === 0) {
+        message = 'Nincs importálható termék árral!'
       }
 
       toast.success(message)

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/utils/supabase/client'
 import { getShoppingStatistics } from '@/lib/shoppingStatistics'
 import type { SpendingStatistics } from '@/lib/shoppingStatistics'
+import MonthlySpendingBreakdown from '@/components/MonthlySpendingBreakdown'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/src/components/ui/card'
 import { Button } from '@/src/components/ui/button'
 import { Badge } from '@/src/components/ui/badge'
@@ -415,6 +416,13 @@ export default function StatisztikaPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Havi bontás részletes táblázat */}
+            <MonthlySpendingBreakdown 
+              userId={currentUser.id}
+              startDate={getDateRange().start}
+              endDate={getDateRange().end}
+            />
           </>
         )}
 

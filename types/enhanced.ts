@@ -13,7 +13,7 @@ export interface ProductPriceHistory {
   quantity: number;
   total_price: number;
   price_date: string; // YYYY-MM-DD format
-  source: 'ocr' | 'manual' | 'import';
+  source: 'ocr' | 'manual' | 'import' | 'list';
   created_at: string;
   updated_at: string;
 }
@@ -33,6 +33,7 @@ export interface ShoppingStatistic {
   unit: string;
   unit_price: number;
   total_price: number;
+  source?: 'ocr' | 'manual' | 'list';
   created_at: string;
   updated_at: string;
 }

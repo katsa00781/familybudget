@@ -19,7 +19,7 @@ export const savePriceHistory = async (
     quantity?: number;
     totalPrice?: number;
     priceDate?: string;
-    source?: 'ocr' | 'manual' | 'import';
+    source?: 'ocr' | 'manual' | 'import' | 'list';
   } = {}
 ): Promise<{ success: boolean; error?: string; data?: ProductPriceHistory }> => {
   try {

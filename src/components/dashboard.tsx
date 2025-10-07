@@ -469,7 +469,7 @@ export default function Dashboard() {
                   Bérkalkulátor
                 </Button>
               </a>
-              <a href="/bevasarlas" className="block">
+              <a href="/bevasarlas-quick" className="block">
                 <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 sm:py-3 text-sm sm:text-base">
                   <ShoppingCart className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                   Bevásárlólista

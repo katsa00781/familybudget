@@ -83,7 +83,7 @@ export default function BerkalkulatorPage() {
   const ledolgozottNapok = munkarendNapok - szabadsagNapok; // Ledolgozott napok = munkanapok - szabadság
   const munkarendSzerintiOrak = munkarendNapok * 8.1; // Munkarend szerinti idő: napok * 8,1 óra
   const ledolgozottOrak = ledolgozottNapok * 8.1; // Ledolgozott órák: ledolgozott napok * 8,1
-  const muszakpotlekOrak = ledolgozottOrak; // Mindig megegyezik a ledolgozott órákkal
+  // muszakpotlekOrak már nem használt, a műszakpótlék a havibéres időbér alapján számolódik
   const szabadsagOrak = szabadsagNapok * 8.1; // Fizetett szabadság órák
   const [betegszabadsagNapok, setBetegszabadsagNapok] = useState(0);
   const [kikuldetesNapok, setKikuldetesNapok] = useState(0);
@@ -174,11 +174,13 @@ export default function BerkalkulatorPage() {
     // Túlóra pótlék: túlóra órák × órábér × 150%
     const tuloraPotlek = Math.round(tuloraOrak * oraber * KULCSOK.TULORA_POTLEK);
     
-    // Műszakpótlék: műszakpótlékes órák × órábér × 45%
-    const muszakpotlek = Math.round(muszakpotlekOrak * oraber * KULCSOK.MUSZAKPOTLEK);
+    // Műszakpótlék: havibéres időbér × 45%
+    // FONTOS: A műszakpótlék az ALAPBÉR (havibéres időbér) 45%-a, NEM az órák × órábér × 45%!
+    const muszakpotlek = Math.round(haviberesIdober * KULCSOK.MUSZAKPOTLEK);
     
-    // Túlóra műszakpótlék: túlóra órák × órábér × 45% (nem 45% × 1.5!)
-    const tuloraMuszakpotlek = Math.round(tuloraOrak * oraber * KULCSOK.MUSZAKPOTLEK);
+    // Túlóra műszakpótlék: túlóra alap × 45%
+    // FONTOS: A túlóra műszakpótléke a túlóra ALAPössszeg 45%-a, nem az órák × órábér × 45%!
+    const tuloraMuszakpotlek = Math.round(tuloraAlapossszeg * KULCSOK.MUSZAKPOTLEK);
     
     // Munkaszüneti munkavégzés: 8,17 óra × 8750 Ft/óra = 71488 Ft (200% szorzó)
     const unnepnapiMunka = Math.round(unnepnapiOrak * oraber * KULCSOK.MUNKASZUNETI_POTLEK);
@@ -211,14 +213,13 @@ export default function BerkalkulatorPage() {
     // MÉSZ tagdíj: 0.7%
     const meszTagdij = Math.round(bruttoBer * KULCSOK.MÉSZ_TAGDIJ);
     
-    // SZJA alap számítása (TB és nyugdíj levonása után)
-    const szjaAlap = bruttoBer + formaruhakompenzacio - tbJarulék - onkentesNyugdij;
+    // SZJA alap számítása: bruttó + formaruha - TB - nyugdíj - családi kedvezmény
+    // A családi adókedvezmény AZ ADÓALAPOT csökkenti!
+    const szjaAlapKedvezmenyElott = bruttoBer - meszTagdij;
+    const szjaAlap = Math.max(0, szjaAlapKedvezmenyElott - családiAdókedvezmény);
     
-    // Családi adókedvezmény alkalmazása
-    const kedvezményesAlap = Math.max(0, szjaAlap - családiAdókedvezmény);
-    
-    // SZJA számítás: 15%
-    const szja = Math.round(kedvezményesAlap * KULCSOK.SZJA_KULCS);
+    // SZJA számítás: 15% a (kedvezménnyel csökkentett) adóalapból
+    const szja = Math.round(szjaAlap * KULCSOK.SZJA_KULCS);
     
     // Összes levonás (bérpapír szerint: 499 569 Ft)
     const osszesLevonas = tbJarulék + onkentesNyugdij + meszTagdij + szja;
@@ -253,8 +254,8 @@ export default function BerkalkulatorPage() {
       onkentesNyugdij,
       erdekKepvTagdij: meszTagdij, // MÉSZ tagdíj
       szja,
-      szjaAlap,
-      kedvezményesAlap,
+      szjaAlap, // Adóalap a családi kedvezmény levonása UTÁN
+      kedvezményesAlap: szjaAlap, // Ugyanaz, mint az szjaAlap (kompatibilitás)
       osszesLevonas,
       netto,
       szocHozzjarulas,
@@ -262,7 +263,7 @@ export default function BerkalkulatorPage() {
       levonasArany: ((osszesLevonas / osszesJarandsag) * 100).toFixed(1),
       munkaltaroiTerhek: ((szocHozzjarulas / osszesJarandsag) * 100).toFixed(1)
     });
-  }, [alapber, munkarendNapok, szabadsagNapok, tuloraOrak, muszakpotlekOrak, 
+  }, [alapber, munkarendNapok, szabadsagNapok, tuloraOrak, 
       unnepnapiOrak, betegszabadsagNapok, kikuldetesNapok, gyedMellett, 
       formaruhakompenzacio, családiAdókedvezmény, munkarendSzerintiOrak, 
       ledolgozottOrak, szabadsagOrak, setEredmény]);
@@ -439,7 +440,7 @@ export default function BerkalkulatorPage() {
         szabadsag_napok: szabadsagNapok,
         szabadsag_orak: szabadsagOrak,
         tulora_orak: tuloraOrak,
-        muszakpotlek_orak: muszakpotlekOrak,
+        // muszakpotlek_orak már nem használt - a műszakpótlék a havibéres időbér alapján számolódik
         unnepnapi_orak: unnepnapiOrak,
         betegszabadsag_napok: betegszabadsagNapok,
         kikuldes_napok: kikuldetesNapok,

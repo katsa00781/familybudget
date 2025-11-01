@@ -16,6 +16,21 @@ import { toast } from 'sonner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select'
 import { getUserPreferences, setActiveIncomePlan, setActiveBudgetPlan } from '@/lib/userPreferences'
 
+// Wallet kategóriák a szinkronizáláshoz
+const WALLET_CATEGORIES = {
+  'Étel és ital': ['Bevásárlás', 'Étterem, gyorsétterem', 'Bár, kávézó'],
+  'Vásárlás': ['Ruházat és cipő', 'Ékszerek, kiegészítők', 'Egészség, szépség', 'Gyerekek', 'Otthon, kert', 'Elektronika, tartozékok', 'Ajándékok, örömök', 'Irodaszerek, eszközök', 'Szabadidő', 'Gyógyszertár, drogéria'],
+  'Lakhatás': ['Bérleti díj', 'Jelzáloghitel', 'Energia, közművek', 'Szolgáltatások', 'Karbantartás, javítások', 'Ingatlanbiztosítás'],
+  'Közlekedés': ['Tömegközlekedés', 'Taxi', 'Hosszú távú', 'Üzleti utak'],
+  'Jármű': ['Üzemanyag', 'Parkolás', 'Jármű karbantartása', 'Jármű biztosítás', 'Lizing'],
+  'Élet és szórakozás': ['Egészségügyi ellátás, orvos', 'Wellness, szépség', 'Aktiv sport, Fitness', 'Életesemények', 'Hobbi', 'Oktatás fejlődés', 'Könyvek, hanganyagok', 'TV, streaming', 'Nyaralás, utazások, hotelek', 'Jótékonyság, ajándékok'],
+  'Kommunikáció, számítógép': ['Telefon, mobiltelefon', 'Internet', 'Szoftverek, alkalmazások, játékok', 'Postai szolgáltatások'],
+  'Pénzügyi kiadások': ['Adók', 'Biztosítások', 'Kölcsönök, törlesztések', 'Bírságok', 'Díjak'],
+  'Befektetések': ['Ingatlanok', 'Járművek, ingóságok', 'Pénzügyi befektetések', 'Megtakarítások'],
+  'Bevétel': ['Bér, számlák', 'Kamatok, osztalékok', 'Eladás', 'Bérleti bevétel', 'Tagdíjak, támogatások', 'Visszatérítések'],
+  'Egyebek': ['Hiányzó', 'Egyebek']
+} as const
+
 interface BudgetItem {
   id: string
   category: string
@@ -27,12 +42,16 @@ interface BudgetItem {
 interface BudgetCategory {
   name: string
   items: BudgetItem[]
+  walletCategories?: Array<{
+    mainCategory: string
+    subCategories: string[]
+  }>
 }
 
 interface SavedBudget {
   id: string
   user_id: string
-  budget_data: BudgetItem[]
+  budget_data: BudgetCategory[] | BudgetItem[] // Támogatjuk mindkét formátumot
   total_amount: number
   name?: string
   description?: string
@@ -244,6 +263,64 @@ export default function KoltsegvetesPage() {
     setBudgetData(newData)
   }
 
+  // Wallet főkategória hozzáadása
+  const addWalletMainCategory = (categoryIndex: number, mainCategory: string) => {
+    const newData = [...budgetData]
+    if (!newData[categoryIndex].walletCategories) {
+      newData[categoryIndex].walletCategories = []
+    }
+    // Ellenőrizzük, hogy még nincs hozzáadva
+    const exists = newData[categoryIndex].walletCategories!.some(
+      wc => wc.mainCategory === mainCategory
+    )
+    if (!exists) {
+      newData[categoryIndex].walletCategories!.push({
+        mainCategory,
+        subCategories: []
+      })
+    }
+    setBudgetData(newData)
+  }
+
+  // Wallet főkategória eltávolítása
+  const removeWalletMainCategory = (categoryIndex: number, mainCategory: string) => {
+    const newData = [...budgetData]
+    if (newData[categoryIndex].walletCategories) {
+      newData[categoryIndex].walletCategories = newData[categoryIndex].walletCategories!.filter(
+        wc => wc.mainCategory !== mainCategory
+      )
+    }
+    setBudgetData(newData)
+  }
+
+  // Wallet alkategória hozzáadása egy főkategóriához
+  const addWalletSubCategory = (categoryIndex: number, mainCategory: string, subCategory: string) => {
+    const newData = [...budgetData]
+    if (!newData[categoryIndex].walletCategories) return
+    
+    const walletCat = newData[categoryIndex].walletCategories!.find(
+      wc => wc.mainCategory === mainCategory
+    )
+    if (walletCat && !walletCat.subCategories.includes(subCategory)) {
+      walletCat.subCategories.push(subCategory)
+    }
+    setBudgetData(newData)
+  }
+
+  // Wallet alkategória eltávolítása
+  const removeWalletSubCategory = (categoryIndex: number, mainCategory: string, subCategory: string) => {
+    const newData = [...budgetData]
+    if (!newData[categoryIndex].walletCategories) return
+    
+    const walletCat = newData[categoryIndex].walletCategories!.find(
+      wc => wc.mainCategory === mainCategory
+    )
+    if (walletCat) {
+      walletCat.subCategories = walletCat.subCategories.filter(sc => sc !== subCategory)
+    }
+    setBudgetData(newData)
+  }
+
   // Kategória összegzése
   const getCategoryTotal = (category: BudgetCategory) => {
     return category.items.reduce((sum, item) => sum + item.amount, 0)
@@ -263,15 +340,14 @@ export default function KoltsegvetesPage() {
 
     setIsLoading(true)
     try {
-      const allItems = budgetData.flatMap(category => category.items)
       const { total } = calculateTotals()
 
-      console.log('allItems count:', allItems.length)
+      console.log('budgetData categories:', budgetData.length)
       console.log('total:', total)
 
       const budgetToSave = {
         user_id: currentUser.id,
-        budget_data: allItems,
+        budget_data: budgetData, // Mentjük a teljes kategória struktúrát
         total_amount: total,
         name: budgetName || `Költségvetés ${new Date().toLocaleDateString('hu-HU')}`,
         description: budgetDescription || null
@@ -398,26 +474,70 @@ export default function KoltsegvetesPage() {
       if (error) throw error
       
       if (data) {
-        // Költségvetés adatok betöltése
-        const loadedItems = data.budget_data as BudgetItem[]
+        // Ellenőrizzük, hogy a budget_data tételek (régi formátum) vagy kategóriák (új formátum)
+        const budgetDataRaw = data.budget_data
         
-        // Új költségvetés struktúra létrehozása a betöltött adatokkal
-        const newBudgetData = createInitialBudgetData()
-        
-        // Meglévő tételek törlése és újak hozzáadása
-        newBudgetData.forEach(category => {
-          category.items = []
-        })
-        
-        // Betöltött tételek kategóriák szerint csoportosítása
-        loadedItems.forEach(item => {
-          const categoryIndex = newBudgetData.findIndex(cat => cat.name === item.category)
-          if (categoryIndex !== -1) {
-            newBudgetData[categoryIndex].items.push(item)
+        if (Array.isArray(budgetDataRaw) && budgetDataRaw.length > 0) {
+          // Ellenőrizzük, hogy van-e 'items' property (új formátum)
+          if (budgetDataRaw[0].items) {
+            // Új formátum: kategóriák wallet kategóriákkal
+            const categories = budgetDataRaw as Array<BudgetCategory & { 
+              walletSubCategory?: string
+              walletMainCategory?: string
+              walletSubCategories?: string[]
+            }>
+            
+            // Kompatibilitás: régi formátumok konverziója
+            const updatedCategories = categories.map(cat => {
+              let walletCategories = cat.walletCategories || []
+              
+              // Régi formátum: walletMainCategory + walletSubCategory (egyetlen)
+              if (cat.walletMainCategory && !cat.walletCategories) {
+                walletCategories = [{
+                  mainCategory: cat.walletMainCategory,
+                  subCategories: cat.walletSubCategory ? [cat.walletSubCategory] : []
+                }]
+              }
+              // Köztes formátum: walletMainCategory + walletSubCategories (tömb)
+              else if (cat.walletMainCategory && cat.walletSubCategories && !cat.walletCategories) {
+                walletCategories = [{
+                  mainCategory: cat.walletMainCategory,
+                  subCategories: cat.walletSubCategories
+                }]
+              }
+              
+              return {
+                name: cat.name,
+                items: cat.items,
+                walletCategories
+              }
+            })
+            
+            setBudgetData(updatedCategories as BudgetCategory[])
+          } else {
+            // Régi formátum: csak tételek
+            const loadedItems = budgetDataRaw as BudgetItem[]
+            
+            // Új költségvetés struktúra létrehozása a betöltött adatokkal
+            const newBudgetData = createInitialBudgetData()
+            
+            // Meglévő tételek törlése és újak hozzáadása
+            newBudgetData.forEach(category => {
+              category.items = []
+            })
+            
+            // Betöltött tételek kategóriák szerint csoportosítása
+            loadedItems.forEach(item => {
+              const categoryIndex = newBudgetData.findIndex(cat => cat.name === item.category)
+              if (categoryIndex !== -1) {
+                newBudgetData[categoryIndex].items.push(item)
+              }
+            })
+            
+            setBudgetData(newBudgetData)
           }
-        })
+        }
         
-        setBudgetData(newBudgetData)
         setBudgetName(data.name || '')
         setBudgetDescription(data.description || '')
         setSelectedBudgetId(budgetId)
@@ -867,25 +987,121 @@ export default function KoltsegvetesPage() {
             <div className="space-y-4 sm:space-y-6">
               {budgetData.map((category, categoryIndex) => (
                 <div key={category.name} className="border-2 border-gray-100 rounded-xl p-4 sm:p-6 bg-gradient-to-r from-gray-50 to-gray-100">
-                  <div className="flex items-center justify-between mb-3 sm:mb-4">
-                    <h3 className="font-semibold text-base sm:text-lg text-gray-900 flex items-center gap-2 sm:gap-3">
-                      {getCategoryIcon(category.name)}
-                      {category.name}
-                    </h3>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
-                      <div className="text-xs sm:text-sm font-medium text-gray-600">
-                        Kategória összesen: <span className="text-sm sm:text-lg font-bold text-gray-900">{formatCurrency(getCategoryTotal(category))}</span>
+                  <div className="flex flex-col gap-3 sm:gap-4 mb-3 sm:mb-4">
+                    {/* Első sor: Kategória neve és összeg */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col gap-2">
+                        <h3 className="font-semibold text-base sm:text-lg text-gray-900 flex items-center gap-2 sm:gap-3">
+                          {getCategoryIcon(category.name)}
+                          {category.name}
+                        </h3>
+                        {/* Wallet kategória badge-ek */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {category.walletCategories && category.walletCategories.length > 0 ? (
+                            category.walletCategories.map((walletCat, wcIdx) => (
+                              <div key={wcIdx} className="flex flex-wrap items-center gap-1.5">
+                                {/* Főkategória badge */}
+                                <Badge 
+                                  variant="outline" 
+                                  className="text-xs bg-blue-50 text-blue-700 border-blue-300 flex items-center gap-1"
+                                >
+                                  {walletCat.mainCategory}
+                                  <X 
+                                    size={12} 
+                                    className="cursor-pointer hover:text-blue-900"
+                                    onClick={() => removeWalletMainCategory(categoryIndex, walletCat.mainCategory)}
+                                  />
+                                </Badge>
+                                {/* Alkategória badge-ek */}
+                                {walletCat.subCategories.map((subcat, scIdx) => (
+                                  <Badge 
+                                    key={scIdx}
+                                    variant="outline" 
+                                    className="text-xs bg-purple-50 text-purple-700 border-purple-300 flex items-center gap-1"
+                                  >
+                                    {subcat}
+                                    <X 
+                                      size={12} 
+                                      className="cursor-pointer hover:text-purple-900"
+                                      onClick={() => removeWalletSubCategory(categoryIndex, walletCat.mainCategory, subcat)}
+                                    />
+                                  </Badge>
+                                ))}
+                              </div>
+                            ))
+                          ) : (
+                            <Badge variant="outline" className="text-xs bg-gray-50 text-gray-400 border-gray-200">
+                              Nincs wallet kategória
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                      <Button
-                        onClick={() => addItem(categoryIndex)}
-                        variant="outline"
-                        size="sm"
-                        className="w-full sm:w-auto flex items-center justify-center gap-1 text-green-600 border-green-300 hover:bg-green-50 text-sm h-8"
+                      <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 sm:gap-4">
+                        <div className="text-xs sm:text-sm font-medium text-gray-600 text-right">
+                          Kategória összesen: <span className="text-sm sm:text-lg font-bold text-gray-900">{formatCurrency(getCategoryTotal(category))}</span>
+                        </div>
+                        <Button
+                          onClick={() => addItem(categoryIndex)}
+                          variant="outline"
+                          size="sm"
+                          className="w-full sm:w-auto flex items-center justify-center gap-1 text-green-600 border-green-300 hover:bg-green-50 text-sm h-8"
+                        >
+                          <Plus size={14} />
+                          <span className="sm:hidden">Új tétel</span>
+                          <span className="hidden sm:inline">Tétel hozzáadása</span>
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {/* Második sor: Wallet kategória választók */}
+                    <div className="space-y-2">
+                      {/* Főkategória hozzáadása */}
+                      <Select 
+                        value="add-main"
+                        onValueChange={(value) => {
+                          if (value !== "add-main") {
+                            addWalletMainCategory(categoryIndex, value)
+                          }
+                        }}
                       >
-                        <Plus size={14} />
-                        <span className="sm:hidden">Új tétel</span>
-                        <span className="hidden sm:inline">Tétel hozzáadása</span>
-                      </Button>
+                        <SelectTrigger className="h-8 text-xs sm:text-sm">
+                          <SelectValue placeholder="+ Wallet főkategória hozzáadása" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="add-main" disabled>Válassz főkategóriát</SelectItem>
+                          {Object.keys(WALLET_CATEGORIES)
+                            .filter(cat => !category.walletCategories?.some(wc => wc.mainCategory === cat))
+                            .map((cat) => (
+                              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      
+                      {/* Alkategória hozzáadása minden főkategóriához */}
+                      {category.walletCategories && category.walletCategories.map((walletCat, wcIdx) => (
+                        <div key={wcIdx} className="pl-4 border-l-2 border-blue-200">
+                          <Select 
+                            value="add-sub"
+                            onValueChange={(value) => {
+                              if (value !== "add-sub") {
+                                addWalletSubCategory(categoryIndex, walletCat.mainCategory, value)
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="h-8 text-xs sm:text-sm">
+                              <SelectValue placeholder={`+ ${walletCat.mainCategory} alkategória`} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="add-sub" disabled>Válassz alkategóriát</SelectItem>
+                              {WALLET_CATEGORIES[walletCat.mainCategory as keyof typeof WALLET_CATEGORIES]
+                                .filter(subcat => !walletCat.subCategories.includes(subcat))
+                                .map((subcat) => (
+                                  <SelectItem key={subcat} value={subcat}>{subcat}</SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
                     </div>
                   </div>
                   <div className="space-y-3">
@@ -977,7 +1193,7 @@ export default function KoltsegvetesPage() {
                             )}
                           </div>
                           
-                          {/* Tétel neve (szerkeszthető) */}
+                          {/* Tétel neve */}
                           <div className="md:col-span-2">
                             <Input
                               value={item.subcategory}

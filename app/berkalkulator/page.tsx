@@ -73,6 +73,7 @@ export default function BerkalkulatorPage() {
   const [familyMember, setFamilyMember] = useState("");
   const [calculationName, setCalculationName] = useState(""); // Kalkuláció neve
   const [alapber, setAlapber] = useState(986400); // Alapbér a bérpapírból
+  const [jutalom, setJutalom] = useState(0); // Jutalom (eseti jövedelem)
   const [munkarendNapok, setMunkarendNapok] = useState(20); // Munkarend szerinti napok
   const [szabadsagNapok, setSzabadsagNapok] = useState(0); // Fizetett szabadság: 0 nap (default)
   const [tuloraOrak, setTuloraOrak] = useState(0); // Túlóra: 0 óra (default)
@@ -92,6 +93,7 @@ export default function BerkalkulatorPage() {
   const [családiAdókedvezmény, setCsaládiAdókedvezmény] = useState(500000); // Családi adókedvezmény: 500,000 Ft (default)
   interface SalaryResult {
     alapber: number;
+    jutalom: number;
     oraber: number;
     haviberesIdober: number;
     fizetettSzabadsag: number;
@@ -190,10 +192,10 @@ export default function BerkalkulatorPage() {
     const kikuldetesTobblet = Math.round(kikuldetesNapok * KULCSOK.KIKULDETESI_POTLEK);
     const gyedMunkavMellett = Math.round(gyedMellett * KULCSOK.GYED_NAPI);
     
-    // Bruttó bér összesen
+    // Bruttó bér összesen (jutalom hozzáadva)
     const bruttoBer = haviberesIdober + fizetettSzabadsag + tuloraAlapossszeg + tuloraPotlek +
                      muszakpotlek + tuloraMuszakpotlek + unnepnapiMunka +
-                     betegszabadsag + kikuldetesTobblet;
+                     betegszabadsag + kikuldetesTobblet + jutalom;
     
     // Összes járandóság (bruttó + GYED + formaruha)
     const osszesJarandsag = bruttoBer + gyedMunkavMellett + formaruhakompenzacio;
@@ -235,6 +237,7 @@ export default function BerkalkulatorPage() {
 
     setEredmény({
       alapber,
+      jutalom,
       oraber: Math.round(oraber),
       haviberesIdober,
       fizetettSzabadsag,
@@ -263,7 +266,7 @@ export default function BerkalkulatorPage() {
       levonasArany: ((osszesLevonas / osszesJarandsag) * 100).toFixed(1),
       munkaltaroiTerhek: ((szocHozzjarulas / osszesJarandsag) * 100).toFixed(1)
     });
-  }, [alapber, munkarendNapok, szabadsagNapok, tuloraOrak, 
+  }, [alapber, jutalom, munkarendNapok, szabadsagNapok, tuloraOrak, 
       unnepnapiOrak, betegszabadsagNapok, kikuldetesNapok, gyedMellett, 
       formaruhakompenzacio, családiAdókedvezmény, munkarendSzerintiOrak, 
       ledolgozottOrak, szabadsagOrak, setEredmény]);
@@ -673,6 +676,24 @@ export default function BerkalkulatorPage() {
                         <span className="absolute right-2 md:right-3 top-2 md:top-3 text-xs md:text-sm text-gray-500">Ft</span>
                       </div>
                     </div>
+
+                    <div>
+                      <Label className="text-xs md:text-sm font-medium text-gray-700">
+                        Jutalom (eseti, Ft)
+                      </Label>
+                      <div className="mt-1 relative">
+                        <Input
+                          type="number"
+                          value={jutalom || ''}
+                          onChange={handleInputChange(setJutalom)}
+                          onFocus={handleInputFocus}
+                          placeholder="pl. 100000"
+                          className="pr-8 h-9 md:h-10 text-sm"
+                        />
+                        <span className="absolute right-2 md:right-3 top-2 md:top-3 text-xs md:text-sm text-gray-500">Ft</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Opcionális eseti jövedelem (prémium, jutalom, stb.)</p>
+                    </div>
                     
                     <div>
                       <Label className="text-xs md:text-sm font-medium text-gray-700">
@@ -944,6 +965,12 @@ export default function BerkalkulatorPage() {
                         <span className="truncate pr-2">Munkaszüneti munkavégzés:</span>
                         <span className="font-medium whitespace-nowrap">{formatCurrency(eredmény.unnepnapiMunka)}</span>
                       </div>
+                      {jutalom > 0 && (
+                        <div className="flex justify-between">
+                          <span className="truncate pr-2">Jutalom/prémium:</span>
+                          <span className="font-medium whitespace-nowrap">{formatCurrency(eredmény.jutalom)}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 

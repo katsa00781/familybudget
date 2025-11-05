@@ -180,6 +180,7 @@ export default function KoltsegvetesPage() {
   const [selectedIncomeId, setSelectedIncomeId] = useState<string>('')
   const [activeIncomeId, setActiveIncomeId] = useState<string | null>(null)
   const [activeBudgetId, setActiveBudgetId] = useState<string | null>(null)
+  const [isCreatingNew, setIsCreatingNew] = useState(false) // Új költségvetés létrehozás jelzője
   const supabase = createClient()
 
   // Felhasználó betöltése
@@ -394,6 +395,7 @@ export default function KoltsegvetesPage() {
           toast.success("Új költségvetés sikeresen elmentve! Mostantól frissíteni fogod ezt a költségvetést.")
           // Automatikusan kiválasztjuk ÉS aktívvá tesszük az új költségvetést
           setSelectedBudgetId(data[0].id)
+          setIsCreatingNew(false) // Újat létrehozás vége
           console.log('setActiveBudgetPlan hívása:', currentUser.id, data[0].id)
           await setActiveBudgetPlan(currentUser.id, data[0].id)
         }
@@ -443,15 +445,92 @@ export default function KoltsegvetesPage() {
     }
   }, [currentUser, supabase])
 
-  // ÚJ költségvetés létrehozása (üres form)
+  // ÚJ költségvetés létrehozása (legutolsó másolása)
   const createNewBudget = () => {
-    console.log('=== ÚJ KÖLTSÉGVETÉS LÉTREHOZÁSA ===')
-    setBudgetName('')
-    setBudgetDescription('')
-    setSelectedBudgetId('') // Ürítjük a kiválasztást
-    setBudgetData(createInitialBudgetData())
-    console.log('selectedBudgetId törölve, új üres költségvetés')
-    toast.success('Új költségvetés indítva! Töltsd ki az adatokat és mentsd el.')
+    console.log('=== ÚJ KÖLTSÉGVETÉS LÉTREHOZÁSA (MÁSOLÁS) ===')
+    setIsCreatingNew(true) // Jelezzük, hogy új költségvetést hozunk létre
+    
+    // Ha van mentett költségvetés, betöltjük a legutolsót (adatokkal együtt)
+    if (savedBudgets.length > 0) {
+      const latestBudget = savedBudgets[0]
+      console.log('Legutolsó költségvetés másolása:', latestBudget.name)
+      
+      // Költségvetés adatok betöltése a másoláshoz
+      const budgetDataRaw = latestBudget.budget_data
+      
+      if (Array.isArray(budgetDataRaw) && budgetDataRaw.length > 0) {
+        // Ellenőrizzük a formátumot és betöltjük
+        if ('items' in budgetDataRaw[0]) {
+          // Új formátum: kategóriák wallet kategóriákkal
+          const categories = budgetDataRaw as Array<BudgetCategory & { 
+            walletSubCategory?: string
+            walletMainCategory?: string
+            walletSubCategories?: string[]
+          }>
+          
+          // Kompatibilitás: régi formátumok konverziója
+          const updatedCategories = categories.map(cat => {
+            let walletCategories = cat.walletCategories || []
+            
+            // Régi formátum konverziók (ugyanaz a logika mint loadBudget-ben)
+            if (cat.walletMainCategory && !cat.walletCategories) {
+              walletCategories = [{
+                mainCategory: cat.walletMainCategory,
+                subCategories: cat.walletSubCategory ? [cat.walletSubCategory] : []
+              }]
+            }
+            else if (cat.walletMainCategory && cat.walletSubCategories && !cat.walletCategories) {
+              walletCategories = [{
+                mainCategory: cat.walletMainCategory,
+                subCategories: cat.walletSubCategories
+              }]
+            }
+            
+            return {
+              name: cat.name,
+              items: cat.items,
+              walletCategories
+            }
+          })
+          
+          setBudgetData(updatedCategories as BudgetCategory[])
+        } else {
+          // Régi formátum: csak tételek
+          const loadedItems = budgetDataRaw as BudgetItem[]
+          const newBudgetData = createInitialBudgetData()
+          
+          // Meglévő tételek törlése és újak hozzáadása
+          newBudgetData.forEach(category => {
+            category.items = []
+          })
+          
+          // Betöltött tételek kategóriák szerint csoportosítása
+          loadedItems.forEach(item => {
+            const categoryIndex = newBudgetData.findIndex(cat => cat.name === item.category)
+            if (categoryIndex !== -1) {
+              newBudgetData[categoryIndex].items.push(item)
+            }
+          })
+          
+          setBudgetData(newBudgetData)
+        }
+      }
+      
+      // Név és leírás alapján új nevet generálunk
+      const currentDate = new Date().toLocaleDateString('hu-HU')
+      setBudgetName(`${latestBudget.name} - Másolat (${currentDate})`)
+      setBudgetDescription(latestBudget.description || '')
+      toast.success(`Költségvetés másolva: ${latestBudget.name}. Adj neki új nevet és mentsd el!`)
+    } else {
+      // Ha nincs mentett költségvetés, kezdjük üres adatokkal
+      setBudgetData(createInitialBudgetData())
+      setBudgetName('')
+      setBudgetDescription('')
+      toast.success('Új üres költségvetés indítva! Töltsd ki az adatokat és mentsd el.')
+    }
+    
+    setSelectedBudgetId('') // Ürítjük a kiválasztást (ez jelzi, hogy új költségvetés)
+    console.log('selectedBudgetId törölve, új költségvetés létrehozva másolással')
   }
 
   // Meglévő költségvetés betöltése
@@ -541,6 +620,7 @@ export default function KoltsegvetesPage() {
         setBudgetName(data.name || '')
         setBudgetDescription(data.description || '')
         setSelectedBudgetId(budgetId)
+        setIsCreatingNew(false) // Betöltés esetén nem újat hozunk létre
         
         console.log('Költségvetés betöltve:', data.name, 'ID:', budgetId)
         toast.success(`Költségvetés betöltve: ${data.name}`)
@@ -642,10 +722,10 @@ export default function KoltsegvetesPage() {
 
   // Legutolsó költségvetés automatikus betöltése, amikor a mentett költségvetések betöltődnek
   useEffect(() => {
-    if (savedBudgets.length > 0 && !selectedBudgetId) {
+    if (savedBudgets.length > 0 && !selectedBudgetId && !isCreatingNew) {
       loadLatestBudget()
     }
-  }, [savedBudgets, selectedBudgetId, loadLatestBudget])
+  }, [savedBudgets, selectedBudgetId, loadLatestBudget, isCreatingNew])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('hu-HU', {
@@ -746,13 +826,21 @@ export default function KoltsegvetesPage() {
                     className="flex-1 flex items-center gap-2 h-9 text-sm bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
                   >
                     <Plus size={14} />
-                    Új költségvetés
+                    Másolás új néven
                   </Button>
-                  {selectedBudgetId && (
+                  {selectedBudgetId && !isCreatingNew && (
                     <div className="flex-1 text-xs sm:text-sm text-gray-600 flex items-center">
                       <span className="font-medium">Módosítás alatt: </span>
                       <span className="ml-1 text-blue-600 font-semibold truncate">
                         {savedBudgets.find(b => b.id === selectedBudgetId)?.name}
+                      </span>
+                    </div>
+                  )}
+                  {isCreatingNew && (
+                    <div className="flex-1 text-xs sm:text-sm text-gray-600 flex items-center">
+                      <span className="font-medium">Másolat készítés: </span>
+                      <span className="ml-1 text-green-600 font-semibold">
+                        Módosítsd a nevet és mentsd el
                       </span>
                     </div>
                   )}

@@ -55,6 +55,7 @@ interface SavedBudget {
   total_amount: number
   name?: string
   description?: string
+  actual_income?: number // Tényleges bevétel
   created_at: string
   updated_at?: string
 }
@@ -181,6 +182,7 @@ export default function KoltsegvetesPage() {
   const [activeIncomeId, setActiveIncomeId] = useState<string | null>(null)
   const [activeBudgetId, setActiveBudgetId] = useState<string | null>(null)
   const [isCreatingNew, setIsCreatingNew] = useState(false) // Új költségvetés létrehozás jelzője
+  const [actualIncome, setActualIncome] = useState<number>(0) // Tényleges bevétel
   const supabase = createClient()
 
   // Felhasználó betöltése
@@ -351,7 +353,8 @@ export default function KoltsegvetesPage() {
         budget_data: budgetData, // Mentjük a teljes kategória struktúrát
         total_amount: total,
         name: budgetName || `Költségvetés ${new Date().toLocaleDateString('hu-HU')}`,
-        description: budgetDescription || null
+        description: budgetDescription || null,
+        actual_income: actualIncome > 0 ? actualIncome : null // Tényleges bevétel mentése
       }
 
       console.log('budgetToSave:', budgetToSave)
@@ -445,6 +448,35 @@ export default function KoltsegvetesPage() {
     }
   }, [currentUser, supabase])
 
+  // Tényleges bevétel mentése
+  const saveActualIncome = async () => {
+    if (!currentUser || !selectedBudgetId) {
+      toast.error("Válassz ki egy költségvetést a tényleges bevétel mentéséhez!")
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const { error } = await supabase
+        .from('budget_plans')
+        .update({ 
+          actual_income: actualIncome > 0 ? actualIncome : null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedBudgetId)
+      
+      if (error) throw error
+      
+      toast.success(`Tényleges bevétel mentve: ${actualIncome.toLocaleString('hu-HU')} HUF`)
+      console.log('Tényleges bevétel mentve:', actualIncome)
+    } catch (error) {
+      console.error('Tényleges bevétel mentési hiba:', error)
+      toast.error('Hiba történt a tényleges bevétel mentése során!')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // ÚJ költségvetés létrehozása (legutolsó másolása)
   const createNewBudget = () => {
     console.log('=== ÚJ KÖLTSÉGVETÉS LÉTREHOZÁSA (MÁSOLÁS) ===')
@@ -520,12 +552,14 @@ export default function KoltsegvetesPage() {
       const currentDate = new Date().toLocaleDateString('hu-HU')
       setBudgetName(`${latestBudget.name} - Másolat (${currentDate})`)
       setBudgetDescription(latestBudget.description || '')
+      setActualIncome(0) // Új költségvetésben nullázzuk a tényleges bevételt
       toast.success(`Költségvetés másolva: ${latestBudget.name}. Adj neki új nevet és mentsd el!`)
     } else {
       // Ha nincs mentett költségvetés, kezdjük üres adatokkal
       setBudgetData(createInitialBudgetData())
       setBudgetName('')
       setBudgetDescription('')
+      setActualIncome(0) // Új költségvetésben nullázzuk a tényleges bevételt
       toast.success('Új üres költségvetés indítva! Töltsd ki az adatokat és mentsd el.')
     }
     
@@ -619,10 +653,11 @@ export default function KoltsegvetesPage() {
         
         setBudgetName(data.name || '')
         setBudgetDescription(data.description || '')
+        setActualIncome(data.actual_income || 0) // Tényleges bevétel betöltése
         setSelectedBudgetId(budgetId)
         setIsCreatingNew(false) // Betöltés esetén nem újat hozunk létre
         
-        console.log('Költségvetés betöltve:', data.name, 'ID:', budgetId)
+        console.log('Költségvetés betöltve:', data.name, 'ID:', budgetId, 'Tényleges bevétel:', data.actual_income)
         toast.success(`Költségvetés betöltve: ${data.name}`)
       }
     } catch (error) {
@@ -702,6 +737,28 @@ export default function KoltsegvetesPage() {
       }
     }
   }, [incomePlans, currentUser])
+
+  // Költségvetés aktívvá tétele
+  const setActiveBudget = useCallback(async (budgetId: string) => {
+    if (!currentUser) {
+      toast.error('Nincs bejelentkezett felhasználó')
+      return
+    }
+
+    try {
+      const result = await setActiveBudgetPlan(currentUser.id, budgetId)
+      if (result.success) {
+        setActiveBudgetId(budgetId)
+        const budget = savedBudgets.find(b => b.id === budgetId)
+        toast.success(`Költségvetés aktívként beállítva: ${budget?.name}`)
+      } else {
+        toast.error('Nem sikerült aktívként beállítani a költségvetést')
+      }
+    } catch (error) {
+      console.error('Hiba a költségvetés aktívvá tételekor:', error)
+      toast.error('Hiba történt a költségvetés aktívvá tételekor!')
+    }
+  }, [currentUser, savedBudgets])
 
   // Felhasználó és mentett költségvetések betöltése
   useEffect(() => {
@@ -828,6 +885,16 @@ export default function KoltsegvetesPage() {
                     <Plus size={14} />
                     Másolás új néven
                   </Button>
+                  {selectedBudgetId && !isCreatingNew && activeBudgetId !== selectedBudgetId && (
+                    <Button
+                      onClick={() => setActiveBudget(selectedBudgetId)}
+                      variant="outline"
+                      className="flex-1 flex items-center gap-2 h-9 text-sm bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
+                    >
+                      <Target size={14} />
+                      Aktívvá tétel
+                    </Button>
+                  )}
                   {selectedBudgetId && !isCreatingNew && (
                     <div className="flex-1 text-xs sm:text-sm text-gray-600 flex items-center">
                       <span className="font-medium">Módosítás alatt: </span>
@@ -908,15 +975,75 @@ export default function KoltsegvetesPage() {
                     {expectedIncome > 0 ? `${expectedIncome.toLocaleString('hu-HU')} HUF` : 'Nincs kiválasztva'}
                   </span>
                 </div>
+
+                {/* Tényleges bevétel input mező */}
+                <div>
+                  <label htmlFor="actual-income" className="block text-sm font-medium text-gray-700 mb-2">
+                    Tényleges bevétel
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="actual-income"
+                      type="number"
+                      placeholder="Tényleges bevétel összege"
+                      value={actualIncome || ''}
+                      onChange={(e) => setActualIncome(Number(e.target.value) || 0)}
+                      className="h-9 sm:h-10 flex-1"
+                    />
+                    <span className="text-sm text-gray-500 font-medium">HUF</span>
+                    <Button 
+                      onClick={saveActualIncome}
+                      disabled={!selectedBudgetId || isLoading}
+                      size="sm"
+                      className="h-9 px-3"
+                    >
+                      <Save size={16} className="mr-1" />
+                      Mentés
+                    </Button>
+                  </div>
+                  <div className="flex flex-col gap-1 mt-1">
+                    <p className="text-xs text-gray-500">
+                      Add meg a ténylegesen megkapott bevételt és mentsd el
+                    </p>
+                    {!selectedBudgetId && (
+                      <p className="text-xs text-orange-600 font-medium">
+                        Válassz ki egy költségvetést a mentéshez!
+                      </p>
+                    )}
+                    {actualIncome > 0 && (
+                      <p className="text-xs text-green-600 font-medium">
+                        Formázva: {formatCurrency(actualIncome)}
+                      </p>
+                    )}
+                  </div>
+                </div>
                 
-                {expectedIncome > 0 && (
+                {(expectedIncome > 0 || actualIncome > 0) && (
                   <div className="space-y-2 sm:space-y-3 p-3 sm:p-4 bg-gray-50 rounded-lg">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs sm:text-sm font-medium text-gray-600">Tervezett bevétel:</span>
-                      <span className="font-bold text-green-600 text-sm">
-                        {expectedIncome.toLocaleString('hu-HU')} HUF
-                      </span>
-                    </div>
+                    {expectedIncome > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs sm:text-sm font-medium text-gray-600">Tervezett bevétel:</span>
+                        <span className="font-bold text-blue-600 text-sm">
+                          {expectedIncome.toLocaleString('hu-HU')} HUF
+                        </span>
+                      </div>
+                    )}
+                    {actualIncome > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs sm:text-sm font-medium text-gray-600">Tényleges bevétel:</span>
+                        <span className="font-bold text-green-600 text-sm">
+                          {actualIncome.toLocaleString('hu-HU')} HUF
+                        </span>
+                      </div>
+                    )}
+                    {expectedIncome > 0 && actualIncome > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs sm:text-sm font-medium text-gray-600">Bevétel eltérés:</span>
+                        <span className={`font-bold text-sm ${actualIncome - expectedIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {actualIncome > expectedIncome ? '+' : ''}{(actualIncome - expectedIncome).toLocaleString('hu-HU')} HUF
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center">
                       <span className="text-xs sm:text-sm font-medium text-gray-600">Összes költség:</span>
                       <span className="font-bold text-red-600 text-sm">
@@ -924,30 +1051,44 @@ export default function KoltsegvetesPage() {
                       </span>
                     </div>
                     <Separator />
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs sm:text-sm font-medium text-gray-600">Különbség:</span>
-                      <span className={`font-bold text-sm ${expectedIncome - calculateTotals().total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {(expectedIncome - calculateTotals().total).toLocaleString('hu-HU')} HUF
-                      </span>
-                    </div>
                     
-                    {expectedIncome - calculateTotals().total < 0 && (
-                      <div className="flex items-center gap-2 p-2 sm:p-3 bg-red-50 border border-red-200 rounded-lg">
-                        <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></div>
-                        <span className="text-xs sm:text-sm text-red-700 font-medium">
-                          Figyelem! A költségvetés meghaladja a bevételt!
-                        </span>
-                      </div>
-                    )}
-                    
-                    {expectedIncome - calculateTotals().total >= 0 && (
-                      <div className="flex items-center gap-2 p-2 sm:p-3 bg-green-50 border border-green-200 rounded-lg">
-                        <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></div>
-                        <span className="text-xs sm:text-sm text-green-700 font-medium">
-                          Kiváló! A költségvetés belefér a bevételbe.
-                        </span>
-                      </div>
-                    )}
+                    {/* Összehasonlítás - használjuk a tényleges bevételt ha van, különben a tervezettet */}
+                    {(() => {
+                      const incomeToUse = actualIncome > 0 ? actualIncome : expectedIncome;
+                      const difference = incomeToUse - calculateTotals().total;
+                      const incomeLabel = actualIncome > 0 ? 'tényleges' : 'tervezett';
+                      
+                      return (
+                        <>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs sm:text-sm font-medium text-gray-600">
+                              Különbség ({incomeLabel} bevétel alapján):
+                            </span>
+                            <span className={`font-bold text-sm ${difference >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {difference.toLocaleString('hu-HU')} HUF
+                            </span>
+                          </div>
+                          
+                          {difference < 0 && (
+                            <div className="flex items-center gap-2 p-2 sm:p-3 bg-red-50 border border-red-200 rounded-lg">
+                              <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></div>
+                              <span className="text-xs sm:text-sm text-red-700 font-medium">
+                                Figyelem! A költségvetés meghaladja a {incomeLabel} bevételt!
+                              </span>
+                            </div>
+                          )}
+                          
+                          {difference >= 0 && (
+                            <div className="flex items-center gap-2 p-2 sm:p-3 bg-green-50 border border-green-200 rounded-lg">
+                              <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></div>
+                              <span className="text-xs sm:text-sm text-green-700 font-medium">
+                                Kiváló! A költségvetés belefér a {incomeLabel} bevételbe.
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

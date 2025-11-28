@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/utils/supabase/client'
-import { getPriceChanges, getProductPriceHistory } from '@/lib/priceHistory'
+import { getPriceChanges, getProductPriceHistory, savePriceHistory } from '@/lib/priceHistory'
 import type { PriceChange, ProductPriceHistory } from '@/types/enhanced'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/src/components/ui/card'
 import { Button } from '@/src/components/ui/button'
@@ -117,6 +117,67 @@ export default function ArfigyelesPage() {
     }
   }
 
+  // Teszt adatok generálása
+  const generateTestData = async () => {
+    if (!currentUser) return
+    
+    setIsLoading(true)
+    try {
+      const testProducts = [
+        { name: 'Tej 1L', category: 'Tejtermékek', prices: [450, 460, 470, 485] },
+        { name: 'Kenyér', category: 'Pékáru', prices: [380, 380, 390, 400] },
+        { name: 'Tojás 10db', category: 'Tojás', prices: [650, 680, 720, 750] },
+        { name: 'Alma 1kg', category: 'Zöldség-gyümölcs', prices: [550, 520, 580, 600] },
+        { name: 'Csirkemell 1kg', category: 'Hús', prices: [1800, 1850, 1900, 1950] },
+      ]
+
+      const today = new Date()
+      let successCount = 0
+      let failCount = 0
+
+      for (const product of testProducts) {
+        for (let i = 0; i < product.prices.length; i++) {
+          const date = new Date(today)
+          date.setDate(date.getDate() - (product.prices.length - i - 1) * 7) // Heti adatok
+          
+          const result = await savePriceHistory(
+            currentUser.id,
+            product.name,
+            product.prices[i],
+            {
+              productCategory: product.category,
+              unit: 'db',
+              quantity: 1,
+              totalPrice: product.prices[i],
+              priceDate: date.toISOString().split('T')[0],
+              source: 'manual'
+            }
+          )
+
+          if (result.success) {
+            successCount++
+          } else {
+            failCount++
+            console.error('Failed to save price:', result.error)
+          }
+        }
+      }
+
+      if (failCount === 0) {
+        toast.success(`Teszt adatok sikeresen generálva! (${successCount} ár mentve)`)
+      } else {
+        toast.warning(`${successCount} ár mentve, ${failCount} hiba történt`)
+      }
+      
+      await loadPriceChanges()
+    } catch (error) {
+      console.error('Hiba a teszt adatok generálásakor:', error)
+      toast.error('Hiba történt a teszt adatok generálásakor!')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 p-4 sm:p-6 lg:p-8">
@@ -145,9 +206,16 @@ export default function ArfigyelesPage() {
               Kövesd nyomon a termékek árváltozásait
             </p>
           </div>
-          <Button onClick={loadPriceChanges} disabled={isLoading}>
-            {isLoading ? 'Betöltés...' : 'Frissítés'}
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={loadPriceChanges} disabled={isLoading} variant="outline">
+              {isLoading ? 'Betöltés...' : 'Frissítés'}
+            </Button>
+            {priceChanges.length === 0 && (
+              <Button onClick={generateTestData} disabled={isLoading}>
+                Teszt adatok generálása
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Főbb mutatók */}

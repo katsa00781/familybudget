@@ -99,6 +99,8 @@ export const getPriceChanges = async (
     cutoffDate.setDate(cutoffDate.getDate() - daysBack);
     const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
 
+    console.log('🔍 Price changes query:', { userId, daysBack, cutoffDateStr });
+
     // Lekérjük az összes árat a megadott időszakból
     const { data, error } = await supabase
       .from('product_price_history')
@@ -108,10 +110,17 @@ export const getPriceChanges = async (
       .order('product_name', { ascending: true })
       .order('price_date', { ascending: true });
 
-    if (error || !data) {
-      console.error('Error fetching price changes:', error);
+    if (error) {
+      console.error('❌ Error fetching price changes:', error);
       return [];
     }
+
+    if (!data || data.length === 0) {
+      console.log('⚠️ No price history data found for price changes');
+      return [];
+    }
+
+    console.log('✅ Found', data.length, 'price history records for changes');
 
     // Csoportosítás termékenként és árváltozások számítása
     const productGroups: { [key: string]: ProductPriceHistory[] } = {};
@@ -229,8 +238,10 @@ export const getInflationData = async (
   try {
     const supabase = createClient();
     const cutoffDate = new Date();
-    cutoffDate.setMonth(cutoffDate.getDate() - monthsBack);
+    cutoffDate.setMonth(cutoffDate.getMonth() - monthsBack);
     const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+
+    console.log('🔍 Inflation data query:', { userId, monthsBack, cutoffDateStr });
 
     const { data, error } = await supabase
       .from('product_price_history')
@@ -239,10 +250,17 @@ export const getInflationData = async (
       .gte('price_date', cutoffDateStr)
       .order('price_date', { ascending: true });
 
-    if (error || !data) {
-      console.error('Error fetching inflation data:', error);
+    if (error) {
+      console.error('❌ Error fetching inflation data:', error);
       return [];
     }
+
+    if (!data || data.length === 0) {
+      console.log('⚠️ No price history data found for inflation calculation');
+      return [];
+    }
+
+    console.log('✅ Found', data.length, 'price history records');
 
     // Csoportosítás hónaponként
     const monthlyData: { [period: string]: { [productName: string]: ProductPriceHistory[] } } = {};

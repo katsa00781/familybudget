@@ -2,7 +2,24 @@
 
 import { createClient } from '@/lib/utils/supabase/client'
 import type { AnnualBudgetPlan, RecurringExpense } from '@/types/annual-budget'
-import type { BudgetItem, BudgetCategory } from '@/types/budget'
+
+// Lokális típusdefiníciók az éves költségvetés integráció számára
+interface BudgetItem {
+  id: string
+  category: string
+  type: 'Szükséglet' | 'Vágyak' | 'Megtakarítás' | ''
+  subcategory: string
+  amount: number
+}
+
+interface BudgetCategory {
+  name: string
+  items: BudgetItem[]
+  walletCategories?: Array<{
+    mainCategory: string
+    subCategories: string[]
+  }>
+}
 
 /**
  * Lekéri az aktuális év éves költségvetési tervét

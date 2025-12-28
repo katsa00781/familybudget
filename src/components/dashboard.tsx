@@ -14,7 +14,7 @@ import {
 import { 
   ShoppingCart, BarChart2,
   Wallet, TrendingUp, TrendingDown, Target,
-  PiggyBank, ChefHat, Calculator
+  PiggyBank, ChefHat, Calculator, Calendar
 } from 'lucide-react';
 
 interface BudgetItem {
@@ -324,11 +324,12 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-6">
-        <div className="max-w-7xl mx-auto">
+      <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-6 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 via-teal-500/20 to-emerald-500/20 animate-gradient"></div>
+        <div className="max-w-7xl mx-auto relative z-10">
           <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-            <p className="text-white text-lg">Adatok betöltése...</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+            <p className="text-gray-700 text-lg font-semibold">Adatok betöltése...</p>
           </div>
         </div>
       </div>
@@ -336,73 +337,82 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-3 sm:p-6">
-      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-3 sm:p-6 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 via-teal-500/20 to-emerald-500/20 animate-gradient"></div>
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 relative z-10">
         {/* Fejléc */}
-        <div className="text-center space-y-2 mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white">Családi Költségvetés</h1>
-          <p className="text-cyan-100 text-sm sm:text-base px-4">
+        <div className="text-center space-y-2 mb-6 sm:mb-8 bg-white/80 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/20">
+          <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent tracking-tight">Családi Költségvetés</h1>
+          <p className="text-gray-600 text-sm sm:text-base px-4 font-medium leading-relaxed">
             {currentUser ? `Üdvözöljük, ${getUserDisplayName()}!` : 'Áttekintés a pénzügyi helyzetről'}
           </p>
         </div>
 
         {/* Főbb mutatók */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          <Card className="bg-white/90 backdrop-blur-sm hover:bg-white/95 transition-all duration-300">
+          <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-emerald-500/30 hover:scale-105 transition-all duration-300 rounded-2xl">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600">Havi bevétel</CardTitle>
-              <TrendingUp className="h-4 w-4 text-teal-600" />
+              <CardTitle className="text-xs sm:text-sm font-semibold text-gray-600">Havi bevétel</CardTitle>
+              <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl">
+                <TrendingUp className="h-4 w-4 text-white" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-teal-700">
+              <div className="text-lg sm:text-2xl lg:text-3xl font-extrabold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent tabular-nums">
                 {formatCurrency(totalIncome)}
               </div>
-              <p className="text-xs text-teal-600 mt-2">
+              <p className="text-xs text-emerald-600 mt-2 font-medium">
                 {currentIncome ? 'Aktuális terv alapján' : 'Nincs bevételi terv'}
               </p>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/90 backdrop-blur-sm hover:bg-white/95 transition-all duration-300">
+          <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-red-500/30 hover:scale-105 transition-all duration-300 rounded-2xl">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600">Havi kiadás</CardTitle>
-              <TrendingDown className="h-4 w-4 text-red-500" />
+              <CardTitle className="text-xs sm:text-sm font-semibold text-gray-600">Havi kiadás</CardTitle>
+              <div className="p-2 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl">
+                <TrendingDown className="h-4 w-4 text-white" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-red-600">
+              <div className="text-lg sm:text-2xl lg:text-3xl font-extrabold bg-gradient-to-r from-red-500 to-rose-600 bg-clip-text text-transparent tabular-nums">
                 {formatCurrency(totalExpenses)}
               </div>
-              <p className="text-xs text-red-500 mt-2">
+              <p className="text-xs text-red-500 mt-2 font-medium">
                 {currentBudget ? 'Tervezett kiadások' : 'Nincs költségvetési terv'}
               </p>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/90 backdrop-blur-sm hover:bg-white/95 transition-all duration-300">
+          <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-green-500/30 hover:scale-105 transition-all duration-300 rounded-2xl">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600">Egyenleg</CardTitle>
-              <Wallet className="h-4 w-4 text-green-600" />
+              <CardTitle className="text-xs sm:text-sm font-semibold text-gray-600">Egyenleg</CardTitle>
+              <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl">
+                <Wallet className="h-4 w-4 text-white" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className={`text-lg sm:text-xl lg:text-2xl font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <div className={`text-lg sm:text-2xl lg:text-3xl font-extrabold tabular-nums ${balance >= 0 ? 'bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent' : 'bg-gradient-to-r from-red-500 to-rose-600 bg-clip-text text-transparent'}`}>
                 {formatCurrency(balance)}
               </div>
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-gray-500 mt-2 font-medium">
                 Bevétel - Kiadás
               </p>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/90 backdrop-blur-sm hover:bg-white/95 transition-all duration-300">
+          <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-blue-500/30 hover:scale-105 transition-all duration-300 rounded-2xl">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600">Mai bevásárlás</CardTitle>
-              <ShoppingCart className="h-4 w-4 text-blue-600" />
+              <CardTitle className="text-xs sm:text-sm font-semibold text-gray-600">Mai bevásárlás</CardTitle>
+              <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
+                <ShoppingCart className="h-4 w-4 text-white" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-600">
+              <div className="text-lg sm:text-2xl lg:text-3xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent tabular-nums">
                 {formatCurrency(todayShoppingTotal)}
               </div>
-              <p className="text-xs text-blue-500 mt-2">
+              <p className="text-xs text-blue-500 mt-2 font-medium">
                 {shoppingLists.length} lista ma
               </p>
             </CardContent>
@@ -411,11 +421,13 @@ export default function Dashboard() {
 
         {/* Megtakarítási célok és gyors műveletek */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-          <Card className="lg:col-span-2 bg-white/90 backdrop-blur-sm">
+          <Card className="lg:col-span-2 bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-emerald-500/20 transition-all duration-300 rounded-2xl">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-teal-700 text-base sm:text-lg">
-                <Target className="h-4 w-4 sm:h-5 sm:w-5" />
-                Megtakarítási Célok
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-bold">
+                <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl">
+                  <Target className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                </div>
+                <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">Megtakarítási Célok</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -425,20 +437,20 @@ export default function Dashboard() {
                 savingsGoals.slice(0, 3).map((goal) => {
                   const progress = Math.min((goal.current_amount / goal.target_amount) * 100, 100);
                   return (
-                    <div key={goal.id} className="space-y-2">
+                    <div key={goal.id} className="space-y-2 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200 hover:shadow-md transition-all">
                       <div className="flex justify-between items-center flex-wrap gap-2">
-                        <span className="font-medium text-gray-800 text-sm sm:text-base truncate flex-1 min-w-0">{goal.name}</span>
-                        <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">
+                        <span className="font-semibold text-gray-900 text-sm sm:text-base truncate flex-1 min-w-0">{goal.name}</span>
+                        <span className="text-xs sm:text-sm text-gray-700 font-medium whitespace-nowrap tabular-nums">
                           {formatCurrency(goal.current_amount)} / {formatCurrency(goal.target_amount)}
                         </span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="w-full bg-gray-200 rounded-full h-2.5">
                         <div 
-                          className="bg-gradient-to-r from-teal-500 to-green-500 h-2 rounded-full transition-all duration-300"
+                          className="bg-gradient-to-r from-emerald-500 to-teal-500 h-2.5 rounded-full transition-all duration-300 shadow-md"
                           style={{ width: `${progress}%` }}
                         ></div>
                       </div>
-                      <div className="flex justify-between text-xs text-gray-500">
+                      <div className="flex justify-between text-xs text-gray-600 font-medium">
                         <span>{progress.toFixed(1)}% teljesítve</span>
                         <span>Határidő: {new Date(goal.target_date).toLocaleDateString('hu-HU')}</span>
                       </div>
@@ -449,37 +461,50 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="bg-white/90 backdrop-blur-sm">
+          <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-blue-500/20 transition-all duration-300 rounded-2xl">
             <CardHeader>
-              <CardTitle className="text-teal-700 text-base sm:text-lg">Gyors műveletek</CardTitle>
+              <CardTitle className="text-base sm:text-lg font-bold">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
+                    <BarChart2 className="h-4 w-4 text-white" />
+                  </div>
+                  <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Gyors műveletek</span>
+                </div>
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 p-4 sm:p-6">
               <a href="/berkalkulator" className="block">
-                <Button className="w-full bg-teal-600 hover:bg-teal-700 text-white py-2 sm:py-3 text-sm sm:text-base">
+                <Button className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white py-2 sm:py-3 text-sm sm:text-base shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 rounded-xl font-semibold">
                   <Calculator className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                   Bérkalkulátor
                 </Button>
               </a>
               <a href="/bevasarlas-quick" className="block">
-                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 sm:py-3 text-sm sm:text-base">
+                <Button className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white py-2 sm:py-3 text-sm sm:text-base shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 rounded-xl font-semibold">
                   <ShoppingCart className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                   Bevásárlólista
                 </Button>
               </a>
               <a href="/statisztika" className="block">
-                <Button className="w-full bg-green-600 hover:bg-green-700 text-white py-2 sm:py-3 text-sm sm:text-base">
+                <Button className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-2 sm:py-3 text-sm sm:text-base shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 rounded-xl font-semibold">
                   <BarChart2 className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                   Statisztika
                 </Button>
               </a>
+              <a href="/eves-koltsegvetes" className="block">
+                <Button className="w-full bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white py-2 sm:py-3 text-sm sm:text-base shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 rounded-xl font-semibold">
+                  <Calendar className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                  Éves költségvetés
+                </Button>
+              </a>
               <a href="/receptek" className="block">
-                <Button className="w-full bg-orange-600 hover:bg-orange-700 text-white py-2 sm:py-3 text-sm sm:text-base">
+                <Button className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white py-2 sm:py-3 text-sm sm:text-base shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 rounded-xl font-semibold">
                   <ChefHat className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                   Receptek
                 </Button>
               </a>
               <a href="/jelentesek" className="block">
-                <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 sm:py-3 text-sm sm:text-base">
+                <Button className="w-full bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white py-2 sm:py-3 text-sm sm:text-base shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 rounded-xl font-semibold">
                   <PiggyBank className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                   Megtakarítások
                 </Button>
@@ -490,14 +515,16 @@ export default function Dashboard() {
 
         {/* Aktuális költségvetési terv */}
         {currentBudget && (
-          <Card className="bg-white/90 backdrop-blur-sm">
+          <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-emerald-500/20 transition-all duration-300 rounded-2xl">
             <CardHeader>
-              <CardTitle className="flex items-center justify-between text-teal-700">
+              <CardTitle className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <BarChart2 className="h-5 w-5" />
-                  Aktuális Költségvetési Terv
+                  <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl">
+                    <BarChart2 className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent font-bold">Aktuális Költségvetési Terv</span>
                 </div>
-                <Badge className="bg-teal-100 text-teal-700 text-sm">
+                <Badge className="bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-700 text-sm border border-emerald-300 font-semibold">
                   {currentBudget.name}
                 </Badge>
               </CardTitle>

@@ -73,21 +73,27 @@ export default function SegitsegPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-green-50 p-4 lg:p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-3 sm:p-6 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 via-teal-500/20 to-emerald-500/20 animate-gradient"></div>
+      <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8 relative z-10">
         
         {/* Header */}
-        <div className="text-center">
-          <h1 className="text-3xl lg:text-4xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent mb-4">
-            Segítség & Útmutató
-          </h1>
-          <p className="text-gray-600 text-lg">
+        <div className="mb-6 sm:mb-8 bg-white/80 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/20">
+          <div className="flex items-center gap-3 sm:gap-4 mb-4">
+            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-3 sm:p-4 rounded-2xl shadow-lg animate-pulse-slow">
+              <Info className="text-white" size={32} />
+            </div>
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent tracking-tight">
+              Segítség & Útmutató
+            </h1>
+          </div>
+          <p className="text-sm sm:text-base lg:text-lg text-gray-600 leading-relaxed px-1 font-medium">
             Itt mindent megtudhatsz az alkalmazás használatáról
           </p>
         </div>
 
         {/* Családtagok hozzáadása */}
-        <Card>
+        <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-blue-500/20 transition-all duration-300 rounded-2xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-3">
               <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-lg flex items-center justify-center">

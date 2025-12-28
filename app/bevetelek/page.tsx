@@ -200,15 +200,20 @@ export default function BevetelTervekPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-3 sm:p-6">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-3 sm:p-6 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 via-teal-500/20 to-emerald-500/20 animate-gradient"></div>
+      <div className="max-w-6xl mx-auto relative z-10">
         {/* Header */}
-        <div className="text-white mb-4 sm:mb-6">
-          <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-            <TrendingUp className="text-white" size={24} />
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">Bevételi Tervek Kezelése</h1>
+        <div className="mb-6 sm:mb-8 bg-white/80 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/20">
+          <div className="flex items-center gap-3 sm:gap-4 mb-4">
+            <div className="bg-gradient-to-br from-green-500 to-teal-600 p-3 sm:p-4 rounded-2xl shadow-lg animate-pulse-slow">
+              <TrendingUp className="text-white" size={32} />
+            </div>
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold bg-gradient-to-r from-green-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent tracking-tight">
+              Bevételi Tervek Kezelése
+            </h1>
           </div>
-          <p className="text-sm sm:text-base lg:text-lg px-1">
+          <p className="text-sm sm:text-base lg:text-lg text-gray-600 leading-relaxed px-1 font-medium">
             Hozz létre és kezelj bevételi terveket a költségvetéseid pontosabb tervezéséhez.
           </p>
         </div>
@@ -216,13 +221,15 @@ export default function BevetelTervekPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Új bevételi terv létrehozása */}
           <div className="space-y-4 sm:space-y-6">
-            <Card className="bg-white shadow-lg border-0">
+            <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-green-500/20 hover:scale-[1.02] transition-all duration-300 rounded-2xl">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                  <Plus size={16} className="text-green-600 sm:w-5 sm:h-5" />
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-bold">
+                  <div className="p-2 bg-gradient-to-br from-green-500 to-teal-600 rounded-xl">
+                    <Plus size={16} className="text-white sm:w-5 sm:h-5" />
+                  </div>
                   Új Bevételi Terv
                 </CardTitle>
-                <CardDescription className="text-sm">
+                <CardDescription className="text-sm text-gray-600 leading-relaxed">
                   Hozz létre egy új bevételi tervet az alapbevétellel és egyéb jövedelmekkel
                 </CardDescription>
               </CardHeader>
@@ -281,7 +288,7 @@ export default function BevetelTervekPage() {
                         onClick={addAdditionalIncome}
                         variant="outline"
                         size="sm"
-                        className="flex items-center gap-1 h-8 text-sm"
+                        className="flex items-center gap-1 h-8 text-sm bg-gradient-to-r from-green-50 to-emerald-50 hover:from-green-100 hover:to-emerald-100 border-2 border-green-300 text-green-700 font-semibold shadow-md hover:shadow-lg transition-all duration-200 rounded-xl"
                       >
                         <Plus size={14} />
                         <span className="hidden sm:inline">Hozzáad</span>
@@ -315,7 +322,7 @@ export default function BevetelTervekPage() {
                                 onClick={() => removeAdditionalIncome(income.id)}
                                 variant="outline"
                                 size="sm"
-                                className="text-red-600 hover:text-red-700 h-8 w-8 p-0 flex-shrink-0"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-300 h-8 w-8 p-0 flex-shrink-0 rounded-xl"
                               >
                                 <X size={14} />
                               </Button>
@@ -328,7 +335,7 @@ export default function BevetelTervekPage() {
 
                   {/* Összegzés */}
                   {(monthlyIncome > 0 || additionalIncomes.some(i => i.amount > 0)) && (
-                    <div className="p-3 sm:p-4 bg-gray-50 rounded-lg space-y-2">
+                    <div className="p-3 sm:p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border-2 border-green-200 space-y-2">
                       <div className="flex justify-between text-xs sm:text-sm">
                         <span className="text-gray-600">Alapbevétel:</span>
                         <span className="font-medium">{formatCurrency(monthlyIncome)}</span>
@@ -351,7 +358,7 @@ export default function BevetelTervekPage() {
                   <Button 
                     onClick={savePlan} 
                     disabled={isLoading || !currentUser || !planName.trim() || monthlyIncome <= 0}
-                    className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white shadow-lg flex items-center justify-center gap-2 h-9 sm:h-10 text-sm sm:text-base"
+                    className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white shadow-xl hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 flex items-center justify-center gap-2 h-9 sm:h-10 text-sm sm:text-base font-bold rounded-xl"
                   >
                     <Save size={16} className="sm:w-5 sm:h-5" />
                     {isLoading ? 'Mentés...' : 'Bevételi Terv Mentése'}
@@ -366,13 +373,15 @@ export default function BevetelTervekPage() {
 
           {/* Mentett bevételi tervek */}
           <div>
-            <Card className="bg-white shadow-lg border-0">
+            <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-blue-500/20 hover:scale-[1.02] transition-all duration-300 rounded-2xl">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                  <DollarSign size={16} className="text-blue-600 sm:w-5 sm:h-5" />
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-bold">
+                  <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
+                    <DollarSign size={16} className="text-white sm:w-5 sm:h-5" />
+                  </div>
                   Mentett Bevételi Tervek
                 </CardTitle>
-                <CardDescription className="text-sm">
+                <CardDescription className="text-sm text-gray-600 leading-relaxed">
                   A korábban létrehozott bevételi terveid
                 </CardDescription>
               </CardHeader>
@@ -384,7 +393,7 @@ export default function BevetelTervekPage() {
                 ) : (
                   <div className="space-y-3 sm:space-y-4">
                     {savedPlans.map((plan) => (
-                      <div key={plan.id} className="p-3 sm:p-4 border border-gray-200 rounded-lg">
+                      <div key={plan.id} className="p-3 sm:p-4 border-2 border-gray-200 rounded-xl bg-gradient-to-br from-gray-50 to-white hover:shadow-lg hover:scale-[1.01] transition-all duration-200">
                         <div className="flex flex-col sm:flex-row justify-between items-start gap-2 sm:gap-0 mb-3">
                           <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{plan.name}</h3>
@@ -399,7 +408,7 @@ export default function BevetelTervekPage() {
                             onClick={() => deletePlan(plan.id)}
                             variant="outline"
                             size="sm"
-                            className="text-red-600 hover:text-red-700 h-8 w-8 p-0 flex-shrink-0"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-300 h-8 w-8 p-0 flex-shrink-0 rounded-xl"
                           >
                             <Trash2 size={14} />
                           </Button>

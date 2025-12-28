@@ -597,17 +597,20 @@ export default function BerkalkulatorPage() {
   }, [eredmény, additionalIncomes])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-3 sm:p-4 md:p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-3 sm:p-4 md:p-6 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 via-teal-500/20 to-emerald-500/20 animate-gradient"></div>
+      <div className="max-w-7xl mx-auto relative z-10">
         {/* Header */}
-        <div className="text-white mb-4 md:mb-6">
+        <div className="mb-4 md:mb-6 bg-white/80 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/20">
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3 md:mb-4">
-            <Calculator className="text-white" size={28} />
-            <h1 className="text-2xl sm:text-3xl font-bold leading-tight">
+            <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-lg animate-pulse-slow">
+              <Calculator className="text-white" size={32} />
+            </div>
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent tracking-tight leading-tight">
               Részletes Magyar Bérkalkulátor 2025
             </h1>
           </div>
-          <p className="text-sm sm:text-base md:text-lg">
+          <p className="text-sm sm:text-base md:text-lg text-gray-600 font-medium leading-relaxed">
             Számítsd ki a havi nettó bért és add hozzá a passzív jövedelmeket a teljes 
             jövedelem meghatározásához.
           </p>
@@ -616,23 +619,25 @@ export default function BerkalkulatorPage() {
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6">
           {/* Kalkulátor forma */}
           <div className="xl:col-span-2">
-            <Card className="bg-white shadow-lg">
+            <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl">
               <CardContent className="p-3 sm:p-4 md:p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6 mb-4 md:mb-6">
                   {/* Alapadatok */}
                   <div className="space-y-3 md:space-y-4">
-                    <h3 className="text-base md:text-lg font-semibold text-gray-800 flex items-center gap-2">
-                      <Info size={18} className="md:w-5 md:h-5" />
-                      Alapadatok
+                    <h3 className="text-base md:text-lg font-bold text-gray-900 flex items-center gap-2">
+                      <div className="p-1.5 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                        <Info size={18} className="md:w-5 md:h-5 text-white" />
+                      </div>
+                      <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Alapadatok</span>
                     </h3>
                     
                     {/* Családtag */}
                     <div>
-                      <Label htmlFor="family-member" className="text-xs md:text-sm font-medium text-gray-700">
+                      <Label htmlFor="family-member" className="text-xs md:text-sm font-semibold text-gray-700">
                         Családtag
                       </Label>
                       <Select value={familyMember} onValueChange={setFamilyMember}>
-                        <SelectTrigger className="mt-1 h-9 md:h-10 text-sm">
+                        <SelectTrigger className="mt-1 h-9 md:h-10 text-sm border-2 border-gray-200 hover:border-emerald-400 focus:border-emerald-500 transition-colors duration-200 rounded-xl">
                           <SelectValue placeholder={loading ? "Betöltés..." : "Válassz családtagot"} />
                         </SelectTrigger>
                         <SelectContent>
@@ -647,7 +652,7 @@ export default function BerkalkulatorPage() {
 
                     {/* Kalkuláció neve */}
                     <div>
-                      <Label htmlFor="calculation-name" className="text-xs md:text-sm font-medium text-gray-700">
+                      <Label htmlFor="calculation-name" className="text-xs md:text-sm font-semibold text-gray-700">
                         Kalkuláció neve
                       </Label>
                       <Input
@@ -656,12 +661,12 @@ export default function BerkalkulatorPage() {
                         value={calculationName}
                         onChange={(e) => setCalculationName(e.target.value)}
                         placeholder="pl. December 2024 fizetés"
-                        className="mt-1 h-9 md:h-10 text-sm"
+                        className="mt-1 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl"
                       />
                     </div>
 
                     <div>
-                      <Label className="text-xs md:text-sm font-medium text-gray-700">
+                      <Label className="text-xs md:text-sm font-semibold text-gray-700">
                         Besorolási alapbér (Ft/hó)
                       </Label>
                       <div className="mt-1 relative">
@@ -671,14 +676,14 @@ export default function BerkalkulatorPage() {
                           onChange={handleInputChange(setAlapber)}
                           onFocus={handleInputFocus}
                           placeholder="pl. 986400"
-                          className="pr-8 h-9 md:h-10 text-sm"
+                          className="pr-8 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
                         />
-                        <span className="absolute right-2 md:right-3 top-2 md:top-3 text-xs md:text-sm text-gray-500">Ft</span>
+                        <span className="absolute right-2 md:right-3 top-2 md:top-3 text-xs md:text-sm text-gray-500 font-medium">Ft</span>
                       </div>
                     </div>
 
                     <div>
-                      <Label className="text-xs md:text-sm font-medium text-gray-700">
+                      <Label className="text-xs md:text-sm font-semibold text-gray-700">
                         Jutalom (eseti, Ft)
                       </Label>
                       <div className="mt-1 relative">
@@ -688,15 +693,15 @@ export default function BerkalkulatorPage() {
                           onChange={handleInputChange(setJutalom)}
                           onFocus={handleInputFocus}
                           placeholder="pl. 100000"
-                          className="pr-8 h-9 md:h-10 text-sm"
+                          className="pr-8 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
                         />
-                        <span className="absolute right-2 md:right-3 top-2 md:top-3 text-xs md:text-sm text-gray-500">Ft</span>
+                        <span className="absolute right-2 md:right-3 top-2 md:top-3 text-xs md:text-sm text-gray-500 font-medium">Ft</span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">Opcionális eseti jövedelem (prémium, jutalom, stb.)</p>
+                      <p className="text-xs text-gray-500 mt-1 font-medium">Opcionális eseti jövedelem (prémium, jutalom, stb.)</p>
                     </div>
                     
                     <div>
-                      <Label className="text-xs md:text-sm font-medium text-gray-700">
+                      <Label className="text-xs md:text-sm font-semibold text-gray-700">
                         Családi adókedvezmény (Ft/hó)
                       </Label>
                       <div className="mt-1 relative">
@@ -706,23 +711,25 @@ export default function BerkalkulatorPage() {
                           onChange={handleInputChange(setCsaládiAdókedvezmény)}
                           onFocus={handleInputFocus}
                           placeholder="pl. 333330"
-                          className="pr-8 h-9 md:h-10 text-sm"
+                          className="pr-8 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
                         />
-                        <span className="absolute right-2 md:right-3 top-2 md:top-3 text-xs md:text-sm text-gray-500">Ft</span>
+                        <span className="absolute right-2 md:right-3 top-2 md:top-3 text-xs md:text-sm text-gray-500 font-medium">Ft</span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">2 gyermek: 333.330 Ft</p>
+                      <p className="text-xs text-gray-500 mt-1 font-medium">2 gyermek: 333.330 Ft</p>
                     </div>
                   </div>
 
                   {/* Munkaidő */}
                   <div className="space-y-3 md:space-y-4">
-                    <h3 className="text-base md:text-lg font-semibold text-gray-800 flex items-center gap-2">
-                      <Clock size={18} className="md:w-5 md:h-5" />
-                      Munkaidő
+                    <h3 className="text-base md:text-lg font-bold text-gray-900 flex items-center gap-2">
+                      <div className="p-1.5 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg">
+                        <Clock size={18} className="md:w-5 md:h-5 text-white" />
+                      </div>
+                      <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Munkaidő</span>
                     </h3>
                     
                     <div>
-                      <Label className="text-xs md:text-sm font-medium text-gray-700">
+                      <Label className="text-xs md:text-sm font-semibold text-gray-700">
                         Munkarend szerinti napok
                       </Label>
                       <Input
@@ -732,16 +739,16 @@ export default function BerkalkulatorPage() {
                         onChange={handleInputChange(setMunkarendNapok)}
                         onFocus={handleInputFocus}
                         placeholder="20"
-                        className="mt-1 h-9 md:h-10 text-sm"
+                        className="mt-1 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
                       />
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-500 mt-1 font-medium">
                         Munkarend szerinti órák: {munkarendSzerintiOrak.toFixed(1)} óra ({munkarendNapok} × 8,1)<br/>
                         <strong>Órabér számítás alapja: {formatCurrency(alapber / munkarendSzerintiOrak)}/óra</strong>
                       </p>
                     </div>
                     
                     <div>
-                      <Label className="text-xs md:text-sm font-medium text-gray-700">
+                      <Label className="text-xs md:text-sm font-semibold text-gray-700">
                         Ledolgozott napok
                       </Label>
                       <Input
@@ -749,18 +756,18 @@ export default function BerkalkulatorPage() {
                         step="0.01"
                         value={ledolgozottNapok || ''}
                         readOnly
-                        className="mt-1 h-9 md:h-10 text-sm bg-gray-50 cursor-not-allowed"
+                        className="mt-1 h-9 md:h-10 text-sm bg-gray-50 cursor-not-allowed border-2 border-gray-200 rounded-xl font-mono"
                       />
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-500 mt-1 font-medium">
                         Automatikusan számított: munkanapok ({munkarendNapok}) - szabadság ({szabadsagNapok}) = {ledolgozottNapok} nap
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-gray-500 font-medium">
                         Ledolgozott órák: {ledolgozottOrak.toFixed(2)} óra
                       </p>
                     </div>
                     
                     <div>
-                      <Label className="text-xs md:text-sm font-medium text-gray-700">
+                      <Label className="text-xs md:text-sm font-semibold text-gray-700">
                         Fizetett szabadság (nap)
                       </Label>
                       <Input
@@ -770,15 +777,15 @@ export default function BerkalkulatorPage() {
                         onChange={handleInputChange(setSzabadsagNapok)}
                         onFocus={handleInputFocus}
                         placeholder="0"
-                        className="mt-1 h-9 md:h-10 text-sm"
+                        className="mt-1 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
                       />
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-500 mt-1 font-medium">
                         Szabadság órák: {szabadsagOrak.toFixed(2)} óra ({szabadsagNapok} × 8,1)
                       </p>
                     </div>
                     
                     <div>
-                      <Label className="text-xs md:text-sm font-medium text-gray-700">
+                      <Label className="text-xs md:text-sm font-semibold text-gray-700">
                         Túlóra (óra)
                       </Label>
                       <Input
@@ -788,13 +795,13 @@ export default function BerkalkulatorPage() {
                         onChange={handleInputChange(setTuloraOrak)}
                         onFocus={handleInputFocus}
                         placeholder="0"
-                        className="mt-1 h-9 md:h-10 text-sm"
+                        className="mt-1 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
                       />
-                      <p className="text-xs text-gray-500 mt-1">+150% pótlék</p>
+                      <p className="text-xs text-gray-500 mt-1 font-medium">+150% pótlék</p>
                     </div>
                     
                     <div>
-                      <Label className="text-xs md:text-sm font-medium text-gray-700">
+                      <Label className="text-xs md:text-sm font-semibold text-gray-700">
                         Munkaszüneti munkavégzés (óra)
                       </Label>
                       <Input
@@ -804,21 +811,23 @@ export default function BerkalkulatorPage() {
                         onChange={handleInputChange(setUnnepnapiOrak)}
                         onFocus={handleInputFocus}
                         placeholder="0"
-                        className="mt-1 h-9 md:h-10 text-sm"
+                        className="mt-1 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
                       />
-                      <p className="text-xs text-gray-500 mt-1">+200% pótlék</p>
+                      <p className="text-xs text-gray-500 mt-1 font-medium">+200% pótlék</p>
                     </div>
                   </div>
 
                   {/* Egyéb */}
                   <div className="space-y-3 md:space-y-4 md:col-span-2 xl:col-span-1">
-                    <h3 className="text-base md:text-lg font-semibold text-gray-800 flex items-center gap-2">
-                      <Plus size={18} className="md:w-5 md:h-5" />
-                      Egyéb
+                    <h3 className="text-base md:text-lg font-bold text-gray-900 flex items-center gap-2">
+                      <div className="p-1.5 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg">
+                        <Plus size={18} className="md:w-5 md:h-5 text-white" />
+                      </div>
+                      <span className="bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">Egyéb</span>
                     </h3>
                     
                     <div>
-                      <Label className="text-xs md:text-sm font-medium text-gray-700">
+                      <Label className="text-xs md:text-sm font-semibold text-gray-700">
                         Betegszabadság (nap)
                       </Label>
                       <Input
@@ -827,13 +836,13 @@ export default function BerkalkulatorPage() {
                         onChange={handleInputChange(setBetegszabadsagNapok)}
                         onFocus={handleInputFocus}
                         placeholder="0"
-                        className="mt-1 h-9 md:h-10 text-sm"
+                        className="mt-1 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
                       />
-                      <p className="text-xs text-gray-500 mt-1">70% térítés</p>
+                      <p className="text-xs text-gray-500 mt-1 font-medium">70% térítés</p>
                     </div>
                     
                     <div>
-                      <Label className="text-xs md:text-sm font-medium text-gray-700">
+                      <Label className="text-xs md:text-sm font-semibold text-gray-700">
                         Kiküldetés (nap)
                       </Label>
                       <Input
@@ -843,12 +852,12 @@ export default function BerkalkulatorPage() {
                         onChange={handleInputChange(setKikuldetesNapok)}
                         onFocus={handleInputFocus}
                         placeholder="0"
-                        className="mt-1 h-9 md:h-10 text-sm"
+                        className="mt-1 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
                       />
                     </div>
                     
                     <div>
-                      <Label className="text-xs md:text-sm font-medium text-gray-700">
+                      <Label className="text-xs md:text-sm font-semibold text-gray-700">
                         GYED munkavégzés mellett (nap)
                       </Label>
                       <Input
@@ -857,12 +866,12 @@ export default function BerkalkulatorPage() {
                         onChange={handleInputChange(setGyedMellett)}
                         onFocus={handleInputFocus}
                         placeholder="0"
-                        className="mt-1 h-9 md:h-10 text-sm"
+                        className="mt-1 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
                       />
                     </div>
                     
                     <div>
-                      <Label className="text-xs md:text-sm font-medium text-gray-700">
+                      <Label className="text-xs md:text-sm font-semibold text-gray-700">
                         Formaruha kompenzáció (Ft)
                       </Label>
                       <Input
@@ -871,13 +880,13 @@ export default function BerkalkulatorPage() {
                         onChange={handleInputChange(setFormaruhakompenzacio)}
                         onFocus={handleInputFocus}
                         placeholder="0"
-                        className="mt-1 h-9 md:h-10 text-sm"
+                        className="mt-1 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
                       />
                     </div>
 
-                    <div className="bg-blue-50 p-2 md:p-3 rounded-lg">
-                      <p className="text-xs md:text-sm font-medium text-blue-800 mb-1 md:mb-2">Számított értékek:</p>
-                      <div className="text-xs text-blue-600 space-y-1">
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-3 md:p-4 rounded-xl border-2 border-blue-200/50 shadow-sm">
+                      <p className="text-xs md:text-sm font-bold text-blue-800 mb-2">Számított értékek:</p>
+                      <div className="text-xs text-blue-600 space-y-1 font-medium">
                         <div>• Munkarend szerinti órák: {munkarendSzerintiOrak.toFixed(1)} óra</div>
                         <div><strong>• Órabér: {formatCurrency(alapber / munkarendSzerintiOrak)}/óra</strong></div>
                         <div>• Ledolgozott órák: {ledolgozottOrak.toFixed(2)} óra</div>
@@ -891,19 +900,19 @@ export default function BerkalkulatorPage() {
 
                 {/* Számítás és mentés gombok */}
                 <div className="flex flex-col sm:flex-row gap-2 md:gap-3">
-                  <Button onClick={calculateSalary} className="flex-1 bg-cyan-500 hover:bg-cyan-600 text-white py-2 md:py-3 text-sm md:text-base">
+                  <Button onClick={calculateSalary} className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white py-2 md:py-3 text-sm md:text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 rounded-xl">
                     Számítás
                   </Button>
                   <Button 
                     onClick={handleSaveCalculation} 
-                    className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 md:py-3 text-sm md:text-base"
+                    className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-2 md:py-3 text-sm md:text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                     disabled={!eredmény}
                   >
                     Mentés
                   </Button>
                   <Button 
                     onClick={handleSaveAsIncomePlan} 
-                    className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 md:py-3 text-sm md:text-base"
+                    className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white py-2 md:py-3 text-sm md:text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                     disabled={!eredmény}
                     title="Mentés bevételi tervként a költségvetéshez"
                   >
@@ -918,121 +927,123 @@ export default function BerkalkulatorPage() {
           <div className="space-y-4 md:space-y-6">
             {/* Eredmény */}
             {eredmény && (
-              <Card className="bg-white shadow-lg">
+              <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl">
                 <CardHeader className="pb-3 md:pb-6">
-                  <CardTitle className="text-base md:text-lg font-semibold text-gray-900 flex items-center gap-2">
-                    <TrendingUp className="text-green-500" size={18} />
-                    Eredmény
+                  <CardTitle className="text-base md:text-lg font-bold text-gray-900 flex items-center gap-2">
+                    <div className="p-1.5 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
+                      <TrendingUp className="text-white" size={18} />
+                    </div>
+                    <span className="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">Eredmény</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 md:space-y-4 pt-0">
                   <div>
-                    <p className="text-xs md:text-sm text-gray-600">Órabér</p>
-                    <p className="text-base md:text-lg font-bold text-cyan-600">
+                    <p className="text-xs md:text-sm text-gray-600 font-semibold">Órabér</p>
+                    <p className="text-base md:text-lg font-extrabold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">
                       {formatCurrency(eredmény.oraber)}/óra
                     </p>
                   </div>
 
                   {/* Részletes jövedelemi tételek */}
-                  <div className="bg-gray-50 p-2 md:p-3 rounded-lg">
-                    <p className="text-xs md:text-sm font-semibold text-gray-700 mb-2">Jövedelmi tételek:</p>
-                    <div className="space-y-1 text-xs">
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-3 md:p-4 rounded-xl border-2 border-green-200/50 shadow-sm">
+                    <p className="text-xs md:text-sm font-bold text-green-800 mb-2">Jövedelmi tételek:</p>
+                    <div className="space-y-1 text-xs font-medium">
                       <div className="flex justify-between">
                         <span className="truncate pr-2">Havibéres időbér ({ledolgozottOrak.toFixed(2)} óra):</span>
-                        <span className="font-medium whitespace-nowrap">{formatCurrency(eredmény.haviberesIdober)}</span>
+                        <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.haviberesIdober)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="truncate pr-2">Fizetett szabadság ({szabadsagOrak.toFixed(2)} óra):</span>
-                        <span className="font-medium whitespace-nowrap">{formatCurrency(eredmény.fizetettSzabadsag)}</span>
+                        <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.fizetettSzabadsag)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="truncate pr-2">Túlóra alap ({tuloraOrak} óra):</span>
-                        <span className="font-medium whitespace-nowrap">{formatCurrency(eredmény.tuloraAlapossszeg)}</span>
+                        <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.tuloraAlapossszeg)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="truncate pr-2">Túlóra pótlék (150%):</span>
-                        <span className="font-medium whitespace-nowrap">{formatCurrency(eredmény.tuloraPotlek)}</span>
+                        <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.tuloraPotlek)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="truncate pr-2">Műszakpótlék (45%):</span>
-                        <span className="font-medium whitespace-nowrap">{formatCurrency(eredmény.muszakpotlek)}</span>
+                        <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.muszakpotlek)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="truncate pr-2">Túlóra műszakpótlék:</span>
-                        <span className="font-medium whitespace-nowrap">{formatCurrency(eredmény.tuloraMuszakpotlek)}</span>
+                        <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.tuloraMuszakpotlek)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="truncate pr-2">Munkaszüneti munkavégzés:</span>
-                        <span className="font-medium whitespace-nowrap">{formatCurrency(eredmény.unnepnapiMunka)}</span>
+                        <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.unnepnapiMunka)}</span>
                       </div>
                       {jutalom > 0 && (
                         <div className="flex justify-between">
                           <span className="truncate pr-2">Jutalom/prémium:</span>
-                          <span className="font-medium whitespace-nowrap">{formatCurrency(eredmény.jutalom)}</span>
+                          <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.jutalom)}</span>
                         </div>
                       )}
                     </div>
                   </div>
 
                   <div>
-                    <p className="text-xs md:text-sm text-gray-600">Bruttó bér összesen</p>
-                    <p className="text-lg md:text-xl font-bold text-green-600">
+                    <p className="text-xs md:text-sm text-gray-600 font-semibold">Bruttó bér összesen</p>
+                    <p className="text-lg md:text-xl font-extrabold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
                       {formatCurrency(eredmény.bruttoBer)}
                     </p>
                   </div>
                   
                   {/* Részletes levonások */}
-                  <div className="bg-red-50 p-2 md:p-3 rounded-lg">
-                    <p className="text-xs md:text-sm font-semibold text-red-700 mb-2">Levonások:</p>
-                    <div className="space-y-1 text-xs">
+                  <div className="bg-gradient-to-br from-red-50 to-orange-50 p-3 md:p-4 rounded-xl border-2 border-red-200/50 shadow-sm">
+                    <p className="text-xs md:text-sm font-bold text-red-800 mb-2">Levonások:</p>
+                    <div className="space-y-1 text-xs font-medium">
                       <div className="flex justify-between">
                         <span className="truncate pr-2">Adóelőleg (SZJA 15%):</span>
-                        <span className="font-medium whitespace-nowrap">{formatCurrency(eredmény.szja)}</span>
+                        <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.szja)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="truncate pr-2">TB járulék (18,5%):</span>
-                        <span className="font-medium whitespace-nowrap">{formatCurrency(eredmény.tbJarulék)}</span>
+                        <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.tbJarulék)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="truncate pr-2">Önkéntes nyugdíj (1,5%):</span>
-                        <span className="font-medium whitespace-nowrap">{formatCurrency(eredmény.onkentesNyugdij)}</span>
+                        <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.onkentesNyugdij)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="truncate pr-2">MÉSZ tagdíj (0,7%):</span>
-                        <span className="font-medium whitespace-nowrap">{formatCurrency(eredmény.erdekKepvTagdij)}</span>
+                        <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.erdekKepvTagdij)}</span>
                       </div>
                     </div>
                   </div>
                   
                   <div>
-                    <p className="text-xs md:text-sm text-gray-600">Összes levonás</p>
-                    <p className="text-base md:text-lg font-bold text-red-600">
+                    <p className="text-xs md:text-sm text-gray-600 font-semibold">Összes levonás</p>
+                    <p className="text-base md:text-lg font-extrabold bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">
                       -{formatCurrency(eredmény.osszesLevonas)}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 font-medium">
                       Levonások aránya: {eredmény.levonasArany}%
                     </p>
                   </div>
 
-                  <div className="pt-2 md:pt-3 border-t">
-                    <p className="text-xs md:text-sm text-gray-600">Nettó fizetés</p>
-                    <p className="text-xl md:text-2xl font-bold text-blue-600">
+                  <div className="pt-2 md:pt-3 border-t-2 border-gray-200">
+                    <p className="text-xs md:text-sm text-gray-600 font-semibold">Nettó fizetés</p>
+                    <p className="text-xl md:text-2xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                       {formatCurrency(eredmény.netto)}
                     </p>
-                    <p className="text-xs text-green-600 mt-1">
+                    <p className="text-xs text-green-600 mt-1 font-medium">
                       Bérpapír szerint: 1.114.616 Ft
                     </p>
                   </div>
 
                   {/* Egyéb jövedelmi tételek */}
-                  <div className="pt-2 md:pt-3 border-t">
+                  <div className="pt-2 md:pt-3 border-t-2 border-gray-200">
                     <div className="flex items-center justify-between mb-2 md:mb-3">
-                      <p className="text-xs md:text-sm font-medium text-gray-700">Egyéb jövedelmek</p>
+                      <p className="text-xs md:text-sm font-bold text-gray-700">Egyéb jövedelmek</p>
                       <Button
                         onClick={addAdditionalIncome}
                         size="sm"
                         variant="outline"
-                        className="flex items-center gap-1 h-7 md:h-8 text-xs"
+                        className="flex items-center gap-1 h-7 md:h-8 text-xs border-2 border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50 transition-all duration-200 rounded-lg"
                       >
                         <Plus size={12} />
                         Hozzáad
@@ -1042,25 +1053,25 @@ export default function BerkalkulatorPage() {
                     {additionalIncomes.length > 0 && (
                       <div className="space-y-2 mb-2 md:mb-3">
                         {additionalIncomes.map((income) => (
-                          <div key={income.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                          <div key={income.id} className="flex items-center gap-2 p-2 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-200">
                             <Input
                               placeholder="Jövedelem neve"
                               value={income.name}
                               onChange={(e) => updateAdditionalIncome(income.id, 'name', e.target.value)}
-                              className="flex-1 h-8 text-xs"
+                              className="flex-1 h-8 text-xs border-2 border-gray-200 focus:border-emerald-400 transition-colors rounded-lg"
                             />
                             <Input
                               type="number"
                               placeholder="Összeg"
                               value={income.amount || ''}
                               onChange={(e) => updateAdditionalIncome(income.id, 'amount', parseInt(e.target.value) || 0)}
-                              className="w-20 md:w-24 h-8 text-xs"
+                              className="w-20 md:w-24 h-8 text-xs border-2 border-gray-200 focus:border-emerald-400 transition-colors rounded-lg font-mono"
                             />
                             <Button
                               onClick={() => removeAdditionalIncome(income.id)}
                               size="sm"
                               variant="outline"
-                              className="px-2 h-8 text-xs"
+                              className="px-2 h-8 text-xs border-2 border-red-200 hover:border-red-400 hover:bg-red-50 transition-all rounded-lg"
                             >
                               ×
                             </Button>
@@ -1070,15 +1081,15 @@ export default function BerkalkulatorPage() {
                     )}
                     
                     {additionalIncomes.length > 0 && (
-                      <div className="p-2 md:p-3 bg-green-50 rounded-lg border border-green-200">
-                        <p className="text-xs md:text-sm font-medium text-green-800 mb-1">Teljes havi bevétel:</p>
-                        <p className="text-base md:text-lg font-bold text-green-700">
+                      <div className="p-3 md:p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border-2 border-green-200/50 shadow-sm">
+                        <p className="text-xs md:text-sm font-bold text-green-800 mb-1">Teljes havi bevétel:</p>
+                        <p className="text-base md:text-lg font-extrabold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
                           {formatCurrency(getTotalMonthlyIncome())}
                         </p>
-                        <div className="text-xs text-green-600 mt-1">
+                        <div className="text-xs text-green-600 mt-1 font-medium">
                           <div>Nettó bér: {formatCurrency(eredmény.netto)}</div>
                           <div>Egyéb jövedelem: {formatCurrency(additionalIncomes.reduce((sum, income) => sum + income.amount, 0))}</div>
-                          <div className="mt-2 p-2 bg-blue-50 rounded text-blue-700">
+                          <div className="mt-2 p-2 bg-blue-50 rounded-lg text-blue-700 border border-blue-200">
                             💡 <strong>Tipp:</strong> A &ldquo;Bevételi terv&rdquo; gombbal mentheted ezt az eredményt a költségvetés tervezéshez!
                           </div>
                         </div>
@@ -1086,23 +1097,23 @@ export default function BerkalkulatorPage() {
                     )}
                   </div>
 
-                  <div className="pt-2 md:pt-3 border-t bg-orange-50 p-2 md:p-3 rounded-lg">
-                    <p className="text-xs font-semibold text-gray-700 mb-1">Munkáltatói terhek:</p>
-                    <p className="text-xs text-gray-600">
+                  <div className="pt-2 md:pt-3 border-t-2 border-gray-200 bg-gradient-to-br from-orange-50 to-amber-50 p-3 md:p-4 rounded-xl border-2 border-orange-200/50 shadow-sm">
+                    <p className="text-xs font-bold text-orange-800 mb-1">Munkáltatói terhek:</p>
+                    <p className="text-xs text-orange-700 font-medium">
                       Szoc. hozzájárulás: {formatCurrency(eredmény.szocHozzjarulas)}
                     </p>
-                    <p className="text-xs font-semibold text-gray-700">
+                    <p className="text-xs font-bold text-orange-800">
                       Teljes költség: {formatCurrency(eredmény.teljesMunkaltaroiKoltseg)}
                     </p>
                   </div>
 
                   {eredmény.gyedMunkavMellett > 0 && (
-                    <div className="pt-2 md:pt-3 border-t bg-blue-50 p-2 md:p-3 rounded-lg">
-                      <p className="text-xs font-semibold text-blue-700 mb-1">GYED munkavégzés mellett:</p>
-                      <p className="text-xs text-blue-600">
+                    <div className="pt-2 md:pt-3 border-t-2 border-gray-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-3 md:p-4 rounded-xl border-2 border-blue-200/50 shadow-sm">
+                      <p className="text-xs font-bold text-blue-800 mb-1">GYED munkavégzés mellett:</p>
+                      <p className="text-xs text-blue-700 font-medium">
                         Összeg: {formatCurrency(eredmény.gyedMunkavMellett)}
                       </p>
-                      <p className="text-xs text-blue-500 italic">
+                      <p className="text-xs text-blue-600 italic font-medium">
                         ✓ Adómentes juttatás (nem része az SZJA alapnak)
                       </p>
                     </div>
@@ -1112,23 +1123,26 @@ export default function BerkalkulatorPage() {
             )}
 
             {/* Korábbi kalkulációk */}
-            <Card className="bg-white shadow-lg">
+            <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl">
               <CardHeader className="pb-3 md:pb-6">
-                <CardTitle className="text-base md:text-lg font-semibold text-gray-900">
-                  Korábbi kalkulációk
+                <CardTitle className="text-base md:text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <div className="p-1.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg">
+                    <Clock className="text-white" size={18} />
+                  </div>
+                  <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Korábbi kalkulációk</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 md:space-y-4 pt-0">
                 {savedCalculations.length > 0 ? (
                   savedCalculations.map((calc) => (
-                    <div key={calc.id} className="p-2 md:p-3 bg-gray-50 rounded-lg">
+                    <div key={calc.id} className="p-3 md:p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-gray-200/50 shadow-sm hover:shadow-md transition-shadow duration-200">
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-900 text-xs md:text-sm truncate">
+                          <p className="font-bold text-gray-900 text-xs md:text-sm truncate">
                             {users.find(u => u.id === calc.family_member_id)?.user_metadata?.full_name || 'Ismeretlen'} - 
                             {new Date(calc.created_at).toLocaleDateString('hu-HU', { month: 'long' })}
                           </p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-gray-500 font-medium">
                             {new Date(calc.created_at).toLocaleDateString('hu-HU')}
                           </p>
                         </div>
@@ -1136,34 +1150,34 @@ export default function BerkalkulatorPage() {
                           onClick={() => handleDeleteCalculation(calc.id)}
                           size="sm"
                           variant="outline"
-                          className="ml-2 h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                          className="ml-2 h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 border-2 border-red-200 hover:border-red-400 transition-all rounded-lg"
                           title="Kalkuláció törlése"
                         >
                           <Trash2 size={14} />
                         </Button>
                       </div>
                       <div className="space-y-1">
-                        <div className="flex justify-between text-xs">
+                        <div className="flex justify-between text-xs font-medium">
                           <span className="text-gray-600 truncate pr-2">Alapbér:</span>
-                          <span className="font-medium text-gray-900 whitespace-nowrap">
+                          <span className="font-bold text-gray-900 whitespace-nowrap">
                             {calc.alapber.toLocaleString()} Ft
                           </span>
                         </div>
-                        <div className="flex justify-between text-xs">
+                        <div className="flex justify-between text-xs font-medium">
                           <span className="text-gray-600 truncate pr-2">Ledolgozott napok:</span>
-                          <span className="font-medium text-gray-900 whitespace-nowrap">
+                          <span className="font-bold text-gray-900 whitespace-nowrap">
                             {calc.ledolgozott_napok} nap
                           </span>
                         </div>
-                        <div className="flex justify-between text-xs">
+                        <div className="flex justify-between text-xs font-medium">
                           <span className="text-gray-600 truncate pr-2">Bruttó bér:</span>
-                          <span className="font-medium text-gray-900 whitespace-nowrap">
+                          <span className="font-bold text-gray-900 whitespace-nowrap">
                             {calc.brutto_ber.toLocaleString()} Ft
                           </span>
                         </div>
-                        <div className="flex justify-between text-xs">
+                        <div className="flex justify-between text-xs font-medium">
                           <span className="text-gray-600 truncate pr-2">Nettó bér:</span>
-                          <span className="font-medium text-green-600 whitespace-nowrap">
+                          <span className="font-bold text-green-600 whitespace-nowrap">
                             {calc.netto_ber.toLocaleString()} Ft
                           </span>
                         </div>

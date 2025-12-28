@@ -244,30 +244,39 @@ export default function ReceptekPage() {
   )
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-3 sm:p-6 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 via-teal-500/20 to-emerald-500/20 animate-gradient"></div>
+      <div className="max-w-7xl mx-auto relative z-10">
         {/* Fejléc */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2 flex items-center justify-center gap-3">
-            <ChefHat size={36} />
-            Receptkezelés
-          </h1>
-          <p className="text-white/80 text-lg">Kezeld a családi recepteket és készíts bevásárló listát</p>
+        <div className="mb-6 sm:mb-8 bg-white/80 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/20">
+          <div className="flex items-center gap-3 sm:gap-4 mb-4">
+            <div className="bg-gradient-to-br from-pink-500 to-rose-600 p-3 sm:p-4 rounded-2xl shadow-lg animate-pulse-slow">
+              <ChefHat className="text-white" size={32} />
+            </div>
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold bg-gradient-to-r from-pink-600 via-rose-600 to-red-600 bg-clip-text text-transparent tracking-tight">
+              Receptkezelés
+            </h1>
+          </div>
+          <p className="text-sm sm:text-base lg:text-lg text-gray-600 leading-relaxed px-1 font-medium">
+            Kezeld a családi recepteket és készíts bevásárló listát
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Bal oldal - Receptek listája */}
           <div className="lg:col-span-1">
-            <Card className="bg-white shadow-xl border-0">
+            <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-pink-500/20 transition-all duration-300 rounded-2xl">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Search size={20} className="text-teal-600" />
+                  <CardTitle className="flex items-center gap-2 font-bold">
+                    <div className="p-2 bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl">
+                      <Search size={16} className="text-white sm:w-5 sm:h-5" />
+                    </div>
                     Receptkezelés
                   </CardTitle>
                   <Button 
                     onClick={() => setShowNewRecipeForm(!showNewRecipeForm)}
-                    className="bg-teal-500 hover:bg-teal-600"
+                    className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white shadow-xl hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 font-bold rounded-xl"
                   >
                     <Plus size={16} className="mr-2" />
                     Új recept

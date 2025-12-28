@@ -180,8 +180,9 @@ export default function ArfigyelesPage() {
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 p-4 sm:p-6 lg:p-8">
-        <Card className="max-w-md mx-auto mt-20">
+      <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-4 sm:p-6 lg:p-8 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 via-teal-500/20 to-emerald-500/20 animate-gradient"></div>
+        <Card className="max-w-md mx-auto mt-20 bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl relative z-10">
           <CardHeader>
             <CardTitle>Jelentkezz be</CardTitle>
             <CardDescription>Az árfigyeléshez be kell jelentkezned</CardDescription>
@@ -192,35 +193,49 @@ export default function ArfigyelesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 p-3 sm:p-4 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-3 sm:p-6 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 via-teal-500/20 to-emerald-500/20 animate-gradient"></div>
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 relative z-10">
         
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
-              <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" />
+        <div className="mb-6 sm:mb-8 bg-white/80 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/20">
+          <div className="flex items-center gap-3 sm:gap-4 mb-4">
+            <div className="bg-gradient-to-br from-orange-500 to-red-600 p-3 sm:p-4 rounded-2xl shadow-lg animate-pulse-slow">
+              <TrendingUp className="text-white" size={32} />
+            </div>
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold bg-gradient-to-r from-orange-600 via-red-600 to-pink-600 bg-clip-text text-transparent tracking-tight">
               Árfigyelés
             </h1>
-            <p className="text-sm sm:text-base text-gray-600 mt-1">
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <p className="text-sm sm:text-base lg:text-lg text-gray-600 leading-relaxed px-1 font-medium">
               Kövesd nyomon a termékek árváltozásait
             </p>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={loadPriceChanges} disabled={isLoading} variant="outline">
-              {isLoading ? 'Betöltés...' : 'Frissítés'}
-            </Button>
-            {priceChanges.length === 0 && (
-              <Button onClick={generateTestData} disabled={isLoading}>
-                Teszt adatok generálása
+            <div className="flex gap-2">
+              <Button 
+                onClick={loadPriceChanges} 
+                disabled={isLoading} 
+                variant="outline"
+                className="bg-gradient-to-r from-orange-50 to-red-50 hover:from-orange-100 hover:to-red-100 border-2 border-orange-300 text-orange-700 font-semibold shadow-md hover:shadow-lg transition-all duration-200 rounded-xl"
+              >
+                {isLoading ? 'Betöltés...' : 'Frissítés'}
               </Button>
-            )}
+              {priceChanges.length === 0 && (
+                <Button 
+                  onClick={generateTestData} 
+                  disabled={isLoading}
+                  className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-xl hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 font-bold rounded-xl"
+                >
+                  Teszt adatok generálása
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Főbb mutatók */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <Card>
+          <Card className="bg-white/90 backdrop-blur-xl shadow-xl border border-white/20 hover:shadow-blue-500/30 hover:scale-[1.05] transition-all duration-300 rounded-2xl">
             <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -244,7 +259,7 @@ export default function ArfigyelesPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-white/90 backdrop-blur-xl shadow-xl border border-white/20 hover:shadow-green-500/30 hover:scale-[1.05] transition-all duration-300 rounded-2xl">
             <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -272,7 +287,7 @@ export default function ArfigyelesPage() {
         </div>
 
         {/* Szűrők */}
-        <Card>
+        <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-orange-500/20 hover:scale-[1.01] transition-all duration-300 rounded-2xl">
           <CardContent className="p-4">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex-1">
@@ -323,7 +338,7 @@ export default function ArfigyelesPage() {
         </Card>
 
         {/* Árváltozások listája */}
-        <Card>
+        <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-red-500/20 transition-all duration-300 rounded-2xl">
           <CardHeader className="p-4 sm:p-6">
             <CardTitle className="text-base sm:text-lg">Árváltozások</CardTitle>
             <CardDescription>{filteredAndSortedChanges.length} változás</CardDescription>

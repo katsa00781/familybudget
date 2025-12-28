@@ -160,8 +160,9 @@ export default function InflacioPage() {
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 p-4 sm:p-6 lg:p-8">
-        <Card className="max-w-md mx-auto mt-20">
+      <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-4 sm:p-6 lg:p-8 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 via-teal-500/20 to-emerald-500/20 animate-gradient"></div>
+        <Card className="max-w-md mx-auto mt-20 bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl relative z-10">
           <CardHeader>
             <CardTitle>Jelentkezz be</CardTitle>
             <CardDescription>Az infláció követéshez be kell jelentkezned</CardDescription>
@@ -172,31 +173,35 @@ export default function InflacioPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 p-3 sm:p-4 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-3 sm:p-6 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 via-teal-500/20 to-emerald-500/20 animate-gradient"></div>
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 relative z-10">
         
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
-              <BarChart3 className="h-6 w-6 sm:h-8 sm:w-8 text-purple-600" />
+        <div className="mb-6 sm:mb-8 bg-white/80 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/20">
+          <div className="flex items-center gap-3 sm:gap-4 mb-4">
+            <div className="bg-gradient-to-br from-purple-500 to-pink-600 p-3 sm:p-4 rounded-2xl shadow-lg animate-pulse-slow">
+              <BarChart3 className="text-white" size={32} />
+            </div>
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 bg-clip-text text-transparent tracking-tight">
               Személyes Infláció
             </h1>
-            <p className="text-sm sm:text-base text-gray-600 mt-1">
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <p className="text-sm sm:text-base lg:text-lg text-gray-600 leading-relaxed px-1 font-medium">
               Kövesd nyomon a saját bevásárlásaid árváltozásait
             </p>
-          </div>
-          <div className="flex gap-2">
-            <Select value={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="3">3 hónap</SelectItem>
-                <SelectItem value="6">6 hónap</SelectItem>
-                <SelectItem value="12">12 hónap</SelectItem>
-                <SelectItem value="24">24 hónap</SelectItem>
-              </SelectContent>
+            <div className="flex gap-2">
+              <Select value={timeRange} onValueChange={setTimeRange}>
+                <SelectTrigger className="w-32 h-10 border-2 border-gray-200 hover:border-purple-400 focus:border-purple-500 transition-colors duration-200 rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="3">3 hónap</SelectItem>
+                  <SelectItem value="6">6 hónap</SelectItem>
+                  <SelectItem value="12">12 hónap</SelectItem>
+                  <SelectItem value="24">24 hónap</SelectItem>
+                </SelectContent>
             </Select>
             <Button 
               onClick={loadInflationData} 
@@ -357,6 +362,7 @@ export default function InflacioPage() {
         )}
 
       </div>
+    </div>
     </div>
   )
 }

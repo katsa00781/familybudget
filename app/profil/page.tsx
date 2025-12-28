@@ -145,29 +145,38 @@ export default function ProfilPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 p-6 flex items-center justify-center">
-        <div className="text-white text-xl">Betöltés...</div>
+      <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-6 flex items-center justify-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 via-teal-500/20 to-emerald-500/20 animate-gradient"></div>
+        <div className="text-gray-700 text-xl font-semibold relative z-10">Betöltés...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-6">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-3 sm:p-6 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 via-teal-500/20 to-emerald-500/20 animate-gradient"></div>
+      <div className="max-w-4xl mx-auto relative z-10">
         {/* Header */}
-        <div className="text-center space-y-2 mb-8">
-          <h1 className="text-4xl font-bold text-white">Felhasználói Profil</h1>
-          <p className="text-cyan-100">
+        <div className="mb-6 sm:mb-8 bg-white/80 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/20">
+          <div className="flex items-center gap-3 sm:gap-4 mb-4">
+            <div className="bg-gradient-to-br from-teal-500 to-cyan-600 p-3 sm:p-4 rounded-2xl shadow-lg animate-pulse-slow">
+              <Users className="text-white" size={32} />
+            </div>
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold bg-gradient-to-r from-teal-600 via-cyan-600 to-blue-600 bg-clip-text text-transparent tracking-tight">
+              Felhasználói Profil
+            </h1>
+          </div>
+          <p className="text-sm sm:text-base lg:text-lg text-gray-600 leading-relaxed px-1 font-medium">
             Üdvözöljük, {getUserDisplayName()}! Itt szerkesztheted a személyes adataidat.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Profil kép és alapadatok */}
           <div className="lg:col-span-1">
-            <Card className="bg-white/90 backdrop-blur-sm shadow-lg">
+            <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-teal-500/20 transition-all duration-300 rounded-2xl">
               <CardHeader>
-                <CardTitle className="text-lg font-semibold text-teal-700">
+                <CardTitle className="text-lg font-bold text-teal-700">
                   Profilkép
                 </CardTitle>
               </CardHeader>
@@ -192,7 +201,7 @@ export default function ProfilPage() {
                   />
                 </div>
 
-                <Button className="w-full bg-teal-600 hover:bg-teal-700 text-white">
+                <Button className="w-full bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white shadow-xl hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 font-bold rounded-xl">
                   <Camera size={16} className="mr-2" />
                   Kép feltöltése
                 </Button>

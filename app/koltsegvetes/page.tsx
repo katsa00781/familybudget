@@ -10,11 +10,12 @@ import { Badge } from '@/src/components/ui/badge'
 import { 
   Calculator, PiggyBank, Car, Home, Heart, 
   Gamepad2, TrendingUp, Wallet, CreditCard,
-  Save, DollarSign, Target, Gift, Plus, X
+  Save, DollarSign, Target, Gift, Plus, X, Calendar
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select'
 import { getUserPreferences, setActiveIncomePlan, setActiveBudgetPlan } from '@/lib/userPreferences'
+import { prepareBudgetFromAnnualPlan } from '@/lib/annualBudgetIntegration'
 
 // Wallet kategóriák a szinkronizáláshoz
 const WALLET_CATEGORIES = {
@@ -567,6 +568,62 @@ export default function KoltsegvetesPage() {
     console.log('selectedBudgetId törölve, új költségvetés létrehozva másolással')
   }
 
+  // Betöltés az éves tervből
+  const loadFromAnnualPlan = async () => {
+    if (!currentUser) {
+      toast.error('Be kell jelentkezned!')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const currentMonth = new Date().getMonth() + 1
+      const result = await prepareBudgetFromAnnualPlan(
+        currentUser.id,
+        budgetData,
+        currentMonth
+      )
+
+      if (!result.annualPlan) {
+        toast.info('Nincs éves költségvetési terv az aktuális évre')
+        return
+      }
+
+      setBudgetData(result.categories)
+      
+      // Ha van tervezett bevétel, állítsuk be
+      if (result.plannedIncome > 0) {
+        setExpectedIncome(result.plannedIncome)
+      }
+
+      // Generáljunk nevet
+      const monthNames = [
+        'Január', 'Február', 'Március', 'Április', 'Május', 'Június',
+        'Július', 'Augusztus', 'Szeptember', 'Október', 'November', 'December'
+      ]
+      const monthName = monthNames[currentMonth - 1]
+      setBudgetName(`${monthName} ${new Date().getFullYear()} - Éves terv alapján`)
+      setBudgetDescription(
+        `Automatikusan generált az éves tervből. ` +
+        `Ismétlődő kiadások: ${result.recurringExpenses.length} db. ` +
+        `Tervezett megtakarítás: ${result.plannedSavings.toLocaleString('hu-HU')} Ft.`
+      )
+
+      // Új költségvetésként kezeljük
+      setIsCreatingNew(true)
+      setSelectedBudgetId('')
+
+      toast.success(
+        `Betöltve az éves tervből! ${result.recurringExpenses.length} ismétlődő kiadás és ${result.plannedSavings.toLocaleString('hu-HU')} Ft megtakarítás hozzáadva.`
+      )
+    } catch (error) {
+      console.error('Hiba az éves tervből való betöltéskor:', error)
+      toast.error('Hiba történt az éves terv betöltésekor!')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Meglévő költségvetés betöltése
   const loadBudget = useCallback(async (budgetId: string) => {
     console.log('=== KÖLTSÉGVETÉS BETÖLTÉSE ===', budgetId)
@@ -819,15 +876,20 @@ export default function KoltsegvetesPage() {
   const totals = calculateTotals()
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-400 via-teal-500 to-green-500 p-3 sm:p-6">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-3 sm:p-6 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 via-teal-500/20 to-emerald-500/20 animate-gradient"></div>
+      <div className="max-w-7xl mx-auto relative z-10">
         {/* Header */}
-        <div className="text-white mb-4 sm:mb-6">
-          <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-            <PiggyBank className="text-white" size={24} />
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">Költségvetés Tervező 2025</h1>
+        <div className="mb-6 sm:mb-8 bg-white/80 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/20">
+          <div className="flex items-center gap-3 sm:gap-4 mb-4">
+            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-3 sm:p-4 rounded-2xl shadow-lg animate-pulse-slow">
+              <PiggyBank className="text-white" size={32} />
+            </div>
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent tracking-tight">
+              Költségvetés Tervező 2025
+            </h1>
           </div>
-          <p className="text-sm sm:text-base lg:text-lg px-1">
+          <p className="text-sm sm:text-base lg:text-lg text-gray-600 leading-relaxed px-1 font-medium">
             Tervezd meg havi költségvetésedet kategóriák szerint és tartsd kézben a pénzügyeidet.
           </p>
         </div>
@@ -835,13 +897,15 @@ export default function KoltsegvetesPage() {
         {/* Mentett költségvetések betöltése és bevétel kezelése */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {/* Mentett költségvetések */}
-          <Card className="bg-white shadow-lg border-0">
+          <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-emerald-500/20 hover:scale-[1.02] transition-all duration-300 rounded-2xl">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                <DollarSign size={16} className="text-green-600 sm:w-5 sm:h-5" />
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-bold">
+                <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl">
+                  <DollarSign size={16} className="text-white sm:w-5 sm:h-5" />
+                </div>
                 Mentett Költségvetések
               </CardTitle>
-              <CardDescription className="text-sm">
+              <CardDescription className="text-sm text-gray-600 leading-relaxed">
                 Töltsd be egy korábban elmentett költségvetésedet
               </CardDescription>
             </CardHeader>
@@ -852,7 +916,7 @@ export default function KoltsegvetesPage() {
                     Válassz egy költségvetést
                   </label>
                   <Select key={selectedBudgetId} value={selectedBudgetId || undefined} onValueChange={(value) => loadBudget(value)}>
-                    <SelectTrigger className="h-9 sm:h-10">
+                    <SelectTrigger className="h-9 sm:h-10 border-2 border-gray-200 hover:border-emerald-400 focus:border-emerald-500 transition-colors duration-200 rounded-xl">
                       <SelectValue placeholder="Válassz egy mentett költségvetést..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -880,16 +944,25 @@ export default function KoltsegvetesPage() {
                   <Button
                     onClick={createNewBudget}
                     variant="outline"
-                    className="flex-1 flex items-center gap-2 h-9 text-sm bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
+                    className="flex-1 flex items-center gap-2 h-9 text-sm bg-gradient-to-r from-green-50 to-emerald-50 hover:from-green-100 hover:to-emerald-100 border-2 border-green-300 text-green-700 font-semibold shadow-md hover:shadow-lg transition-all duration-200 rounded-xl"
                   >
                     <Plus size={14} />
                     Másolás új néven
+                  </Button>
+                  <Button
+                    onClick={loadFromAnnualPlan}
+                    variant="outline"
+                    className="flex-1 flex items-center gap-2 h-9 text-sm bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 border-2 border-purple-300 text-purple-700 font-semibold shadow-md hover:shadow-lg transition-all duration-200 rounded-xl"
+                    disabled={isLoading}
+                  >
+                    <Calendar size={14} />
+                    Betöltés éves tervből
                   </Button>
                   {selectedBudgetId && !isCreatingNew && activeBudgetId !== selectedBudgetId && (
                     <Button
                       onClick={() => setActiveBudget(selectedBudgetId)}
                       variant="outline"
-                      className="flex-1 flex items-center gap-2 h-9 text-sm bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
+                      className="flex-1 flex items-center gap-2 h-9 text-sm bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border-2 border-blue-300 text-blue-700 font-semibold shadow-md hover:shadow-lg transition-all duration-200 rounded-xl"
                     >
                       <Target size={14} />
                       Aktívvá tétel
@@ -923,13 +996,15 @@ export default function KoltsegvetesPage() {
           </Card>
 
           {/* Tervezett bevétel és összehasonlítás */}
-          <Card className="bg-white shadow-lg border-0">
+          <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-blue-500/20 hover:scale-[1.02] transition-all duration-300 rounded-2xl">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                <TrendingUp size={16} className="text-blue-600 sm:w-5 sm:h-5" />
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-bold">
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
+                  <TrendingUp size={16} className="text-white sm:w-5 sm:h-5" />
+                </div>
                 Bevétel vs Költségvetés
               </CardTitle>
-              <CardDescription className="text-sm">
+              <CardDescription className="text-sm text-gray-600 leading-relaxed">
                 Hasonlítsd össze a tervezett bevételed a költségvetéseddel
               </CardDescription>
             </CardHeader>
@@ -940,7 +1015,7 @@ export default function KoltsegvetesPage() {
                     Válassz egy bevételi tervet
                   </label>
                   <Select value={selectedIncomeId} onValueChange={(value) => selectIncomePlan(value)}>
-                    <SelectTrigger className="h-9 sm:h-10">
+                    <SelectTrigger className="h-9 sm:h-10 border-2 border-gray-200 hover:border-blue-400 focus:border-blue-500 transition-colors duration-200 rounded-xl">
                       <SelectValue placeholder="Válassz egy bevételi tervet..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -988,14 +1063,14 @@ export default function KoltsegvetesPage() {
                       placeholder="Tényleges bevétel összege"
                       value={actualIncome || ''}
                       onChange={(e) => setActualIncome(Number(e.target.value) || 0)}
-                      className="h-9 sm:h-10 flex-1"
+                      className="h-9 sm:h-10 flex-1 border-2 border-gray-200 focus:border-green-400 transition-colors duration-200 rounded-xl"
                     />
                     <span className="text-sm text-gray-500 font-medium">HUF</span>
                     <Button 
                       onClick={saveActualIncome}
                       disabled={!selectedBudgetId || isLoading}
                       size="sm"
-                      className="h-9 px-3"
+                      className="h-9 px-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-md hover:shadow-lg transition-all duration-200 rounded-xl"
                     >
                       <Save size={16} className="mr-1" />
                       Mentés
@@ -1098,71 +1173,81 @@ export default function KoltsegvetesPage() {
 
         {/* Összesítő kártyák */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
-          <Card className="bg-white shadow-lg border-0">
+          <Card className="bg-white/90 backdrop-blur-xl shadow-xl border border-gray-200/50 hover:shadow-2xl hover:scale-105 transition-all duration-300 rounded-2xl overflow-hidden group">
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 flex items-center gap-1 sm:gap-2">
-                <Calculator size={14} className="text-gray-600 sm:w-4 sm:h-4" />
+              <CardTitle className="text-xs sm:text-sm font-semibold text-gray-600 flex items-center gap-1 sm:gap-2">
+                <div className="p-1.5 bg-gray-100 rounded-lg group-hover:bg-gray-200 transition-colors">
+                  <Calculator size={14} className="text-gray-600 sm:w-4 sm:h-4" />
+                </div>
                 <span className="truncate">Összes költség</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900">{formatCurrency(totals.total)}</div>
+              <div className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900 tabular-nums">{formatCurrency(totals.total)}</div>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-red-400 to-red-600 text-white shadow-lg border-0">
+          <Card className="bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-xl hover:shadow-2xl hover:shadow-red-500/50 hover:scale-105 transition-all duration-300 rounded-2xl overflow-hidden border-0 group">
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium text-red-100 flex items-center gap-1 sm:gap-2">
-                <Target size={14} className="text-red-100 sm:w-4 sm:h-4" />
+              <CardTitle className="text-xs sm:text-sm font-semibold text-red-50 flex items-center gap-1 sm:gap-2">
+                <div className="p-1.5 bg-white/20 rounded-lg group-hover:bg-white/30 transition-colors backdrop-blur-sm">
+                  <Target size={14} className="text-white sm:w-4 sm:h-4" />
+                </div>
                 <span className="truncate">Szükségletek</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-base sm:text-xl lg:text-2xl font-bold text-white">{formatCurrency(totals.szuksegletTotal)}</div>
+              <div className="text-base sm:text-xl lg:text-2xl font-bold text-white drop-shadow-lg tabular-nums">{formatCurrency(totals.szuksegletTotal)}</div>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-blue-400 to-blue-600 text-white shadow-lg border-0">
+          <Card className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-xl hover:shadow-2xl hover:shadow-blue-500/50 hover:scale-105 transition-all duration-300 rounded-2xl overflow-hidden border-0 group">
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium text-blue-100 flex items-center gap-1 sm:gap-2">
-                <Gift size={14} className="text-blue-100 sm:w-4 sm:h-4" />
+              <CardTitle className="text-xs sm:text-sm font-semibold text-blue-50 flex items-center gap-1 sm:gap-2">
+                <div className="p-1.5 bg-white/20 rounded-lg group-hover:bg-white/30 transition-colors backdrop-blur-sm">
+                  <Gift size={14} className="text-white sm:w-4 sm:h-4" />
+                </div>
                 <span className="truncate">Vágyak</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-base sm:text-xl lg:text-2xl font-bold text-white">{formatCurrency(totals.vagyakTotal)}</div>
+              <div className="text-base sm:text-xl lg:text-2xl font-bold text-white drop-shadow-lg tabular-nums">{formatCurrency(totals.vagyakTotal)}</div>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-green-400 to-green-600 text-white shadow-lg border-0">
+          <Card className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xl hover:shadow-2xl hover:shadow-emerald-500/50 hover:scale-105 transition-all duration-300 rounded-2xl overflow-hidden border-0 group">
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium text-green-100 flex items-center gap-1 sm:gap-2">
-                <PiggyBank size={14} className="text-green-100 sm:w-4 sm:h-4" />
+              <CardTitle className="text-xs sm:text-sm font-semibold text-green-50 flex items-center gap-1 sm:gap-2">
+                <div className="p-1.5 bg-white/20 rounded-lg group-hover:bg-white/30 transition-colors backdrop-blur-sm">
+                  <PiggyBank size={14} className="text-white sm:w-4 sm:h-4" />
+                </div>
                 <span className="truncate">Megtakarítás</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-base sm:text-xl lg:text-2xl font-bold text-white">{formatCurrency(totals.megtakaritasTotal)}</div>
+              <div className="text-base sm:text-xl lg:text-2xl font-bold text-white drop-shadow-lg tabular-nums">{formatCurrency(totals.megtakaritasTotal)}</div>
             </CardContent>
           </Card>
         </div>
 
         {/* Mentés gomb */}
         <div className="mb-4 sm:mb-6">
-          <Card className="bg-white shadow-lg border-0 mb-4">
+          <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl mb-4">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                <Save size={16} className="text-green-600 sm:w-5 sm:h-5" />
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-bold">
+                <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl">
+                  <Save size={16} className="text-white sm:w-5 sm:h-5" />
+                </div>
                 Költségvetés Mentése
               </CardTitle>
-              <CardDescription className="text-sm">
+              <CardDescription className="text-sm text-gray-600 leading-relaxed">
                 Add meg a költségvetés nevét és leírását a mentés előtt
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 mb-4">
                 <div>
-                  <label htmlFor="budget-name" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="budget-name" className="block text-sm font-semibold text-gray-700 mb-2">
                     Költségvetés neve
                   </label>
                   <Input
@@ -1170,11 +1255,11 @@ export default function KoltsegvetesPage() {
                     value={budgetName}
                     onChange={(e) => setBudgetName(e.target.value)}
                     placeholder={`Költségvetés ${new Date().toLocaleDateString('hu-HU')}`}
-                    className="w-full h-9 sm:h-10 text-sm"
+                    className="w-full h-9 sm:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl"
                   />
                 </div>
                 <div>
-                  <label htmlFor="budget-description" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="budget-description" className="block text-sm font-semibold text-gray-700 mb-2">
                     Leírás (opcionális)
                   </label>
                   <Input
@@ -1182,14 +1267,14 @@ export default function KoltsegvetesPage() {
                     value={budgetDescription}
                     onChange={(e) => setBudgetDescription(e.target.value)}
                     placeholder="Rövid leírás a költségvetésről"
-                    className="w-full h-9 sm:h-10 text-sm"
+                    className="w-full h-9 sm:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl"
                   />
                 </div>
               </div>
               <Button 
                 onClick={saveBudget} 
                 disabled={isLoading || !currentUser}
-                className="w-full sm:w-auto bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white shadow-lg px-4 sm:px-6 py-2 sm:py-3 flex items-center justify-center gap-2 text-sm sm:text-base"
+                className="w-full sm:w-auto bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-600 text-white shadow-xl hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 px-6 sm:px-8 py-3 sm:py-4 flex items-center justify-center gap-2 text-sm sm:text-base font-bold rounded-xl"
               >
                 <Save size={16} className="sm:w-5 sm:h-5" />
                 {isLoading ? 'Mentés...' : selectedBudgetId ? 'Költségvetés Frissítése' : 'Új Költségvetés Mentése'}
@@ -1202,25 +1287,27 @@ export default function KoltsegvetesPage() {
         </div>
 
         {/* Költségvetési táblázat */}
-        <Card className="bg-white shadow-lg border-0">
+        <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <CreditCard size={20} className="text-purple-600 sm:w-6 sm:h-6" />
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-bold">
+              <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl">
+                <CreditCard size={20} className="text-white sm:w-6 sm:h-6" />
+              </div>
               Költségvetési Tételek
             </CardTitle>
-            <CardDescription className="text-sm">
+            <CardDescription className="text-sm text-gray-600 leading-relaxed">
               Módosítsd az összegeket a kategóriák szerint
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4 sm:space-y-6">
               {budgetData.map((category, categoryIndex) => (
-                <div key={category.name} className="border-2 border-gray-100 rounded-xl p-4 sm:p-6 bg-gradient-to-r from-gray-50 to-gray-100">
+                <div key={category.name} className="border-l-4 border-gradient-to-b from-emerald-400 to-teal-500 rounded-2xl p-4 sm:p-6 bg-gradient-to-r from-white to-gray-50 shadow-lg hover:shadow-xl transition-all duration-300">
                   <div className="flex flex-col gap-3 sm:gap-4 mb-3 sm:mb-4">
                     {/* Első sor: Kategória neve és összeg */}
                     <div className="flex items-center justify-between">
                       <div className="flex flex-col gap-2">
-                        <h3 className="font-semibold text-base sm:text-lg text-gray-900 flex items-center gap-2 sm:gap-3">
+                        <h3 className="font-bold text-lg sm:text-xl text-gray-900 flex items-center gap-2 sm:gap-3">
                           {getCategoryIcon(category.name)}
                           {category.name}
                         </h3>
@@ -1232,7 +1319,7 @@ export default function KoltsegvetesPage() {
                                 {/* Főkategória badge */}
                                 <Badge 
                                   variant="outline" 
-                                  className="text-xs bg-blue-50 text-blue-700 border-blue-300 flex items-center gap-1"
+                                  className="text-xs bg-gradient-to-r from-blue-50 to-cyan-50 text-blue-700 border-2 border-blue-300 flex items-center gap-1 font-medium rounded-full px-3 py-1 shadow-sm hover:shadow-md transition-all"
                                 >
                                   {walletCat.mainCategory}
                                   <X 
@@ -1246,7 +1333,7 @@ export default function KoltsegvetesPage() {
                                   <Badge 
                                     key={scIdx}
                                     variant="outline" 
-                                    className="text-xs bg-purple-50 text-purple-700 border-purple-300 flex items-center gap-1"
+                                    className="text-xs bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border-2 border-purple-300 flex items-center gap-1 font-medium rounded-full px-3 py-1 shadow-sm hover:shadow-md transition-all"
                                   >
                                     {subcat}
                                     <X 
@@ -1259,21 +1346,21 @@ export default function KoltsegvetesPage() {
                               </div>
                             ))
                           ) : (
-                            <Badge variant="outline" className="text-xs bg-gray-50 text-gray-400 border-gray-200">
+                            <Badge variant="outline" className="text-xs bg-gray-50 text-gray-400 border-gray-200 rounded-full px-3 py-1">
                               Nincs wallet kategória
                             </Badge>
                           )}
                         </div>
                       </div>
                       <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 sm:gap-4">
-                        <div className="text-xs sm:text-sm font-medium text-gray-600 text-right">
-                          Kategória összesen: <span className="text-sm sm:text-lg font-bold text-gray-900">{formatCurrency(getCategoryTotal(category))}</span>
+                        <div className="text-xs sm:text-sm font-semibold text-gray-600 text-right">
+                          Kategória összesen: <span className="text-base sm:text-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent tabular-nums">{formatCurrency(getCategoryTotal(category))}</span>
                         </div>
                         <Button
                           onClick={() => addItem(categoryIndex)}
                           variant="outline"
                           size="sm"
-                          className="w-full sm:w-auto flex items-center justify-center gap-1 text-green-600 border-green-300 hover:bg-green-50 text-sm h-8"
+                          className="w-full sm:w-auto flex items-center justify-center gap-1 text-emerald-600 border-2 border-emerald-300 hover:bg-gradient-to-r hover:from-emerald-50 hover:to-teal-50 hover:border-emerald-400 text-sm h-8 font-semibold shadow-sm hover:shadow-md transition-all duration-200 rounded-xl"
                         >
                           <Plus size={14} />
                           <span className="sm:hidden">Új tétel</span>
@@ -1293,7 +1380,7 @@ export default function KoltsegvetesPage() {
                           }
                         }}
                       >
-                        <SelectTrigger className="h-8 text-xs sm:text-sm">
+                        <SelectTrigger className="h-8 text-xs sm:text-sm border-2 border-gray-200 hover:border-blue-400 focus:border-blue-500 transition-colors duration-200 rounded-xl">
                           <SelectValue placeholder="+ Wallet főkategória hozzáadása" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1308,7 +1395,7 @@ export default function KoltsegvetesPage() {
                       
                       {/* Alkategória hozzáadása minden főkategóriához */}
                       {category.walletCategories && category.walletCategories.map((walletCat, wcIdx) => (
-                        <div key={wcIdx} className="pl-4 border-l-2 border-blue-200">
+                        <div key={wcIdx} className="pl-4 border-l-2 border-blue-300 rounded-l-lg">
                           <Select 
                             value="add-sub"
                             onValueChange={(value) => {
@@ -1317,7 +1404,7 @@ export default function KoltsegvetesPage() {
                               }
                             }}
                           >
-                            <SelectTrigger className="h-8 text-xs sm:text-sm">
+                            <SelectTrigger className="h-8 text-xs sm:text-sm border-2 border-gray-200 hover:border-purple-400 focus:border-purple-500 transition-colors duration-200 rounded-xl">
                               <SelectValue placeholder={`+ ${walletCat.mainCategory} alkategória`} />
                             </SelectTrigger>
                             <SelectContent>
@@ -1335,14 +1422,14 @@ export default function KoltsegvetesPage() {
                   </div>
                   <div className="space-y-3">
                     {category.items.map((item, itemIndex) => (
-                      <div key={item.id} className="grid grid-cols-1 gap-3 sm:gap-4 bg-white rounded-lg p-3 sm:p-4 shadow-sm">
+                      <div key={item.id} className="grid grid-cols-1 gap-3 sm:gap-4 bg-white/80 backdrop-blur-sm rounded-xl p-3 sm:p-4 shadow-md hover:shadow-xl hover:scale-[1.01] transition-all duration-200 border border-gray-100">
                         {/* Mobile layout */}
                         <div className="sm:hidden space-y-3">
                           {/* Row 1: Type and Badge */}
                           <div className="flex items-center gap-2">
                             <div className="flex-1">
                               <Select value={item.type || "none"} onValueChange={(value) => updateItemType(categoryIndex, itemIndex, value === "none" ? '' : value as 'Szükséglet' | 'Vágyak' | 'Megtakarítás')}>
-                                <SelectTrigger className="w-full h-8 text-sm">
+                                <SelectTrigger className="w-full h-8 text-sm border-2 border-gray-200 hover:border-emerald-400 focus:border-emerald-500 transition-colors rounded-xl">
                                   <SelectValue placeholder="Típus" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1365,7 +1452,7 @@ export default function KoltsegvetesPage() {
                             <Input
                               value={item.subcategory}
                               onChange={(e) => updateItemName(categoryIndex, itemIndex, e.target.value)}
-                              className="font-medium text-gray-700 border-gray-300 h-8 text-sm"
+                              className="font-semibold text-gray-700 border-2 border-gray-200 focus:border-emerald-400 h-8 text-sm transition-colors rounded-xl"
                               placeholder="Tétel neve"
                             />
                           </div>
@@ -1377,19 +1464,19 @@ export default function KoltsegvetesPage() {
                                 type="text"
                                 value={item.amount.toLocaleString('hu-HU')}
                                 onChange={(e) => updateAmount(categoryIndex, itemIndex, e.target.value)}
-                                className="text-right border-2 focus:border-green-400 h-8 text-sm"
+                                className="text-right border-2 border-gray-200 focus:border-emerald-400 h-8 text-sm transition-colors rounded-xl font-mono"
                                 placeholder="0"
                               />
                               <span className="text-xs text-gray-500 font-medium">Ft</span>
                             </div>
-                            <div className="text-right font-bold text-gray-900 text-sm min-w-0">
+                            <div className="text-right font-bold text-gray-900 text-sm min-w-0 tabular-nums">
                               {formatCurrency(item.amount)}
                             </div>
                             <Button
                               onClick={() => removeItem(categoryIndex, itemIndex)}
                               variant="ghost"
                               size="sm"
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0 flex-shrink-0"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0 flex-shrink-0 rounded-xl transition-all hover:scale-110"
                             >
                               <X size={14} />
                             </Button>
@@ -1401,7 +1488,7 @@ export default function KoltsegvetesPage() {
                           {/* Típus választó */}
                           <div className="flex items-center gap-2">
                             <Select value={item.type || "none"} onValueChange={(value) => updateItemType(categoryIndex, itemIndex, value === "none" ? '' : value as 'Szükséglet' | 'Vágyak' | 'Megtakarítás')}>
-                              <SelectTrigger className="w-full h-9">
+                              <SelectTrigger className="w-full h-9 border-2 border-gray-200 hover:border-emerald-400 focus:border-emerald-500 transition-colors rounded-xl">
                                 <SelectValue placeholder="Típus" />
                               </SelectTrigger>
                               <SelectContent>
@@ -1427,7 +1514,7 @@ export default function KoltsegvetesPage() {
                             <Input
                               value={item.subcategory}
                               onChange={(e) => updateItemName(categoryIndex, itemIndex, e.target.value)}
-                              className="font-medium text-gray-700 border-gray-300 h-9"
+                              className="font-semibold text-gray-700 border-2 border-gray-200 focus:border-emerald-400 h-9 transition-colors rounded-xl"
                               placeholder="Tétel neve"
                             />
                           </div>
@@ -1438,7 +1525,7 @@ export default function KoltsegvetesPage() {
                               type="text"
                               value={item.amount.toLocaleString('hu-HU')}
                               onChange={(e) => updateAmount(categoryIndex, itemIndex, e.target.value)}
-                              className="text-right border-2 focus:border-green-400 h-9"
+                              className="text-right border-2 border-gray-200 focus:border-emerald-400 h-9 transition-colors rounded-xl font-mono"
                               placeholder="0"
                             />
                             <span className="text-sm text-gray-500 font-medium">Ft</span>
@@ -1446,14 +1533,14 @@ export default function KoltsegvetesPage() {
                           
                           {/* Formázott összeg és törlés gomb */}
                           <div className="flex items-center justify-between">
-                            <div className="text-right font-bold text-gray-900 text-lg">
+                            <div className="text-right font-bold text-gray-900 text-lg tabular-nums">
                               {formatCurrency(item.amount)}
                             </div>
                             <Button
                               onClick={() => removeItem(categoryIndex, itemIndex)}
                               variant="ghost"
                               size="sm"
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50 ml-2"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 ml-2 rounded-xl hover:scale-110 transition-all"
                             >
                               <X size={16} />
                             </Button>
@@ -1469,14 +1556,16 @@ export default function KoltsegvetesPage() {
             <Separator className="my-4 sm:my-6" />
             
             {/* Összesítő sor */}
-            <div className="flex flex-col sm:grid sm:grid-cols-4 gap-3 sm:gap-4 items-center bg-gradient-to-r from-green-50 to-teal-50 p-4 sm:p-6 rounded-xl border-2 border-green-200">
+            <div className="flex flex-col sm:grid sm:grid-cols-4 gap-3 sm:gap-4 items-center bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 p-4 sm:p-6 rounded-2xl border-2 border-emerald-200 shadow-lg">
               <div className="hidden sm:block"></div>
               <div className="font-bold text-base sm:text-lg flex items-center justify-center sm:justify-start gap-2">
-                <TrendingUp size={16} className="text-green-600 sm:w-5 sm:h-5" />
+                <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl">
+                  <TrendingUp size={16} className="text-white sm:w-5 sm:h-5" />
+                </div>
                 Összesen:
               </div>
               <div className="hidden sm:block"></div>
-              <div className="text-center sm:text-right font-bold text-xl sm:text-2xl text-green-900">
+              <div className="text-center sm:text-right font-extrabold text-2xl sm:text-3xl bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent tabular-nums">
                 {formatCurrency(totals.total)}
               </div>
             </div>
@@ -1485,22 +1574,24 @@ export default function KoltsegvetesPage() {
 
         {/* Mentett költségvetések */}
         {savedBudgets.length > 0 && (
-          <Card className="mt-6 sm:mt-8 bg-white shadow-lg border-0">
+          <Card className="mt-6 sm:mt-8 bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                <Save size={20} className="text-green-600 sm:w-6 sm:h-6" />
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-bold">
+                <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl">
+                  <Save size={20} className="text-white sm:w-6 sm:h-6" />
+                </div>
                 Mentett Költségvetések
               </CardTitle>
-              <CardDescription className="text-sm">
+              <CardDescription className="text-sm text-gray-600 leading-relaxed">
                 Korábban elmentett költségvetési terveid
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2 sm:space-y-3">
                 {savedBudgets.slice(0, 5).map((budget) => (
-                  <div key={budget.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 p-3 sm:p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                  <div key={budget.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 p-3 sm:p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border-2 border-emerald-200 shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-200">
                     <div>
-                      <div className="font-medium text-gray-900 text-sm sm:text-base">
+                      <div className="font-semibold text-gray-900 text-sm sm:text-base">
                         {new Date(budget.created_at).toLocaleDateString('hu-HU', {
                           year: 'numeric',
                           month: 'long',
@@ -1510,7 +1601,7 @@ export default function KoltsegvetesPage() {
                         })}
                       </div>
                     </div>
-                    <div className="font-bold text-green-700 text-base sm:text-lg">
+                    <div className="font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent text-lg sm:text-xl tabular-nums">
                       {formatCurrency(budget.total_amount)}
                     </div>
                   </div>

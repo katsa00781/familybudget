@@ -10,7 +10,7 @@ import {
 import { 
   Menu, BarChart2, CircleDollarSign, User, ChefHat, 
   ShoppingCart, TrendingUpIcon, Package, PiggyBank,
-  Users, Home, HelpCircle, TrendingUp, BarChart3
+  Users, Home, HelpCircle, TrendingUp, BarChart3, Calendar
 } from "lucide-react";
 import { useState } from "react";
 import { useUserProfile } from '@/src/hooks/useUserProfile';
@@ -27,6 +27,7 @@ export default function Sidebar({ className = "" }: SidebarProps) {
     { icon: <BarChart2 size={20} />, label: 'Áttekintés', href: '/attekintes' },
     { icon: <CircleDollarSign size={20} />, label: 'Bérkalkulátor', href: '/berkalkulator' },
     { icon: <Home size={20} />, label: 'Költségvetés', href: '/koltsegvetes' },
+    { icon: <Calendar size={20} />, label: 'Éves költségvetés', href: '/eves-koltsegvetes' },
     { icon: <TrendingUpIcon size={20} />, label: 'Bevételek', href: '/bevetelek' },
     { icon: <ShoppingCart size={20} />, label: 'Bevásárlás', href: '/bevasarlas' },
     { icon: <Package size={20} />, label: 'Termékek', href: '/termekek' },

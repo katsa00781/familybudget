@@ -122,8 +122,9 @@ export default function StatisztikaPage() {
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 p-4 sm:p-6 lg:p-8">
-        <Card className="max-w-md mx-auto mt-20">
+      <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-4 sm:p-6 lg:p-8 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 via-teal-500/20 to-emerald-500/20 animate-gradient"></div>
+        <Card className="max-w-md mx-auto mt-20 bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl relative z-10">
           <CardHeader>
             <CardTitle>Jelentkezz be</CardTitle>
             <CardDescription>A statisztikákhoz be kell jelentkezned</CardDescription>
@@ -134,27 +135,36 @@ export default function StatisztikaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 p-3 sm:p-4 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-3 sm:p-6 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 via-teal-500/20 to-emerald-500/20 animate-gradient"></div>
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 relative z-10">
         
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
-              <BarChart3 className="h-6 w-6 sm:h-8 sm:w-8 text-green-600" />
+        <div className="mb-6 sm:mb-8 bg-white/80 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/20">
+          <div className="flex items-center gap-3 sm:gap-4 mb-4">
+            <div className="bg-gradient-to-br from-purple-500 to-indigo-600 p-3 sm:p-4 rounded-2xl shadow-lg animate-pulse-slow">
+              <BarChart3 className="text-white" size={32} />
+            </div>
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 bg-clip-text text-transparent tracking-tight">
               Kiadások Statisztika
             </h1>
-            <p className="text-sm sm:text-base text-gray-600 mt-1">
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <p className="text-sm sm:text-base lg:text-lg text-gray-600 leading-relaxed px-1 font-medium">
               Bevásárlások részletes elemzése
             </p>
+            <Button 
+              onClick={loadStatistics} 
+              disabled={isLoading}
+              className="bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white shadow-xl hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 font-bold rounded-xl"
+            >
+              {isLoading ? 'Betöltés...' : 'Frissítés'}
+            </Button>
           </div>
-          <Button onClick={loadStatistics} disabled={isLoading}>
-            {isLoading ? 'Betöltés...' : 'Frissítés'}
-          </Button>
         </div>
 
         {/* Szűrők */}
-        <Card>
+        <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-purple-500/20 hover:scale-[1.01] transition-all duration-300 rounded-2xl">
           <CardContent className="p-4">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex-1">
@@ -203,7 +213,7 @@ export default function StatisztikaPage() {
           <>
             {/* Összesítő mutatók */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              <Card>
+              <Card className="bg-white/90 backdrop-blur-xl shadow-xl border border-white/20 hover:shadow-green-500/30 hover:scale-[1.05] transition-all duration-300 rounded-2xl">
                 <CardContent className="p-4 sm:p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -217,7 +227,7 @@ export default function StatisztikaPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-white/90 backdrop-blur-xl shadow-xl border border-white/20 hover:shadow-blue-500/30 hover:scale-[1.05] transition-all duration-300 rounded-2xl">
                 <CardContent className="p-4 sm:p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -229,7 +239,7 @@ export default function StatisztikaPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-white/90 backdrop-blur-xl shadow-xl border border-white/20 hover:shadow-purple-500/30 hover:scale-[1.05] transition-all duration-300 rounded-2xl">
                 <CardContent className="p-4 sm:p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -243,7 +253,7 @@ export default function StatisztikaPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-white/90 backdrop-blur-xl shadow-xl border border-white/20 hover:shadow-orange-500/30 hover:scale-[1.05] transition-all duration-300 rounded-2xl">
                 <CardContent className="p-4 sm:p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -257,7 +267,7 @@ export default function StatisztikaPage() {
             </div>
 
             {/* Időbeli bontás */}
-            <Card>
+            <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-indigo-500/20 transition-all duration-300 rounded-2xl">
               <CardHeader className="p-4 sm:p-6">
                 <CardTitle className="text-base sm:text-lg flex items-center gap-2">
                   <Calendar className="h-5 w-5" />
@@ -298,7 +308,7 @@ export default function StatisztikaPage() {
             </Card>
 
             {/* Kategóriák */}
-            <Card>
+            <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-green-500/20 transition-all duration-300 rounded-2xl">
               <CardHeader className="p-4 sm:p-6">
                 <CardTitle className="text-base sm:text-lg flex items-center gap-2">
                   <PieChart className="h-5 w-5" />
@@ -339,7 +349,7 @@ export default function StatisztikaPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               {/* Top 10 termék */}
-              <Card>
+              <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-purple-500/20 transition-all duration-300 rounded-2xl">
                 <CardHeader className="p-4 sm:p-6">
                   <CardTitle className="text-base sm:text-lg flex items-center gap-2">
                     <Package className="h-5 w-5" />
@@ -376,7 +386,7 @@ export default function StatisztikaPage() {
               </Card>
 
               {/* Boltok szerint */}
-              <Card>
+              <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-blue-500/20 transition-all duration-300 rounded-2xl">
                 <CardHeader className="p-4 sm:p-6">
                   <CardTitle className="text-base sm:text-lg flex items-center gap-2">
                     <Store className="h-5 w-5" />

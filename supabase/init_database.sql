@@ -1,7 +1,5 @@
--- Adatbázis inicializálás scr-- 3. Salary calculations tábla létrehozása
-CREATE TABLE IF NOT EXISTS salary_calculations (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    family_member_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,-- Futtasd ezt a Supabase SQL Editor-ban
+-- Adatbázis inicializálás script
+-- Futtasd ezt a Supabase SQL Editor-ban
 
 -- 1. Updated_at trigger funkció létrehozása ELŐSZÖR
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -34,6 +32,10 @@ CREATE TABLE IF NOT EXISTS profiles (
 CREATE TABLE IF NOT EXISTS salary_calculations (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     family_member_id UUID NOT NULL,
+    
+    -- Kalkuláció azonosítása
+    name TEXT,
+    munkarend_napok DECIMAL(5,2) DEFAULT 20.0,
     
     -- Alap adatok
     alapber INTEGER NOT NULL,

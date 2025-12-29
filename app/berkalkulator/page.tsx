@@ -13,10 +13,26 @@ import { setActiveIncomePlan } from "@/lib/userPreferences";
 interface SavedCalculation {
   id: string;
   family_member_id: string;
+  name?: string;
   alapber: number;
+  munkarend_napok?: number;
   ledolgozott_napok: number;
+  ledolgozott_orak?: number;
+  szabadsag_napok?: number;
+  szabadsag_orak?: number;
+  tulora_orak?: number;
+  muszakpotlek_orak?: number;
+  unnepnapi_orak?: number;
+  betegszabadsag_napok?: number;
+  kikuldes_napok?: number;
+  gyed_mellett?: number;
+  formaruha_kompenzacio?: number;
+  csaladi_adokedvezmeny?: number;
   brutto_ber: number;
   netto_ber: number;
+  szja?: number;
+  tb_jarulék?: number;
+  additional_incomes?: string;
   created_at: string;
 }
 
@@ -386,6 +402,42 @@ export default function BerkalkulatorPage() {
       console.error('Error:', error);
     }
   }, [familyMember, setSavedCalculations]);
+
+  // Kalkuláció betöltése módosításhoz
+  const handleLoadCalculation = (calc: SavedCalculation) => {
+    // Beállítjuk a kalkuláció nevét
+    setCalculationName(calc.name || '');
+    
+    // Beállítjuk az alapadatokat
+    setAlapber(calc.alapber);
+    setMunkarendNapok(calc.munkarend_napok || 20);
+    setSzabadsagNapok(calc.szabadsag_napok || 0);
+    setTuloraOrak(calc.tulora_orak || 0);
+    setUnnepnapiOrak(calc.unnepnapi_orak || 0);
+    setBetegszabadsagNapok(calc.betegszabadsag_napok || 0);
+    setKikuldetesNapok(calc.kikuldes_napok || 0);
+    setGyedMellett(calc.gyed_mellett || 0);
+    setFormaruhakompenzacio(calc.formaruha_kompenzacio || 0);
+    setCsaládiAdókedvezmény(calc.csaladi_adokedvezmeny || 0);
+    
+    // Egyéb jövedelmek betöltése
+    if (calc.additional_incomes) {
+      try {
+        const parsedIncomes = JSON.parse(calc.additional_incomes);
+        setAdditionalIncomes(parsedIncomes);
+      } catch (error) {
+        console.error('Error parsing additional incomes:', error);
+      }
+    }
+    
+    // Automatikusan újraszámoljuk
+    setTimeout(() => {
+      calculateSalary();
+    }, 100);
+    
+    // Visszajelzés a felhasználónak
+    alert('Kalkuláció betöltve! Módosíthatod az értékeket és újra mentheted.');
+  };
 
   // Kalkuláció törlése
   const handleDeleteCalculation = async (calculationId: string) => {
@@ -1097,7 +1149,7 @@ export default function BerkalkulatorPage() {
                     )}
                   </div>
 
-                  <div className="pt-2 md:pt-3 border-t-2 border-gray-200 bg-gradient-to-br from-orange-50 to-amber-50 p-3 md:p-4 rounded-xl border-2 border-orange-200/50 shadow-sm">
+                  <div className="pt-2 md:pt-3 border-t-2 bg-gradient-to-br from-orange-50 to-amber-50 p-3 md:p-4 rounded-xl border-2 border-orange-200/50 shadow-sm">
                     <p className="text-xs font-bold text-orange-800 mb-1">Munkáltatói terhek:</p>
                     <p className="text-xs text-orange-700 font-medium">
                       Szoc. hozzájárulás: {formatCurrency(eredmény.szocHozzjarulas)}
@@ -1108,7 +1160,7 @@ export default function BerkalkulatorPage() {
                   </div>
 
                   {eredmény.gyedMunkavMellett > 0 && (
-                    <div className="pt-2 md:pt-3 border-t-2 border-gray-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-3 md:p-4 rounded-xl border-2 border-blue-200/50 shadow-sm">
+                    <div className="pt-2 md:pt-3 border-t-2 bg-gradient-to-br from-blue-50 to-indigo-50 p-3 md:p-4 rounded-xl border-2 border-blue-200/50 shadow-sm">
                       <p className="text-xs font-bold text-blue-800 mb-1">GYED munkavégzés mellett:</p>
                       <p className="text-xs text-blue-700 font-medium">
                         Összeg: {formatCurrency(eredmény.gyedMunkavMellett)}
@@ -1139,22 +1191,32 @@ export default function BerkalkulatorPage() {
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-gray-900 text-xs md:text-sm truncate">
-                            {users.find(u => u.id === calc.family_member_id)?.user_metadata?.full_name || 'Ismeretlen'} - 
-                            {new Date(calc.created_at).toLocaleDateString('hu-HU', { month: 'long' })}
+                            {calc.name || `${users.find(u => u.id === calc.family_member_id)?.user_metadata?.full_name || 'Ismeretlen'} - ${new Date(calc.created_at).toLocaleDateString('hu-HU', { month: 'long' })}`}
                           </p>
                           <p className="text-xs text-gray-500 font-medium">
                             {new Date(calc.created_at).toLocaleDateString('hu-HU')}
                           </p>
                         </div>
-                        <Button
-                          onClick={() => handleDeleteCalculation(calc.id)}
-                          size="sm"
-                          variant="outline"
-                          className="ml-2 h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 border-2 border-red-200 hover:border-red-400 transition-all rounded-lg"
-                          title="Kalkuláció törlése"
-                        >
-                          <Trash2 size={14} />
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button
+                            onClick={() => handleLoadCalculation(calc)}
+                            size="sm"
+                            variant="outline"
+                            className="h-8 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-2 border-blue-200 hover:border-blue-400 transition-all rounded-lg text-xs font-semibold"
+                            title="Kalkuláció betöltése módosításhoz"
+                          >
+                            Betöltés
+                          </Button>
+                          <Button
+                            onClick={() => handleDeleteCalculation(calc.id)}
+                            size="sm"
+                            variant="outline"
+                            className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 border-2 border-red-200 hover:border-red-400 transition-all rounded-lg"
+                            title="Kalkuláció törlése"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
                       </div>
                       <div className="space-y-1">
                         <div className="flex justify-between text-xs font-medium">

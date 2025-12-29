@@ -45,6 +45,10 @@ CREATE TABLE salary_calculations (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     family_member_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     
+    -- Kalkuláció azonosítása
+    name TEXT,
+    munkarend_napok DECIMAL(5,2) DEFAULT 20.0,
+    
     -- Alap adatok
     alapber INTEGER NOT NULL,
     ledolgozott_napok DECIMAL(5,2) NOT NULL,

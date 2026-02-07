@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/utils/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/src/components/ui/card'
 import { Input } from '@/src/components/ui/input'
@@ -10,7 +10,8 @@ import { Badge } from '@/src/components/ui/badge'
 import { 
   Calculator, PiggyBank, Car, Home, Heart, 
   Gamepad2, TrendingUp, Wallet, CreditCard,
-  Save, DollarSign, Target, Gift, Plus, X, Calendar
+  Save, DollarSign, Target, Gift, Plus, X, Calendar,
+  ArrowLeftRight, RefreshCcw
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select'
@@ -52,7 +53,7 @@ interface BudgetCategory {
 interface SavedBudget {
   id: string
   user_id: string
-  budget_data: BudgetCategory[] | BudgetItem[] // Támogatjuk mindkét formátumot
+  budget_data: BudgetStoragePayload
   total_amount: number
   name?: string
   description?: string
@@ -76,6 +77,38 @@ interface IncomePlan {
 interface User {
   id: string
   email?: string
+}
+
+interface TransferAccount {
+  id: string
+  name: string
+  initialBalance: number
+}
+
+interface PlannedTransfer {
+  id: string
+  fromAccountId: string
+  toAccountId: string
+  amount: number
+  description?: string
+}
+
+interface TransferPlanState {
+  accounts: TransferAccount[]
+  transfers: PlannedTransfer[]
+}
+
+interface BudgetStorageV2 {
+  version: 'v2'
+  categories: BudgetCategory[]
+  transferPlan?: TransferPlanState
+}
+
+type BudgetStoragePayload = BudgetCategory[] | BudgetItem[] | BudgetStorageV2
+type BudgetCategoryCompat = BudgetCategory & {
+  walletSubCategory?: string
+  walletMainCategory?: string
+  walletSubCategories?: string[]
 }
 
 // Helper function to generate unique IDs
@@ -169,6 +202,142 @@ const createInitialBudgetData = (): BudgetCategory[] => [
   }
 ]
 
+const createDefaultTransferPlan = (): TransferPlanState => ({
+  accounts: [
+    { id: 'main-account', name: 'Főszámla', initialBalance: 0 },
+    { id: 'credit-card-1', name: 'Hitelkártya 1', initialBalance: 0 },
+    { id: 'credit-card-2', name: 'Hitelkártya 2', initialBalance: 0 }
+  ],
+  transfers: []
+})
+
+const normalizeTransferPlan = (plan?: TransferPlanState): TransferPlanState => {
+  if (!plan) {
+    return createDefaultTransferPlan()
+  }
+
+  const providedAccounts = (plan.accounts || []).map(account => ({
+    id: account.id || generateId(),
+    name: account.name || 'Számla',
+    initialBalance: Number(account.initialBalance) || 0
+  }))
+
+  const ensuredAccounts = [...providedAccounts]
+  createDefaultTransferPlan().accounts.forEach(defaultAccount => {
+    if (!ensuredAccounts.some(account => account.id === defaultAccount.id)) {
+      ensuredAccounts.push({ ...defaultAccount })
+    }
+  })
+
+  const sanitizedTransfers = (plan.transfers || [])
+    .filter(transfer => transfer.fromAccountId && transfer.toAccountId)
+    .map(transfer => ({
+      id: transfer.id || generateId(),
+      fromAccountId: transfer.fromAccountId,
+      toAccountId: transfer.toAccountId,
+      amount: Number(transfer.amount) || 0,
+      description: transfer.description || ''
+    }))
+
+  return {
+    accounts: ensuredAccounts,
+    transfers: sanitizedTransfers
+  }
+}
+
+const displayNumericInputValue = (value: number) => (value === 0 ? '' : value.toString())
+
+const mapWalletCategoryCompatibility = (category: BudgetCategoryCompat): BudgetCategory => {
+  let walletCategories = category.walletCategories || []
+
+  if (category.walletMainCategory && !category.walletCategories) {
+    walletCategories = [{
+      mainCategory: category.walletMainCategory,
+      subCategories: category.walletSubCategory ? [category.walletSubCategory] : []
+    }]
+  } else if (category.walletMainCategory && category.walletSubCategories && !category.walletCategories) {
+    walletCategories = [{
+      mainCategory: category.walletMainCategory,
+      subCategories: category.walletSubCategories
+    }]
+  }
+
+  return {
+    name: category.name,
+    items: category.items?.map(item => ({ ...item })) || [],
+    walletCategories
+  }
+}
+
+const convertLegacyItemsToCategories = (items: BudgetItem[]): BudgetCategory[] => {
+  const base = createInitialBudgetData().map(category => ({
+    ...category,
+    items: [] as BudgetItem[]
+  }))
+
+  items.forEach(item => {
+    const categoryIndex = base.findIndex(category => category.name === item.category)
+    if (categoryIndex !== -1) {
+      base[categoryIndex].items.push({ ...item })
+    } else {
+      base.push({
+        name: item.category,
+        items: [{ ...item }]
+      })
+    }
+  })
+
+  return base
+}
+
+const isBudgetStorageV2 = (payload: BudgetStoragePayload): payload is BudgetStorageV2 => {
+  return typeof payload === 'object' && !Array.isArray(payload) && payload !== null && 'categories' in payload
+}
+
+const parseBudgetPayload = (payload?: BudgetStoragePayload): { categories: BudgetCategory[]; transferPlan: TransferPlanState } => {
+  if (!payload) {
+    return {
+      categories: createInitialBudgetData(),
+      transferPlan: createDefaultTransferPlan()
+    }
+  }
+
+  if (Array.isArray(payload)) {
+    const firstEntry = payload[0]
+    const isCategoryArray = !!firstEntry && typeof firstEntry === 'object' && 'items' in firstEntry
+
+    if (isCategoryArray) {
+      const categories = (payload as BudgetCategoryCompat[]).map(mapWalletCategoryCompatibility)
+      return {
+        categories,
+        transferPlan: createDefaultTransferPlan()
+      }
+    }
+
+    return {
+      categories: convertLegacyItemsToCategories(payload as BudgetItem[]),
+      transferPlan: createDefaultTransferPlan()
+    }
+  }
+
+  if (isBudgetStorageV2(payload)) {
+    const categorySource = Array.isArray(payload.categories) ? payload.categories : []
+    const categories = categorySource.length > 0
+      ? (categorySource as BudgetCategoryCompat[]).map(mapWalletCategoryCompatibility)
+      : createInitialBudgetData()
+
+    return {
+      categories,
+      transferPlan: normalizeTransferPlan(payload.transferPlan)
+    }
+  }
+
+  return {
+    categories: createInitialBudgetData(),
+    transferPlan: createDefaultTransferPlan()
+  }
+}
+
 export default function KoltsegvetesPage() {
   const [budgetData, setBudgetData] = useState<BudgetCategory[]>(createInitialBudgetData())
   const [savedBudgets, setSavedBudgets] = useState<SavedBudget[]>([])
@@ -184,6 +353,7 @@ export default function KoltsegvetesPage() {
   const [activeBudgetId, setActiveBudgetId] = useState<string | null>(null)
   const [isCreatingNew, setIsCreatingNew] = useState(false) // Új költségvetés létrehozás jelzője
   const [actualIncome, setActualIncome] = useState<number>(0) // Tényleges bevétel
+  const [transferPlan, setTransferPlan] = useState<TransferPlanState>(createDefaultTransferPlan())
   const supabase = createClient()
 
   // Felhasználó betöltése
@@ -325,6 +495,96 @@ export default function KoltsegvetesPage() {
     setBudgetData(newData)
   }
 
+  // Számla induló egyenleg frissítése
+  const updateTransferAccount = (accountId: string, updates: Partial<TransferAccount>) => {
+    setTransferPlan(prev => ({
+      ...prev,
+      accounts: prev.accounts.map(account =>
+        account.id === accountId ? { ...account, ...updates } : account
+      )
+    }))
+  }
+
+  // Utalási sor hozzáadása
+  const addTransferRow = () => {
+    setTransferPlan(prev => {
+      const fallbackReceiver = prev.accounts.find(account => account.id !== 'main-account')?.id || prev.accounts[0]?.id || 'main-account'
+      const newTransfer: PlannedTransfer = {
+        id: generateId(),
+        fromAccountId: 'main-account',
+        toAccountId: fallbackReceiver,
+        amount: 0,
+        description: ''
+      }
+
+      return {
+        ...prev,
+        transfers: [...prev.transfers, newTransfer]
+      }
+    })
+  }
+
+  // Utalási sor módosítása
+  const updateTransferRow = (transferId: string, updates: Partial<PlannedTransfer>) => {
+    setTransferPlan(prev => ({
+      ...prev,
+      transfers: prev.transfers.map(transfer =>
+        transfer.id === transferId ? { ...transfer, ...updates } : transfer
+      )
+    }))
+  }
+
+  // Utalási sor törlése
+  const removeTransferRow = (transferId: string) => {
+    setTransferPlan(prev => ({
+      ...prev,
+      transfers: prev.transfers.filter(transfer => transfer.id !== transferId)
+    }))
+  }
+
+  // Bevétel átvétele a főszámlára
+  const handleApplyIncomeToMainAccount = (mode: 'expected' | 'actual') => {
+    const value = mode === 'actual' ? actualIncome : expectedIncome
+
+    if (!value || value <= 0) {
+      toast.info('Nincs olyan bevétel, amit át lehetne venni a főszámlára.')
+      return
+    }
+
+    setTransferPlan(prev => ({
+      ...prev,
+      accounts: prev.accounts.map(account =>
+        account.id === 'main-account'
+          ? { ...account, initialBalance: value }
+          : account
+      )
+    }))
+
+    toast.success(mode === 'actual' ? 'A tényleges bevétel bekerült a főszámla induló egyenlegébe.' : 'A tervezett bevétel bekerült a főszámla induló egyenlegébe.')
+  }
+
+  const accountSummaries = useMemo(() => {
+    return transferPlan.accounts.map(account => {
+      const incoming = transferPlan.transfers.reduce((sum, transfer) => (
+        transfer.toAccountId === account.id ? sum + transfer.amount : sum
+      ), 0)
+      const outgoing = transferPlan.transfers.reduce((sum, transfer) => (
+        transfer.fromAccountId === account.id ? sum + transfer.amount : sum
+      ), 0)
+
+      return {
+        ...account,
+        incoming,
+        outgoing,
+        projectedBalance: account.initialBalance + incoming - outgoing
+      }
+    })
+  }, [transferPlan])
+
+  const totalTransferVolume = useMemo(() => {
+    return transferPlan.transfers.reduce((sum, transfer) => sum + transfer.amount, 0)
+  }, [transferPlan])
+
   // Kategória összegzése
   const getCategoryTotal = (category: BudgetCategory) => {
     return category.items.reduce((sum, item) => sum + item.amount, 0)
@@ -349,9 +609,15 @@ export default function KoltsegvetesPage() {
       console.log('budgetData categories:', budgetData.length)
       console.log('total:', total)
 
+      const budgetPayload: BudgetStorageV2 = {
+        version: 'v2',
+        categories: budgetData,
+        transferPlan: normalizeTransferPlan(transferPlan)
+      }
+
       const budgetToSave = {
         user_id: currentUser.id,
-        budget_data: budgetData, // Mentjük a teljes kategória struktúrát
+        budget_data: budgetPayload, // Mentjük a teljes kategória struktúrát és az utalásokat
         total_amount: total,
         name: budgetName || `Költségvetés ${new Date().toLocaleDateString('hu-HU')}`,
         description: budgetDescription || null,
@@ -488,66 +754,9 @@ export default function KoltsegvetesPage() {
       const latestBudget = savedBudgets[0]
       console.log('Legutolsó költségvetés másolása:', latestBudget.name)
       
-      // Költségvetés adatok betöltése a másoláshoz
-      const budgetDataRaw = latestBudget.budget_data
-      
-      if (Array.isArray(budgetDataRaw) && budgetDataRaw.length > 0) {
-        // Ellenőrizzük a formátumot és betöltjük
-        if ('items' in budgetDataRaw[0]) {
-          // Új formátum: kategóriák wallet kategóriákkal
-          const categories = budgetDataRaw as Array<BudgetCategory & { 
-            walletSubCategory?: string
-            walletMainCategory?: string
-            walletSubCategories?: string[]
-          }>
-          
-          // Kompatibilitás: régi formátumok konverziója
-          const updatedCategories = categories.map(cat => {
-            let walletCategories = cat.walletCategories || []
-            
-            // Régi formátum konverziók (ugyanaz a logika mint loadBudget-ben)
-            if (cat.walletMainCategory && !cat.walletCategories) {
-              walletCategories = [{
-                mainCategory: cat.walletMainCategory,
-                subCategories: cat.walletSubCategory ? [cat.walletSubCategory] : []
-              }]
-            }
-            else if (cat.walletMainCategory && cat.walletSubCategories && !cat.walletCategories) {
-              walletCategories = [{
-                mainCategory: cat.walletMainCategory,
-                subCategories: cat.walletSubCategories
-              }]
-            }
-            
-            return {
-              name: cat.name,
-              items: cat.items,
-              walletCategories
-            }
-          })
-          
-          setBudgetData(updatedCategories as BudgetCategory[])
-        } else {
-          // Régi formátum: csak tételek
-          const loadedItems = budgetDataRaw as BudgetItem[]
-          const newBudgetData = createInitialBudgetData()
-          
-          // Meglévő tételek törlése és újak hozzáadása
-          newBudgetData.forEach(category => {
-            category.items = []
-          })
-          
-          // Betöltött tételek kategóriák szerint csoportosítása
-          loadedItems.forEach(item => {
-            const categoryIndex = newBudgetData.findIndex(cat => cat.name === item.category)
-            if (categoryIndex !== -1) {
-              newBudgetData[categoryIndex].items.push(item)
-            }
-          })
-          
-          setBudgetData(newBudgetData)
-        }
-      }
+      const { categories, transferPlan: parsedTransferPlan } = parseBudgetPayload(latestBudget.budget_data)
+      setBudgetData(categories)
+      setTransferPlan(parsedTransferPlan)
       
       // Név és leírás alapján új nevet generálunk
       const currentDate = new Date().toLocaleDateString('hu-HU')
@@ -561,6 +770,7 @@ export default function KoltsegvetesPage() {
       setBudgetName('')
       setBudgetDescription('')
       setActualIncome(0) // Új költségvetésben nullázzuk a tényleges bevételt
+      setTransferPlan(createDefaultTransferPlan())
       toast.success('Új üres költségvetés indítva! Töltsd ki az adatokat és mentsd el.')
     }
     
@@ -590,6 +800,7 @@ export default function KoltsegvetesPage() {
       }
 
       setBudgetData(result.categories)
+      setTransferPlan(createDefaultTransferPlan())
       
       // Ha van tervezett bevétel, állítsuk be
       if (result.plannedIncome > 0) {
@@ -644,69 +855,9 @@ export default function KoltsegvetesPage() {
       if (error) throw error
       
       if (data) {
-        // Ellenőrizzük, hogy a budget_data tételek (régi formátum) vagy kategóriák (új formátum)
-        const budgetDataRaw = data.budget_data
-        
-        if (Array.isArray(budgetDataRaw) && budgetDataRaw.length > 0) {
-          // Ellenőrizzük, hogy van-e 'items' property (új formátum)
-          if (budgetDataRaw[0].items) {
-            // Új formátum: kategóriák wallet kategóriákkal
-            const categories = budgetDataRaw as Array<BudgetCategory & { 
-              walletSubCategory?: string
-              walletMainCategory?: string
-              walletSubCategories?: string[]
-            }>
-            
-            // Kompatibilitás: régi formátumok konverziója
-            const updatedCategories = categories.map(cat => {
-              let walletCategories = cat.walletCategories || []
-              
-              // Régi formátum: walletMainCategory + walletSubCategory (egyetlen)
-              if (cat.walletMainCategory && !cat.walletCategories) {
-                walletCategories = [{
-                  mainCategory: cat.walletMainCategory,
-                  subCategories: cat.walletSubCategory ? [cat.walletSubCategory] : []
-                }]
-              }
-              // Köztes formátum: walletMainCategory + walletSubCategories (tömb)
-              else if (cat.walletMainCategory && cat.walletSubCategories && !cat.walletCategories) {
-                walletCategories = [{
-                  mainCategory: cat.walletMainCategory,
-                  subCategories: cat.walletSubCategories
-                }]
-              }
-              
-              return {
-                name: cat.name,
-                items: cat.items,
-                walletCategories
-              }
-            })
-            
-            setBudgetData(updatedCategories as BudgetCategory[])
-          } else {
-            // Régi formátum: csak tételek
-            const loadedItems = budgetDataRaw as BudgetItem[]
-            
-            // Új költségvetés struktúra létrehozása a betöltött adatokkal
-            const newBudgetData = createInitialBudgetData()
-            
-            // Meglévő tételek törlése és újak hozzáadása
-            newBudgetData.forEach(category => {
-              category.items = []
-            })
-            
-            // Betöltött tételek kategóriák szerint csoportosítása
-            loadedItems.forEach(item => {
-              const categoryIndex = newBudgetData.findIndex(cat => cat.name === item.category)
-              if (categoryIndex !== -1) {
-                newBudgetData[categoryIndex].items.push(item)
-              }
-            })
-            
-            setBudgetData(newBudgetData)
-          }
-        }
+        const { categories, transferPlan: parsedPlan } = parseBudgetPayload(data.budget_data)
+        setBudgetData(categories)
+        setTransferPlan(parsedPlan)
         
         setBudgetName(data.name || '')
         setBudgetDescription(data.description || '')
@@ -1170,6 +1321,209 @@ export default function KoltsegvetesPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Számlák és tervezett utalások */}
+        <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl mb-6 sm:mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-bold">
+              <div className="p-2 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl">
+                <ArrowLeftRight size={20} className="text-white sm:w-6 sm:h-6" />
+              </div>
+              Számlák és Tervezett Utalások
+            </CardTitle>
+            <CardDescription className="text-sm text-gray-600 leading-relaxed">
+              Kövesd nyomon, honnan hova szeretnéd mozgatni a pénzt, és lásd előre a várható egyenlegeket.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              <div>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Induló egyenlegek</p>
+                    <p className="text-xs text-gray-500">Állítsd be a főszámla és a hitelkártyák kezdő értékeit.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleApplyIncomeToMainAccount('expected')}
+                      disabled={expectedIncome <= 0}
+                      className="text-xs sm:text-sm h-8 border-blue-300 text-blue-700 hover:bg-blue-50"
+                    >
+                      <RefreshCcw size={14} className="mr-1" />
+                      Tervezett bevétel
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleApplyIncomeToMainAccount('actual')}
+                      disabled={actualIncome <= 0}
+                      className="text-xs sm:text-sm h-8 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                    >
+                      <RefreshCcw size={14} className="mr-1" />
+                      Tényleges bevétel
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+                  {transferPlan.accounts.map(account => (
+                    <div key={account.id} className="p-4 rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white shadow-sm">
+                      <Input
+                        value={account.name}
+                        onChange={(e) => updateTransferAccount(account.id, { name: e.target.value })}
+                        className="mb-2 h-9 text-sm border-2 border-gray-200 focus:border-cyan-400"
+                      />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min="0"
+                          value={displayNumericInputValue(account.initialBalance)}
+                          onChange={(e) => updateTransferAccount(account.id, { initialBalance: Number(e.target.value) || 0 })}
+                          className="flex-1 h-9 text-sm text-right border-2 border-gray-200 focus:border-emerald-400"
+                        />
+                        <span className="text-xs text-gray-500 font-medium">Ft</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Formázva: <span className="font-semibold text-gray-800">{formatCurrency(account.initialBalance)}</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Separator />
+
+              <div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Tervezett utalások</p>
+                    <p className="text-xs text-gray-500">Adj hozzá utalási sorokat a főszámla és a kártyák között oda-vissza.</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={addTransferRow}
+                    className="h-8 text-xs sm:text-sm border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                  >
+                    <Plus size={14} className="mr-1" />
+                    Új utalás
+                  </Button>
+                </div>
+
+                {transferPlan.transfers.length === 0 ? (
+                  <div className="p-4 rounded-2xl border border-dashed border-gray-300 text-center text-sm text-gray-500 bg-gray-50">
+                    Még nincs tervezett utalás. Kattints az "Új utalás" gombra a kezdéshez.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {transferPlan.transfers.map(transfer => (
+                      <div key={transfer.id} className="grid grid-cols-1 gap-3 lg:grid-cols-5 items-center p-3 sm:p-4 rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        <div>
+                          <label className="text-xs text-gray-500">Honnan</label>
+                          <Select
+                            value={transfer.fromAccountId}
+                            onValueChange={(value) => updateTransferRow(transfer.id, { fromAccountId: value })}
+                          >
+                            <SelectTrigger className="h-9 border-2 border-gray-200 focus:border-blue-400 text-sm">
+                              <SelectValue placeholder="Válassz számlát" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {transferPlan.accounts.map(account => (
+                                <SelectItem key={account.id} value={account.id}>{account.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500">Hova</label>
+                          <Select
+                            value={transfer.toAccountId}
+                            onValueChange={(value) => updateTransferRow(transfer.id, { toAccountId: value })}
+                          >
+                            <SelectTrigger className="h-9 border-2 border-gray-200 focus:border-purple-400 text-sm">
+                              <SelectValue placeholder="Válassz számlát" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {transferPlan.accounts.map(account => (
+                                <SelectItem key={account.id} value={account.id}>{account.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500">Összeg</label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min="0"
+                              value={displayNumericInputValue(transfer.amount)}
+                              onChange={(e) => updateTransferRow(transfer.id, { amount: Number(e.target.value) || 0 })}
+                              className="h-9 text-right border-2 border-gray-200 focus:border-emerald-400"
+                            />
+                            <span className="text-xs text-gray-500 font-medium">Ft</span>
+                          </div>
+                        </div>
+                        <div className="lg:col-span-1">
+                          <label className="text-xs text-gray-500">Megjegyzés</label>
+                          <Input
+                            value={transfer.description || ''}
+                            onChange={(e) => updateTransferRow(transfer.id, { description: e.target.value })}
+                            placeholder="Pl. minimum törlesztés"
+                            className="h-9 text-sm border-2 border-gray-200 focus:border-cyan-400"
+                          />
+                        </div>
+                        <div className="flex items-center justify-end">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeTransferRow(transfer.id)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 h-9 w-9 rounded-xl"
+                          >
+                            <X size={16} />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-semibold text-gray-800">Számla előrejelzés</p>
+                  <p className="text-xs text-gray-500">Induló egyenleg + bejövő utalások - kimenő utalások = várható egyenleg.</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+                  {accountSummaries.map(account => (
+                    <div key={account.id} className="p-4 rounded-2xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 shadow-sm space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-gray-800">{account.name}</span>
+                        <Badge className="bg-cyan-500 text-white border-0 text-xs">
+                          {account.projectedBalance >= 0 ? 'Pozitív' : 'Negatív'}
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-gray-600 space-y-1">
+                        <p>Induló: <span className="font-semibold">{formatCurrency(account.initialBalance)}</span></p>
+                        <p>Bejövő: <span className="font-semibold text-emerald-600">+{formatCurrency(account.incoming)}</span></p>
+                        <p>Kimenő: <span className="font-semibold text-red-600">-{formatCurrency(account.outgoing)}</span></p>
+                      </div>
+                      <Separator className="my-1" />
+                      <p className="text-sm font-bold text-gray-900">
+                        Várható egyenleg: <span className={account.projectedBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}>{formatCurrency(account.projectedBalance)}</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-xs text-gray-500 font-medium">
+                  Összes tervezett pénzmozgás: <span className="text-gray-900">{formatCurrency(totalTransferVolume)}</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Összesítő kártyák */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">

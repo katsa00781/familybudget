@@ -40,11 +40,23 @@ interface BudgetCategory {
   }>;
 }
 
+interface BudgetStorageV2 {
+  version: 'v2';
+  categories: BudgetCategory[];
+  transferPlan?: unknown;
+}
+
+type BudgetStoragePayload = BudgetCategory[] | BudgetItem[] | BudgetStorageV2;
+
+const isBudgetStorageV2 = (data: BudgetStoragePayload): data is BudgetStorageV2 => {
+  return typeof data === 'object' && !Array.isArray(data) && data !== null && 'categories' in data;
+};
+
 interface BudgetPlan {
   id: string;
   name: string;
   total_amount: number;
-  budget_data: BudgetCategory[] | BudgetItem[]; // Támogatjuk mindkét formátumot
+  budget_data: BudgetStoragePayload; // Támogatjuk mindhárom formátumot
 }
 
 interface SavingsGoal {
@@ -219,10 +231,21 @@ export default function Dashboard() {
           }
         });
         return allItems;
-      } else {
-        // Régi formátum: közvetlenül tételek
-        return budgetDataRaw as BudgetItem[];
       }
+
+      // Régi formátum: közvetlenül tételek
+      return budgetDataRaw as BudgetItem[];
+    }
+
+    if (isBudgetStorageV2(budgetDataRaw)) {
+      const categories = Array.isArray(budgetDataRaw.categories) ? budgetDataRaw.categories : [];
+      const allItems: BudgetItem[] = [];
+      categories.forEach(category => {
+        if (category.items && Array.isArray(category.items)) {
+          allItems.push(...category.items);
+        }
+      });
+      return allItems;
     }
     
     return [];

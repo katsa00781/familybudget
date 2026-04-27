@@ -42,13 +42,28 @@ function RegisterForm() {
     }
     
     if (error === 'signup_failed') {
-      toast.error(
-        "Regisztráció sikertelen! ❌", 
-        {
-          description: "Hiba történt a regisztráció során. Kérjük, próbálja újra.",
-          duration: 5000,
-        }
-      );
+      toast.error("Regisztráció sikertelen!", {
+        description: "Hiba történt a regisztráció során. Kérjük, próbálja újra.",
+        duration: 5000,
+      });
+    }
+    if (error === 'invalid_email') {
+      toast.error("Érvénytelen email cím!", {
+        description: "Kérjük, adjon meg egy érvényes email címet.",
+        duration: 5000,
+      });
+    }
+    if (error === 'weak_password') {
+      toast.error("Gyenge jelszó!", {
+        description: "A jelszónak legalább 8 karakter hosszúnak kell lennie.",
+        duration: 5000,
+      });
+    }
+    if (error === 'invalid_name') {
+      toast.error("Érvénytelen név!", {
+        description: "Kérjük, adja meg a teljes nevét (legalább 2 karakter).",
+        duration: 5000,
+      });
     }
   }, [searchParams]);
 

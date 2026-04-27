@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/utils/supabase/client';
 import { useUserProfile } from '@/src/hooks/useUserProfile';
 import { getActiveIncomePlan, getActiveBudgetPlan } from '@/lib/userPreferences';
@@ -93,9 +94,14 @@ export default function Dashboard() {
 
   const { getUserDisplayName } = useUserProfile();
   const supabase = createClient();
+  const router = useRouter();
 
   const checkUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
     setCurrentUser(user);
   };
 
@@ -174,13 +180,6 @@ export default function Dashboard() {
       
       setSavingsGoals(savingsData || []);
       setShoppingLists(shoppingData || []);
-      
-      console.log('Dashboard data loaded:', {
-        budgetData: budgetDataToUse,
-        incomeData: incomeDataToUse,
-        savingsData,
-        shoppingData
-      });
     } catch (error) {
       console.error('Error loading dashboard data:', error);
     } finally {

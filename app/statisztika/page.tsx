@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, type ChangeEvent } from 'react'
 import { createClient } from '@/lib/utils/supabase/client'
 import { getShoppingStatistics } from '@/lib/shoppingStatistics'
 import type { SpendingStatistics } from '@/lib/shoppingStatistics'
@@ -8,11 +8,13 @@ import MonthlySpendingBreakdown from '@/components/MonthlySpendingBreakdown'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/src/components/ui/card'
 import { Button } from '@/src/components/ui/button'
 import { Badge } from '@/src/components/ui/badge'
+import { Input } from '@/src/components/ui/input'
 import { 
   ShoppingCart, TrendingUp, Package, Store, Calendar, 
-  AlertCircle, DollarSign, BarChart3, PieChart
+  AlertCircle, DollarSign, BarChart3, PieChart, Upload, FileSpreadsheet
 } from 'lucide-react'
 import { toast } from 'sonner'
+import type { BudgetCategory, BudgetItem } from '../../types/budget'
 import {
   Select,
   SelectContent,
@@ -34,14 +36,382 @@ interface User {
   email?: string
 }
 
+interface WalletRecord {
+  account: string
+  category: string
+  currency: string
+  amount: number
+  type: string
+  note: string
+  date: string
+  transfer: boolean
+  payment_type?: string
+  labels?: string
+  payee?: string
+}
+
+interface BudgetPlanRecord {
+  id: string
+  name?: string
+  budget_data: BudgetStoragePayload
+  total_amount?: number
+  created_at: string
+}
+
+type BudgetStoragePayload = BudgetCategory[] | BudgetItem[] | BudgetStorageV2 | string | null | undefined
+
+interface BudgetStorageV2 {
+  version?: string
+  categories?: BudgetCategoryCompat[]
+  transferPlan?: unknown
+}
+
+interface BudgetCategoryCompat extends BudgetCategory {
+  walletMainCategory?: string
+  walletSubCategory?: string
+  walletSubCategories?: string[]
+}
+
+interface BudgetAnalysisRow {
+  category: string
+  planned: number
+  actual: number
+  variance: number
+  breakdown: { name: string; amount: number }[]
+}
+
+interface WalletCategoryTotal {
+  name: string
+  amount: number
+}
+
+interface BudgetAnalysisResult {
+  rows: BudgetAnalysisRow[]
+  walletExpenses: WalletCategoryTotal[]
+  incomes: WalletCategoryTotal[]
+  unmapped: WalletRecord[]
+  totalExpenses: number
+  totalIncome: number
+}
+
+const CATEGORY_ALIAS_MAP: Record<string, string> = {
+  'Élelmiszerek': 'Bevásárlás',
+  'Drogéria': 'Gyógyszertár, drogéria',
+  'Egészség, szépség': 'Egészségügyi ellátás, orvos',
+  'Ajándékok, örömök': 'Ajándékok, örömök',
+  'Ruházat és lábbelik': 'Ruházat és cipő',
+  'Jármű karbantartás': 'Jármű karbantartása',
+  'Jótékonyság, ajándékok': 'Jótékonyság, ajándékok',
+  'Bár, kávézó': 'Bár, kávézó'
+}
+
+const FALLBACK_CATEGORY_MAP: Record<string, string> = {
+  'Ajándékok, örömök': 'Szórakozás',
+  'Bár, kávézó': 'Szórakozás',
+  'Jótékonyság, ajándékok': 'Mama',
+  'Kultúra, sportesemények': 'Szórakozás',
+  'Nyaralás, kirándulások, szállodák': 'Szórakozás',
+  'Jelzáloghitel': 'Hitel',
+  'Kölcsönök, törlesztőrészletek': 'Hitel',
+  'Díjak': 'Hitel',
+  'Internet': 'Rezsi',
+  'Szolgáltatások': 'Rezsi',
+  'Ruházat és lábbelik': 'Háztartás',
+  'Egyéb': 'Egyéb',
+  'Járműbiztosítás': 'Autó'
+}
+
+const parseWalletCsv = (content: string): WalletRecord[] => {
+  const lines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+
+  if (lines.length === 0) return []
+
+  const headers = lines[0].split(';').map((header) => header.trim())
+  const records: WalletRecord[] = []
+
+  for (const line of lines.slice(1)) {
+    const values = line.split(';')
+    if (values.length < headers.length) continue
+
+    const row: Record<string, string> = {}
+    headers.forEach((header, index) => {
+      row[header] = values[index]?.trim() ?? ''
+    })
+
+    const amount = Number(row.amount?.replace(',', '.') ?? NaN)
+    if (!row.date || Number.isNaN(amount)) continue
+
+    records.push({
+      account: row.account || '',
+      category: row.category || 'Ismeretlen',
+      currency: row.currency || 'HUF',
+      amount,
+      type: row.type || 'Kiadás',
+      note: row.note || '',
+      date: row.date,
+      transfer: (row.transfer || '').toLowerCase() === 'true',
+      payment_type: row.payment_type,
+      labels: row.labels,
+      payee: row.payee
+    })
+  }
+
+  return records
+}
+
+const mapWalletCategoryCompatibility = (category: BudgetCategoryCompat): BudgetCategory => {
+  let walletCategories = category.walletCategories || []
+
+  if (category.walletMainCategory && !category.walletCategories) {
+    walletCategories = [{
+      mainCategory: category.walletMainCategory,
+      subCategories: category.walletSubCategory ? [category.walletSubCategory] : []
+    }]
+  } else if (category.walletMainCategory && category.walletSubCategories && !category.walletCategories) {
+    walletCategories = [{
+      mainCategory: category.walletMainCategory,
+      subCategories: category.walletSubCategories
+    }]
+  }
+
+  return {
+    name: category.name,
+    items: category.items?.map((item) => ({ ...item })) || [],
+    walletCategories
+  }
+}
+
+const convertLegacyItemsToCategories = (items: BudgetItem[]): BudgetCategory[] => {
+  const grouped = new Map<string, BudgetCategory>()
+
+  items.forEach((item) => {
+    const existing = grouped.get(item.category)
+    if (existing) {
+      existing.items.push({ ...item })
+    } else {
+      grouped.set(item.category, {
+        name: item.category,
+        items: [{ ...item }]
+      })
+    }
+  })
+
+  return Array.from(grouped.values())
+}
+
+const normalizeBudgetCategories = (payload: BudgetStoragePayload): BudgetCategory[] => {
+  if (!payload) return []
+
+  let parsed: unknown = payload
+
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed)
+    } catch (error) {
+      console.error('Nem sikerült beolvasni a budget JSON-t:', error)
+      return []
+    }
+  }
+
+  if (Array.isArray(parsed)) {
+    if (parsed.length === 0) return []
+    const firstEntry = parsed[0] as Record<string, unknown>
+    if (firstEntry && 'items' in firstEntry) {
+      return (parsed as BudgetCategoryCompat[]).map(mapWalletCategoryCompatibility)
+    }
+    return convertLegacyItemsToCategories(parsed as BudgetItem[])
+  }
+
+  if (parsed && typeof parsed === 'object') {
+    const maybeV2 = parsed as BudgetStorageV2
+    if (Array.isArray(maybeV2.categories)) {
+      return maybeV2.categories.map(mapWalletCategoryCompatibility)
+    }
+  }
+
+  return []
+}
+
+const buildWalletCategoryMap = (categories: BudgetCategory[]) => {
+  const mapping = new Map<string, string>()
+  categories.forEach((category) => {
+    category.walletCategories?.forEach((walletCategory) => {
+      if (walletCategory.mainCategory) {
+        mapping.set(walletCategory.mainCategory, category.name)
+      }
+      walletCategory.subCategories?.forEach((subCategory) => {
+        mapping.set(subCategory, category.name)
+      })
+    })
+  })
+  return mapping
+}
+
+const filterRecordsByMonth = (records: WalletRecord[], monthKey: string): WalletRecord[] => {
+  if (!monthKey) return records
+  return records.filter((record) => record.date.startsWith(monthKey))
+}
+
+const analyzeWalletData = (records: WalletRecord[], budgetCategories: BudgetCategory[]): BudgetAnalysisResult => {
+  const plannedMap = new Map<string, number>()
+  budgetCategories.forEach((category) => {
+    const planned = category.items.reduce((sum, item) => sum + (item.amount || 0), 0)
+    plannedMap.set(category.name, planned)
+  })
+
+  const walletMapping = buildWalletCategoryMap(budgetCategories)
+  const expensesByBudget = new Map<string, number>()
+  const walletExpenses = new Map<string, number>()
+  const incomeTotals = new Map<string, number>()
+  const breakdownMap = new Map<string, Map<string, number>>()
+  const unmapped: WalletRecord[] = []
+
+  records.forEach((record) => {
+    const amount = record.amount
+    if (!Number.isFinite(amount)) return
+    if (record.transfer) return
+
+    const normalized = CATEGORY_ALIAS_MAP[record.category] || record.category
+    let budgetCategory = walletMapping.get(normalized) || walletMapping.get(record.category)
+    if (!budgetCategory) {
+      budgetCategory = FALLBACK_CATEGORY_MAP[normalized] || FALLBACK_CATEGORY_MAP[record.category]
+    }
+
+    if (record.type === 'Kiadás') {
+      walletExpenses.set(record.category, (walletExpenses.get(record.category) || 0) + amount)
+
+      if (budgetCategory) {
+        expensesByBudget.set(budgetCategory, (expensesByBudget.get(budgetCategory) || 0) + amount)
+        const breakdown = breakdownMap.get(budgetCategory) || new Map<string, number>()
+        breakdown.set(record.category, (breakdown.get(record.category) || 0) + amount)
+        breakdownMap.set(budgetCategory, breakdown)
+      } else {
+        unmapped.push(record)
+      }
+    } else if (record.type === 'Bevétel') {
+      incomeTotals.set(record.category, (incomeTotals.get(record.category) || 0) + amount)
+    }
+  })
+
+  const categoryNames = new Set<string>([...plannedMap.keys(), ...expensesByBudget.keys()])
+  const rows: BudgetAnalysisRow[] = Array.from(categoryNames).map((name) => {
+    const planned = plannedMap.get(name) || 0
+    const actual = expensesByBudget.get(name) || 0
+    const breakdownEntries = Array.from(breakdownMap.get(name)?.entries() || [])
+      .sort((a, b) => b[1] - a[1])
+      .map(([walletCategory, amount]) => ({ name: walletCategory, amount }))
+
+    return {
+      category: name,
+      planned,
+      actual,
+      variance: actual - planned,
+      breakdown: breakdownEntries
+    }
+  }).sort((a, b) => a.category.localeCompare(b.category, 'hu'))
+
+  const walletExpensesTotals = Array.from(walletExpenses.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, amount]) => ({ name, amount }))
+
+  const incomeTotalsSorted = Array.from(incomeTotals.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, amount]) => ({ name, amount }))
+
+  const totalExpenses = rows.reduce((sum, row) => sum + row.actual, 0)
+  const totalIncome = incomeTotalsSorted.reduce((sum, entry) => sum + entry.amount, 0)
+
+  return {
+    rows,
+    walletExpenses: walletExpensesTotals,
+    incomes: incomeTotalsSorted,
+    unmapped,
+    totalExpenses,
+    totalIncome
+  }
+}
+
+const formatHuf = (value: number) =>
+  value.toLocaleString('hu-HU', { maximumFractionDigits: 0 })
+
+const formatMonthLabel = (monthKey: string) => {
+  if (!monthKey.includes('-')) return monthKey
+  const [year, month] = monthKey.split('-')
+  return `${year}. ${month}.`
+}
+
 export default function StatisztikaPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [statistics, setStatistics] = useState<SpendingStatistics | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [timeRange, setTimeRange] = useState<string>('all')
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month'>('month')
+  const [budgetPlans, setBudgetPlans] = useState<BudgetPlanRecord[]>([])
+  const [selectedBudgetId, setSelectedBudgetId] = useState('')
+  const [budgetLoading, setBudgetLoading] = useState(false)
+  const [walletRecords, setWalletRecords] = useState<WalletRecord[]>([])
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => new Date().toISOString().slice(0, 7))
+  const [csvFileName, setCsvFileName] = useState('')
+  const [csvError, setCsvError] = useState<string | null>(null)
+  const [isParsingCsv, setIsParsingCsv] = useState(false)
   
   const supabase = createClient()
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const monthOptions = useMemo(() => {
+    const months = new Set<string>()
+    walletRecords.forEach((record) => {
+      if (record.date?.length >= 7) {
+        months.add(record.date.slice(0, 7))
+      }
+    })
+    if (months.size === 0) {
+      budgetPlans.forEach((plan) => {
+        if (plan.created_at) {
+          const iso = new Date(plan.created_at).toISOString().slice(0, 7)
+          months.add(iso)
+        }
+      })
+    }
+    return Array.from(months).sort().reverse()
+  }, [walletRecords, budgetPlans])
+
+  const selectedBudget = useMemo(
+    () => budgetPlans.find((plan) => plan.id === selectedBudgetId) || null,
+    [budgetPlans, selectedBudgetId]
+  )
+
+  const budgetCategories = useMemo(() => {
+    if (!selectedBudget) return []
+    return normalizeBudgetCategories(selectedBudget.budget_data)
+  }, [selectedBudget])
+
+  const filteredWalletRecords = useMemo(() => {
+    return filterRecordsByMonth(walletRecords, selectedMonth)
+  }, [walletRecords, selectedMonth])
+
+  const analysisResult = useMemo(() => {
+    if (!filteredWalletRecords.length || !budgetCategories.length) return null
+    return analyzeWalletData(filteredWalletRecords, budgetCategories)
+  }, [filteredWalletRecords, budgetCategories])
+
+  const totalPlanned = useMemo(() => {
+    if (!analysisResult) return 0
+    return analysisResult.rows.reduce((sum, row) => sum + row.planned, 0)
+  }, [analysisResult])
+
+  const totalVariance = useMemo(() => {
+    if (!analysisResult) return 0
+    return analysisResult.totalExpenses - totalPlanned
+  }, [analysisResult, totalPlanned])
+
+  const varianceIsPositive = totalVariance > 0
+  const monthLabel = selectedMonth ? formatMonthLabel(selectedMonth) : 'Nincs kiválasztott hónap'
+  const budgetSelectValue = selectedBudgetId || ''
+  const monthSelectValue = monthOptions.length ? selectedMonth : ''
 
   // Felhasználó betöltése
   useEffect(() => {
@@ -107,6 +477,76 @@ export default function StatisztikaPage() {
     }
   }, [currentUser, loadStatistics])
 
+  useEffect(() => {
+    if (!currentUser) return
+    const fetchBudgetPlans = async () => {
+      try {
+        setBudgetLoading(true)
+        const { data, error } = await supabase
+          .from('budget_plans')
+          .select('id, name, budget_data, total_amount, created_at')
+          .eq('user_id', currentUser.id)
+          .order('created_at', { ascending: false })
+
+        if (error) throw error
+        setBudgetPlans(data || [])
+        if (!selectedBudgetId && data && data.length > 0) {
+          setSelectedBudgetId(data[0].id)
+        }
+      } catch (error) {
+        console.error('Hiba a költségvetések betöltésekor:', error)
+        toast.error('Nem sikerült betölteni a költségvetési terveket')
+      } finally {
+        setBudgetLoading(false)
+      }
+    }
+
+    fetchBudgetPlans()
+  }, [currentUser])
+
+  useEffect(() => {
+    if (!monthOptions.length) return
+    if (!selectedMonth || !monthOptions.includes(selectedMonth)) {
+      setSelectedMonth(monthOptions[0])
+    }
+  }, [monthOptions, selectedMonth])
+
+  const handleCsvUpload = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setIsParsingCsv(true)
+    setCsvError(null)
+
+    try {
+      const text = await file.text()
+      const parsed = parseWalletCsv(text)
+      if (!parsed.length) {
+        setWalletRecords([])
+        setCsvFileName('')
+        setCsvError('A fájl nem tartalmazott feldolgozható tranzakciókat.')
+      } else {
+        setWalletRecords(parsed)
+        setCsvFileName(file.name)
+        toast.success(`Wallet adatok betöltve (${parsed.length} sor).`)
+      }
+    } catch (error) {
+      console.error('CSV feldolgozási hiba:', error)
+      setCsvError('Nem sikerült feldolgozni a CSV fájlt.')
+      toast.error('Nem sikerült beolvasni a CSV fájlt')
+    } finally {
+      setIsParsingCsv(false)
+      event.target.value = ''
+    }
+  }, [])
+
+  const handleFilePicker = () => {
+    fileInputRef.current?.click()
+  }
+
+  const hasCsvData = walletRecords.length > 0
+  const filteredRecordCount = filteredWalletRecords.length
+
   // Format period for display
   const formatPeriod = (period: string) => {
     if (period.includes('W')) {
@@ -162,6 +602,230 @@ export default function StatisztikaPage() {
             </Button>
           </div>
         </div>
+
+        {/* Wallet CSV elemzés */}
+        <Card className="bg-white/90 backdrop-blur-xl shadow-xl border border-white/20 rounded-3xl">
+          <CardHeader className="pb-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-gradient-to-br from-emerald-500 to-cyan-500 p-3 rounded-2xl shadow-lg">
+                  <FileSpreadsheet className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl font-semibold text-slate-900">Wallet CSV összehasonlító</CardTitle>
+                  <CardDescription>Az appon belül látod, mennyire tartod a havi kereted a valós költésekkel szemben.</CardDescription>
+                </div>
+              </div>
+              <Badge variant="outline" className="border-emerald-200 text-emerald-700 bg-emerald-50/80">Béta</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={handleCsvUpload}
+            />
+
+            <div className="grid gap-4 lg:grid-cols-5">
+              <div className="lg:col-span-3 space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">1. Wallet export</p>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleFilePicker}
+                    disabled={isParsingCsv}
+                    className="h-12 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg hover:shadow-xl"
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    {isParsingCsv ? 'Feldolgozás...' : 'CSV kiválasztása'}
+                  </Button>
+                  <div className="flex-1 text-sm text-gray-600 truncate">
+                    {csvFileName ? <span className="font-medium text-slate-800">{csvFileName}</span> : 'Nincs fájl kiválasztva'}
+                  </div>
+                </div>
+                {csvError ? (
+                  <p className="text-sm text-red-600">{csvError}</p>
+                ) : hasCsvData ? (
+                  <p className="text-sm text-emerald-700">
+                    {walletRecords.length.toLocaleString('hu-HU')} tranzakció beolvasva · {monthOptions.length} hónap azonosítva
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-500">
+                    A Wallet alkalmazásban az Export &gt; CSV funkcióval töltsd le az adatokat, majd húzd ide a fájlt.
+                  </p>
+                )}
+              </div>
+              <div className="lg:col-span-2 rounded-3xl border border-dashed border-emerald-200 bg-gradient-to-br from-emerald-50 to-cyan-50 p-4 text-sm text-emerald-900 shadow-inner">
+                <p className="font-semibold mb-2">Automatikus illesztés</p>
+                <p className="text-emerald-800 text-sm leading-relaxed">
+                  A Wallet kategóriákat a FamilyBudget kategóriákhoz rendeljük, felismerjük az aliasokat és jelezzük, hol csúszik meg a havi terv.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">2. Költségvetési terv</p>
+                <Select
+                  value={budgetSelectValue}
+                  onValueChange={setSelectedBudgetId}
+                  disabled={budgetLoading || !budgetPlans.length}
+                >
+                  <SelectTrigger className="h-12 rounded-2xl">
+                    <SelectValue placeholder={budgetLoading ? 'Tervek betöltése...' : 'Válassz egy tervet'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {budgetPlans.map((plan) => (
+                      <SelectItem key={plan.id} value={plan.id}>
+                        {(plan.name || 'Névtelen terv')} · {new Date(plan.created_at).toLocaleDateString('hu-HU', { year: 'numeric', month: '2-digit' })}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">3. Elemzett hónap</p>
+                <Select
+                  value={monthSelectValue}
+                  onValueChange={setSelectedMonth}
+                  disabled={!monthOptions.length}
+                >
+                  <SelectTrigger className="h-12 rounded-2xl">
+                    <SelectValue placeholder="Nincs elérhető hónap" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {monthOptions.map((month) => (
+                      <SelectItem key={month} value={month}>
+                        {formatMonthLabel(month)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {analysisResult ? (
+              <div className="space-y-6">
+                <div className="grid gap-4 md:grid-cols-4">
+                  <div className="p-4 rounded-3xl bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-xl">
+                    <p className="text-xs uppercase tracking-wide text-white/70">Tervezett keret</p>
+                    <p className="text-2xl font-semibold">{formatHuf(totalPlanned)} Ft</p>
+                  </div>
+                  <div className="p-4 rounded-3xl bg-white border border-slate-200 shadow-sm">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Tényleges költés ({monthLabel})</p>
+                    <p className="text-2xl font-semibold text-slate-900">{formatHuf(analysisResult.totalExpenses)} Ft</p>
+                    <p className="text-xs text-slate-500">{filteredRecordCount} tranzakció</p>
+                  </div>
+                  <div className={`p-4 rounded-3xl border shadow-sm ${varianceIsPositive ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+                    <p className="text-xs uppercase tracking-wide">Eltérés</p>
+                    <p className="text-2xl font-semibold">{formatHuf(totalVariance)} Ft</p>
+                    <p className="text-xs">{varianceIsPositive ? 'Túlköltés' : 'Megmaradt keret'}</p>
+                  </div>
+                  <div className="p-4 rounded-3xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 text-blue-900">
+                    <p className="text-xs uppercase tracking-wide">Wallet bevétel</p>
+                    <p className="text-2xl font-semibold">{formatHuf(analysisResult.totalIncome)} Ft</p>
+                    <p className="text-xs">{analysisResult.incomes.length} kategória</p>
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-white/30 bg-white/80 shadow-inner">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Kategória</TableHead>
+                          <TableHead className="text-right">Terv</TableHead>
+                          <TableHead className="text-right">Tény</TableHead>
+                          <TableHead className="text-right">Eltérés</TableHead>
+                          <TableHead>Részletek</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {analysisResult.rows.map((row) => {
+                          const varianceClass = row.variance > 0 ? 'text-rose-600' : row.variance < 0 ? 'text-emerald-600' : 'text-slate-600'
+                          return (
+                            <TableRow key={row.category}>
+                              <TableCell className="font-medium">{row.category}</TableCell>
+                              <TableCell className="text-right">{formatHuf(row.planned)} Ft</TableCell>
+                              <TableCell className="text-right font-semibold">{formatHuf(row.actual)} Ft</TableCell>
+                              <TableCell className={`text-right font-semibold ${varianceClass}`}>{formatHuf(row.variance)} Ft</TableCell>
+                              <TableCell className="space-x-2">
+                                {row.breakdown.slice(0, 3).map((item) => (
+                                  <Badge key={`${row.category}-${item.name}`} variant="outline">
+                                    {item.name}: {formatHuf(item.amount)} Ft
+                                  </Badge>
+                                ))}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <div className="rounded-3xl border border-white/40 bg-white/90 p-4">
+                    <p className="text-sm font-semibold mb-3 text-slate-800">Top Wallet kategóriák</p>
+                    <div className="space-y-2">
+                      {analysisResult.walletExpenses.slice(0, 6).map((item) => (
+                        <div key={item.name} className="flex items-center justify-between text-sm">
+                          <span>{item.name}</span>
+                          <span className="font-semibold text-slate-900">{formatHuf(item.amount)} Ft</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-3xl border border-white/40 bg-white/90 p-4">
+                    <p className="text-sm font-semibold mb-3 text-slate-800">Bevételek</p>
+                    <div className="space-y-2 text-sm">
+                      {analysisResult.incomes.length === 0 ? (
+                        <p className="text-gray-500">Nincs bevétel a hónapban.</p>
+                      ) : (
+                        analysisResult.incomes.slice(0, 6).map((income) => (
+                          <div key={income.name} className="flex items-center justify-between">
+                            <span>{income.name}</span>
+                            <span className="font-semibold text-slate-900">{formatHuf(income.amount)} Ft</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                  <div className="rounded-3xl border border-white/40 bg-white/90 p-4">
+                    <p className="text-sm font-semibold mb-3 text-slate-800">Ismeretlen tételek</p>
+                    {analysisResult.unmapped.length === 0 ? (
+                      <p className="text-sm text-gray-500">Minden tranzakció kategorizálva lett.</p>
+                    ) : (
+                      <div className="space-y-2 text-sm">
+                        {analysisResult.unmapped.slice(0, 5).map((item, index) => (
+                          <div key={`${item.category}-${index}`} className="flex flex-col border border-dashed border-amber-200 rounded-2xl p-3">
+                            <span className="font-semibold text-amber-900">{item.category}</span>
+                            <span className="text-amber-700">{formatHuf(item.amount)} Ft · {item.date}</span>
+                            <span className="text-xs text-amber-600">{item.note || 'Nincs megjegyzés'}</span>
+                          </div>
+                        ))}
+                        {analysisResult.unmapped.length > 5 && (
+                          <p className="text-xs text-amber-600">+ {analysisResult.unmapped.length - 5} további tétel</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : hasCsvData && budgetCategories.length > 0 ? (
+              <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50/80 p-4 text-sm text-slate-700">
+                Nincs a kiválasztott hónapra eső tranzakció, kérlek válassz másik hónapot.
+              </div>
+            ) : (
+              <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50/80 p-4 text-sm text-slate-600">
+                Aktiváld a költségvetési tervet és tölts fel Wallet CSV-t az összehasonlításhoz.
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Szűrők */}
         <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-purple-500/20 hover:scale-[1.01] transition-all duration-300 rounded-2xl">

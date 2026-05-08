@@ -105,7 +105,7 @@ export default function BerkalkulatorPage() {
   const [kikuldetesNapok, setKikuldetesNapok] = useState(0);
   const [gyedMellett, setGyedMellett] = useState(0); // GYED munkavégzés mellett: 0 nap (default)
   const [formaruhakompenzacio, setFormaruhakompenzacio] = useState(0);
-  const [családiAdókedvezmény, setCsaládiAdókedvezmény] = useState(500000); // Családi adókedvezmény: 500,000 Ft (default)
+  const [családiAdókedvezmény, setCsaládiAdókedvezmény] = useState(800000); // Családi adókedvezmény: 500,000 Ft (default)
   interface SalaryResult {
     alapber: number;
     jutalom: number;

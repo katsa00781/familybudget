@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { Button } from "../ui/button";
-import { 
-  Sheet, 
-  SheetContent, 
-  SheetTrigger 
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger
 } from "../ui/sheet";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { 
   Menu, BarChart2, CircleDollarSign, User, ChefHat, 
   ShoppingCart, TrendingUpIcon, Package, PiggyBank,
@@ -101,6 +103,9 @@ export default function Sidebar({ className = "" }: SidebarProps) {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-64 p-0">
+            <VisuallyHidden>
+              <SheetTitle>Navigáció</SheetTitle>
+            </VisuallyHidden>
             <div className="flex flex-col h-full">
               <SidebarContent />
             </div>

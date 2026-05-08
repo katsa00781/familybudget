@@ -35,7 +35,7 @@ export const KULCSOK = {
   garantaltMinimumBer: 348000,
   szocialisHozzajarulas: {
     munkavállaló: 0.185,
-    munkáltató: 0.135
+    munkáltató: 0.13
   },
   szja: {
     alap: 0.15,

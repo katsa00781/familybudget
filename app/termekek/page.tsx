@@ -8,8 +8,8 @@ import { Input } from '@/src/components/ui/input'
 import { Button } from '@/src/components/ui/button'
 import { Badge } from '@/src/components/ui/badge'
 import { Textarea } from '@/src/components/ui/textarea'
-import { 
-  Package, Plus, Upload, Search, Edit, Trash2, QrCode, Store, Coins
+import {
+  Package, Upload, Search, Edit, Trash2, QrCode, Store, Coins
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -88,19 +88,6 @@ export default function TermekekPage() {
   const [filterCategory, setFilterCategory] = useState<string>('all')
   const [filterStore, setFilterStore] = useState<string>('all')
   
-  // Új termék form
-  const [newProduct, setNewProduct] = useState({
-    name: '',
-    brand: '',
-    category: '',
-    store_name: '',
-    price: '',
-    unit: 'db',
-    barcode: '',
-    sku: '',
-    description: ''
-  })
-  
   // JSON import
   const [jsonInput, setJsonInput] = useState('')
   const [showJsonDialog, setShowJsonDialog] = useState(false)
@@ -177,113 +164,6 @@ export default function TermekekPage() {
 
     setFilteredProducts(filtered)
   }, [products, searchTerm, filterCategory, filterStore])
-
-  // Új termék hozzáadása
-  const addProduct = async () => {
-    if (!currentUser) {
-      toast.error('A mentéshez be kell jelentkezned!')
-      return
-    }
-
-    if (!newProduct.name.trim() || !newProduct.category) {
-      toast.error('Add meg legalább a termék nevét és kategóriáját!')
-      return
-    }
-
-    try {
-      setIsLoading(true)
-      
-      const productData = {
-        user_id: currentUser.id,
-        name: newProduct.name.trim(),
-        brand: newProduct.brand.trim() || null,
-        category: newProduct.category,
-        store_name: newProduct.store_name || null,
-        price: newProduct.price ? parseInt(newProduct.price) : null,
-        unit: newProduct.unit,
-        barcode: newProduct.barcode.trim() || null,
-        sku: newProduct.sku.trim() || null,
-        description: newProduct.description.trim() || null,
-        available: true
-      }
-
-      const { data: insertedProduct, error } = await supabase
-        .from('products')
-        .insert([productData])
-        .select()
-        .single()
-
-      if (error) throw error
-
-      // Ha van ár, mentjük a price history és shopping statistics táblákba is
-      if (insertedProduct && insertedProduct.price && insertedProduct.price > 0) {
-        const currentDate = new Date().toISOString().split('T')[0]
-        
-        // 1. Price history mentése (árfigyeléshez és inflációhoz)
-        const priceHistoryResult = await savePriceHistory(
-          currentUser.id,
-          insertedProduct.name,
-          insertedProduct.price,
-          {
-            productId: insertedProduct.id,
-            productCategory: insertedProduct.category,
-            storeName: insertedProduct.store_name,
-            unit: insertedProduct.unit,
-            source: 'manual',
-            priceDate: currentDate
-          }
-        )
-
-        // 2. Shopping statistics mentése (bevásárlási statisztikákhoz)
-        const shoppingStatData = {
-          user_id: currentUser.id,
-          shopping_date: currentDate,
-          product_name: insertedProduct.name,
-          product_category: insertedProduct.category,
-          brand: insertedProduct.brand,
-          store_name: insertedProduct.store_name,
-          quantity: 1,
-          unit: insertedProduct.unit,
-          unit_price: insertedProduct.price,
-          total_price: insertedProduct.price,
-          source: 'manual'
-        }
-
-        const { error: statsError } = await supabase
-          .from('shopping_statistics')
-          .insert([shoppingStatData])
-
-        if (priceHistoryResult.success && !statsError) {
-          console.log('✅ Termék és statisztikák sikeresen mentve!')
-        } else {
-          console.warn('⚠️ Termék mentve, de statisztikák mentése részben sikertelen')
-        }
-      }
-
-      toast.success('Termék sikeresen hozzáadva!')
-      
-      // Form reset
-      setNewProduct({
-        name: '',
-        brand: '',
-        category: '',
-        store_name: '',
-        price: '',
-        unit: 'db',
-        barcode: '',
-        sku: '',
-        description: ''
-      })
-      
-      // Újratöltés
-      loadProducts()
-    } catch (error) {
-      console.error('Hiba a mentéskor:', error)
-      toast.error('Hiba történt a mentés során!')
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   // Termék frissítése
   const updateProduct = async (product: Product) => {
@@ -380,7 +260,14 @@ export default function TermekekPage() {
         description: string | null;
         available: boolean;
       }> = []
-      const skippedProducts: string[] = []
+      const productsToUpdate: Array<{
+        name: string;
+        price: number;
+        category: string;
+        store_name: string | null;
+        unit: string;
+      }> = []
+      const skippedWithoutPrice: number[] = []
       const existingProductsSet = new Set()
       
       // ÚJ: Minden JSON elemet statisztikába mentünk (duplikáltakat is)
@@ -430,7 +317,7 @@ export default function TermekekPage() {
         const productBarcode = item.barcode || item.vonalkod || null
 
         if (!productName) {
-          skippedProducts.push('Névtelen termék')
+          skippedWithoutPrice.push(0)
           return
         }
 
@@ -466,8 +353,18 @@ export default function TermekekPage() {
         }
 
         if (isDuplicate) {
-          skippedProducts.push(productName)
-          return // Csak a products táblából hagyjuk ki, statisztika már mentve
+          if (productPrice && productPrice > 0) {
+            productsToUpdate.push({
+              name: productName,
+              price: productPrice,
+              category: productCategory,
+              store_name: productStoreName,
+              unit: productUnit
+            })
+          } else {
+            skippedWithoutPrice.push(0)
+          }
+          return
         }
 
         // Új termék hozzáadása a products táblához
@@ -525,7 +422,34 @@ export default function TermekekPage() {
         }
       }
 
-      // ÚJ LOGIKA: Shopping statistics mentése MINDEN JSON elemből (duplikáltakkal együtt)
+      // Meglévő termékek árfrissítése + price history bejegyzés
+      // A régi árbejegyzések megmaradnak — ez csak új sort ír a price_history-ba
+      if (productsToUpdate.length > 0) {
+        const currentDate = new Date().toISOString().split('T')[0]
+        const updatePromises = productsToUpdate.map(async (product) => {
+          await supabase
+            .from('products')
+            .update({ price: product.price })
+            .eq('user_id', currentUser.id)
+            .eq('name', product.name)
+
+          await savePriceHistory(
+            currentUser.id,
+            product.name,
+            product.price,
+            {
+              productCategory: product.category,
+              storeName: product.store_name ?? undefined,
+              unit: product.unit,
+              source: 'import',
+              priceDate: currentDate
+            }
+          )
+        })
+        await Promise.allSettled(updatePromises)
+      }
+
+      // Shopping statistics mentése MINDEN JSON elemből (duplikáltakkal együtt)
       if (allItemsForStats.length > 0) {
         const currentDate = new Date().toISOString().split('T')[0]
         
@@ -556,17 +480,17 @@ export default function TermekekPage() {
 
       // Eredmény kijelzése
       let message = ''
-      
+
       if (productsToInsert.length > 0) {
         message += `${productsToInsert.length} új termék hozzáadva! `
+      }
+      if (productsToUpdate.length > 0) {
+        message += `${productsToUpdate.length} termék ára frissítve! `
       }
       if (allItemsForStats.length > 0) {
         message += `${allItemsForStats.length} termék statisztikába mentve! `
       }
-      if (skippedProducts.length > 0) {
-        message += `${skippedProducts.length} termék már létezett (csak statisztikába került).`
-      }
-      if (productsToInsert.length === 0 && allItemsForStats.length === 0) {
+      if (productsToInsert.length === 0 && productsToUpdate.length === 0 && allItemsForStats.length === 0) {
         message = 'Nincs importálható termék árral!'
       }
 
@@ -658,108 +582,8 @@ export default function TermekekPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Bal oldali panel - Új termék hozzáadása */}
+          {/* Bal oldali panel - JSON Import */}
           <div className="space-y-6">
-            <Card className="bg-white shadow-lg border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Plus size={20} className="text-green-600" />
-                  Új termék hozzáadása
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <Input
-                    placeholder="Termék neve *"
-                    value={newProduct.name}
-                    onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
-                  />
-                  
-                  <Input
-                    placeholder="Márka"
-                    value={newProduct.brand}
-                    onChange={(e) => setNewProduct({...newProduct, brand: e.target.value})}
-                  />
-                  
-                  <Select value={newProduct.category} onValueChange={(value) => setNewProduct({...newProduct, category: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Kategória *" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CATEGORIES.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  
-                  <Select value={newProduct.store_name} onValueChange={(value) => setNewProduct({...newProduct, store_name: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Bolt" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STORES.map((store) => (
-                        <SelectItem key={store} value={store}>
-                          {store}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      type="number"
-                      placeholder="Ár (HUF)"
-                      value={newProduct.price}
-                      onChange={(e) => setNewProduct({...newProduct, price: e.target.value})}
-                    />
-                    <Select value={newProduct.unit} onValueChange={(value) => setNewProduct({...newProduct, unit: value})}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {UNITS.map((unit) => (
-                          <SelectItem key={unit} value={unit}>
-                            {unit}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <Input
-                    placeholder="Vonalkód"
-                    value={newProduct.barcode}
-                    onChange={(e) => setNewProduct({...newProduct, barcode: e.target.value})}
-                  />
-                  
-                  <Input
-                    placeholder="Termék kód (SKU)"
-                    value={newProduct.sku}
-                    onChange={(e) => setNewProduct({...newProduct, sku: e.target.value})}
-                  />
-                  
-                  <Textarea
-                    placeholder="Leírás"
-                    value={newProduct.description}
-                    onChange={(e) => setNewProduct({...newProduct, description: e.target.value})}
-                    rows={3}
-                  />
-                  
-                  <Button 
-                    onClick={addProduct}
-                    disabled={isLoading || !currentUser}
-                    className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white"
-                  >
-                    <Plus size={16} className="mr-2" />
-                    {isLoading ? 'Hozzáadás...' : 'Termék hozzáadása'}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* JSON Import */}
             <Card className="bg-white shadow-lg border-0">
               <CardHeader className="p-4 sm:p-6">
                 <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
@@ -893,7 +717,7 @@ export default function TermekekPage() {
                   <div className="text-center py-8 text-gray-500">
                     <Package size={48} className="mx-auto mb-4 text-gray-300" />
                     <p>Még nincsenek termékek az adatbázisban</p>
-                    <p className="text-sm">Add hozzá az első terméket!</p>
+                    <p className="text-sm">Importálj termékeket a JSON import funkcióval!</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">

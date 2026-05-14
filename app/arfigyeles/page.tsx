@@ -37,7 +37,7 @@ export default function ArfigyelesPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [timeRange, setTimeRange] = useState<string>('30')
   const [filterType, setFilterType] = useState<string>('all') // all, increase, decrease
-  const [sortBy, setSortBy] = useState<string>('percent') // percent, amount, date
+  const [sortBy, setSortBy] = useState<string>('date') // percent, amount, date
   
   const [showHistoryDialog, setShowHistoryDialog] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<string>('')

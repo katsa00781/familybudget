@@ -41,6 +41,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# MCP szerver
+mcp/node_modules/
+mcp/dist/
+
 # Mobile app (Expo/React Native)
 mobile/
 # Alternatív részletes megközelítés (ha a fenti nem működne):

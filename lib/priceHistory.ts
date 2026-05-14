@@ -72,6 +72,7 @@ export const getProductPriceHistory = async (
       .eq('user_id', userId)
       .eq('product_name', productName)
       .order('price_date', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(limit);
 
     if (error) {
@@ -108,7 +109,8 @@ export const getPriceChanges = async (
       .eq('user_id', userId)
       .gte('price_date', cutoffDateStr)
       .order('product_name', { ascending: true })
-      .order('price_date', { ascending: true });
+      .order('price_date', { ascending: true })
+      .order('created_at', { ascending: true });
 
     if (error) {
       console.error('❌ Error fetching price changes:', error);
@@ -122,7 +124,7 @@ export const getPriceChanges = async (
 
     console.log('✅ Found', data.length, 'price history records for changes');
 
-    // Csoportosítás termékenként és árváltozások számítása
+    // Csoportosítás termékenként (dátum-növekvő sorrendben)
     const productGroups: { [key: string]: ProductPriceHistory[] } = {};
     data.forEach(record => {
       if (!productGroups[record.product_name]) {
@@ -131,43 +133,73 @@ export const getPriceChanges = async (
       productGroups[record.product_name].push(record);
     });
 
-    const priceChanges: PriceChange[] = [];
-    
-    Object.entries(productGroups).forEach(([productName, records]) => {
-      if (records.length < 2) return; // Kell legalább 2 ár az összehasonlításhoz
+    // Ha valamelyik terméknek csak 1 rekordja van az ablakban, keressük meg
+    // a közvetlenül megelőző (ablak előtti) árát, hogy legyen mihez hasonlítani
+    const singleRecordProducts = Object.entries(productGroups)
+      .filter(([, recs]) => recs.length === 1)
+      .map(([name]) => name);
 
-      for (let i = 1; i < records.length; i++) {
-        const oldRecord = records[i - 1];
-        const newRecord = records[i];
-        
-        const priceDiff = newRecord.unit_price - oldRecord.unit_price;
-        const priceChangePercent = oldRecord.unit_price > 0 
-          ? (priceDiff / oldRecord.unit_price) * 100 
-          : 0;
+    if (singleRecordProducts.length > 0) {
+      const { data: prevData } = await supabase
+        .from('product_price_history')
+        .select('*')
+        .eq('user_id', userId)
+        .lt('price_date', cutoffDateStr)
+        .in('product_name', singleRecordProducts)
+        .order('product_name', { ascending: true })
+        .order('price_date', { ascending: false })
+        .order('created_at', { ascending: false });
 
-        // Csak ha van érdemi változás (több mint 1%)
-        if (Math.abs(priceChangePercent) > 1) {
-          const daysBetween = Math.floor(
-            (new Date(newRecord.price_date).getTime() - new Date(oldRecord.price_date).getTime()) / (1000 * 60 * 60 * 24)
-          );
-
-          priceChanges.push({
-            product_name: productName,
-            product_category: newRecord.product_category || undefined,
-            old_price: oldRecord.unit_price,
-            new_price: newRecord.unit_price,
-            price_difference: priceDiff,
-            price_change_percent: priceChangePercent,
-            old_date: oldRecord.price_date,
-            new_date: newRecord.price_date,
-            store_name: newRecord.store_name || undefined,
-            days_between: daysBetween
-          });
+      // Termékenként csak a legfrissebb ablak-előtti rekordot vesszük
+      const prevByProduct: { [name: string]: ProductPriceHistory } = {};
+      prevData?.forEach(record => {
+        if (!prevByProduct[record.product_name]) {
+          prevByProduct[record.product_name] = record;
         }
+      });
+
+      // Az ablak előtti rekordot az elejére szúrjuk (ez lesz az "old price")
+      Object.entries(prevByProduct).forEach(([name, rec]) => {
+        productGroups[name].unshift(rec);
+      });
+    }
+
+    const priceChanges: PriceChange[] = [];
+
+    Object.entries(productGroups).forEach(([productName, records]) => {
+      if (records.length < 2) return;
+
+      // Csak a legutóbbi változás: utolsó két rekord összehasonlítása
+      const oldRecord = records[records.length - 2];
+      const newRecord = records[records.length - 1];
+
+      const priceDiff = newRecord.unit_price - oldRecord.unit_price;
+      const priceChangePercent = oldRecord.unit_price > 0
+        ? (priceDiff / oldRecord.unit_price) * 100
+        : 0;
+
+      // Csak ha van érdemi változás (több mint 1%)
+      if (Math.abs(priceChangePercent) > 1) {
+        const daysBetween = Math.floor(
+          (new Date(newRecord.price_date).getTime() - new Date(oldRecord.price_date).getTime()) / (1000 * 60 * 60 * 24)
+        );
+
+        priceChanges.push({
+          product_name: productName,
+          product_category: newRecord.product_category || undefined,
+          old_price: oldRecord.unit_price,
+          new_price: newRecord.unit_price,
+          price_difference: priceDiff,
+          price_change_percent: priceChangePercent,
+          old_date: oldRecord.price_date,
+          new_date: newRecord.price_date,
+          store_name: newRecord.store_name || undefined,
+          days_between: daysBetween
+        });
       }
     });
 
-    return priceChanges.sort((a, b) => Math.abs(b.price_change_percent) - Math.abs(a.price_change_percent));
+    return priceChanges;
   } catch (error) {
     console.error('Exception in getPriceChanges:', error);
     return [];

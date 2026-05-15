@@ -239,10 +239,10 @@ export default function TermekekPage() {
         throw new Error('A JSON-nak tömbnek kell lennie!')
       }
 
-      // Meglévő termékek lekérése duplikáció ellenőrzéshez
+      // Meglévő termékek lekérése duplikáció ellenőrzéshez (id-val együtt a frissítéshez)
       const { data: existingProducts, error: fetchError } = await supabase
         .from('products')
-        .select('name, brand, barcode')
+        .select('id, name, brand, barcode, store_name')
         .eq('user_id', currentUser.id)
 
       if (fetchError) throw fetchError
@@ -261,6 +261,7 @@ export default function TermekekPage() {
         available: boolean;
       }> = []
       const productsToUpdate: Array<{
+        id: string;
         name: string;
         price: number;
         category: string;
@@ -268,9 +269,12 @@ export default function TermekekPage() {
         unit: string;
       }> = []
       const skippedWithoutPrice: number[] = []
-      const existingProductsSet = new Set()
-      
-      // ÚJ: Minden JSON elemet statisztikába mentünk (duplikáltakat is)
+      // Set: egyediség-ellenőrzés (meglévő + import közbeni)
+      const existingProductsSet = new Set<string>()
+      // Map: normalizált kulcs → meglévő termék ID-ja (frissítéshez)
+      const existingProductsIdMap = new Map<string, string>()
+
+      // Minden JSON elemet statisztikába mentünk (duplikáltakat is)
       const allItemsForStats: Array<{
         name: string;
         brand: string | null;
@@ -280,15 +284,22 @@ export default function TermekekPage() {
         unit: string;
       }> = []
 
+      // Termék kulcs normalizálása: trim + lowercase
+      const normalizeKey = (name: string, brand: string | null) =>
+        `${name.trim()}|${(brand || '').trim()}`.toLowerCase()
+
       // Meglévő termékek indexelése
       existingProducts?.forEach(product => {
         // Vonalkód alapú egyediség (ha van vonalkód)
-        if (product.barcode) {
-          existingProductsSet.add(`barcode:${product.barcode}`)
+        if (product.barcode && product.barcode.trim()) {
+          const barcodeKey = `barcode:${product.barcode.trim()}`
+          existingProductsSet.add(barcodeKey)
+          existingProductsIdMap.set(barcodeKey, product.id)
         }
         // Név + márka alapú egyediség
-        const key = `${product.name}|${product.brand || ''}`.toLowerCase()
+        const key = normalizeKey(product.name, product.brand)
         existingProductsSet.add(key)
+        existingProductsIdMap.set(key, product.id)
       })
 
       jsonData.forEach((item: {
@@ -339,22 +350,26 @@ export default function TermekekPage() {
         }
 
         // Duplikáció ellenőrzés CSAK a products táblához
-        let isDuplicate = false
-        
+        let existingId: string | undefined
+
         // 1. Vonalkód alapú ellenőrzés (ha van)
-        if (productBarcode && existingProductsSet.has(`barcode:${productBarcode}`)) {
-          isDuplicate = true
-        }
-        
-        // 2. Név + márka alapú ellenőrzés
-        const nameKey = `${productName}|${productBrand || ''}`.toLowerCase()
-        if (existingProductsSet.has(nameKey)) {
-          isDuplicate = true
+        if (productBarcode && productBarcode.trim()) {
+          const barcodeKey = `barcode:${productBarcode.trim()}`
+          if (existingProductsSet.has(barcodeKey)) {
+            existingId = existingProductsIdMap.get(barcodeKey)
+          }
         }
 
-        if (isDuplicate) {
+        // 2. Név + márka alapú ellenőrzés (ha vonalkód nem talált)
+        const nameKey = normalizeKey(productName, productBrand)
+        if (!existingId && existingProductsSet.has(nameKey)) {
+          existingId = existingProductsIdMap.get(nameKey)
+        }
+
+        if (existingId) {
           if (productPrice && productPrice > 0) {
             productsToUpdate.push({
+              id: existingId,
               name: productName,
               price: productPrice,
               category: productCategory,
@@ -383,8 +398,10 @@ export default function TermekekPage() {
         })
 
         // Indexhez hozzáadás, hogy az importon belüli duplikációkat is elkerüljük
-        if (productBarcode) {
-          existingProductsSet.add(`barcode:${productBarcode}`)
+        if (productBarcode && productBarcode.trim()) {
+          const bk = `barcode:${productBarcode.trim()}`
+          existingProductsSet.add(bk)
+          // ID még nem ismert (insert után lesz) — csak a Set-be kerül
         }
         existingProductsSet.add(nameKey)
       })
@@ -427,17 +444,22 @@ export default function TermekekPage() {
       if (productsToUpdate.length > 0) {
         const currentDate = new Date().toISOString().split('T')[0]
         const updatePromises = productsToUpdate.map(async (product) => {
+          // ID alapú frissítés — nem névegyeztetéssel, hogy biztosan a jó sort érjük el
           await supabase
             .from('products')
-            .update({ price: product.price })
-            .eq('user_id', currentUser.id)
-            .eq('name', product.name)
+            .update({
+              price: product.price,
+              store_name: product.store_name,
+              last_seen_at: new Date().toISOString()
+            })
+            .eq('id', product.id)
 
           await savePriceHistory(
             currentUser.id,
             product.name,
             product.price,
             {
+              productId: product.id,
               productCategory: product.category,
               storeName: product.store_name ?? undefined,
               unit: product.unit,

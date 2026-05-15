@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { BudgetCategory, BudgetItem } from '../../types/budget'
+import { WALLET_CATEGORIES, OLD_SUBCATEGORY_TO_IDS } from '@/lib/walletCategories'
 import {
   Select,
   SelectContent,
@@ -162,25 +163,44 @@ const parseWalletCsv = (content: string): WalletRecord[] => {
   return records
 }
 
-const mapWalletCategoryCompatibility = (category: BudgetCategoryCompat): BudgetCategory => {
-  let walletCategories = category.walletCategories || []
+type OldWalletCategory = { mainCategory: string; subCategories: string[] }
 
-  if (category.walletMainCategory && !category.walletCategories) {
-    walletCategories = [{
-      mainCategory: category.walletMainCategory,
-      subCategories: category.walletSubCategory ? [category.walletSubCategory] : []
-    }]
-  } else if (category.walletMainCategory && category.walletSubCategories && !category.walletCategories) {
-    walletCategories = [{
-      mainCategory: category.walletMainCategory,
-      subCategories: category.walletSubCategories
-    }]
+function convertOldWalletCatsToIds(raw: unknown): string[] {
+  if (!Array.isArray(raw) || raw.length === 0) return []
+  if (typeof raw[0] === 'string') return raw as string[]
+  // Régi objektum formátum
+  const ids: string[] = []
+  for (const wc of raw as OldWalletCategory[]) {
+    for (const sub of wc.subCategories || []) {
+      const mapped = OLD_SUBCATEGORY_TO_IDS[sub]
+      if (mapped) ids.push(...mapped)
+    }
+    if ((wc.subCategories || []).length === 0) {
+      const mapped = OLD_SUBCATEGORY_TO_IDS[wc.mainCategory]
+      if (mapped) ids.push(...mapped)
+    }
+  }
+  return [...new Set(ids)]
+}
+
+const mapWalletCategoryCompatibility = (category: BudgetCategoryCompat): BudgetCategory => {
+  let walletCategoryIds: string[]
+
+  if (category.walletCategories) {
+    walletCategoryIds = convertOldWalletCatsToIds(category.walletCategories)
+  } else if (category.walletMainCategory) {
+    const subs = category.walletSubCategory
+      ? [category.walletSubCategory]
+      : (category.walletSubCategories || [])
+    walletCategoryIds = convertOldWalletCatsToIds([{ mainCategory: category.walletMainCategory, subCategories: subs }])
+  } else {
+    walletCategoryIds = []
   }
 
   return {
     name: category.name,
     items: category.items?.map((item) => ({ ...item })) || [],
-    walletCategories
+    walletCategories: walletCategoryIds
   }
 }
 
@@ -236,18 +256,22 @@ const normalizeBudgetCategories = (payload: BudgetStoragePayload): BudgetCategor
 }
 
 const buildWalletCategoryMap = (categories: BudgetCategory[]) => {
-  const mapping = new Map<string, string>()
+  // UUID → budget kategória neve
+  const uuidToBudget = new Map<string, string>()
   categories.forEach((category) => {
-    category.walletCategories?.forEach((walletCategory) => {
-      if (walletCategory.mainCategory) {
-        mapping.set(walletCategory.mainCategory, category.name)
-      }
-      walletCategory.subCategories?.forEach((subCategory) => {
-        mapping.set(subCategory, category.name)
-      })
+    category.walletCategories?.forEach((id) => {
+      uuidToBudget.set(id, category.name)
     })
   })
-  return mapping
+
+  // Wallet kategória neve → budget kategória neve (CSV rekordokhoz)
+  const nameMapping = new Map<string, string>()
+  WALLET_CATEGORIES.forEach((wc) => {
+    const budgetCat = uuidToBudget.get(wc.id)
+    if (budgetCat) nameMapping.set(wc.name, budgetCat)
+  })
+
+  return nameMapping
 }
 
 const filterRecordsByMonth = (records: WalletRecord[], monthKey: string): WalletRecord[] => {

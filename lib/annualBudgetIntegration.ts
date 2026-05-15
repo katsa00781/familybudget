@@ -15,10 +15,7 @@ interface BudgetItem {
 interface BudgetCategory {
   name: string
   items: BudgetItem[]
-  walletCategories?: Array<{
-    mainCategory: string
-    subCategories: string[]
-  }>
+  walletCategories?: string[] // Wallet kategória UUID-k tömbje
 }
 
 /**

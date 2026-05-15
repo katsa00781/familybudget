@@ -11,6 +11,12 @@ function isValidEmail(email: string) {
 export async function login(formData: FormData) {
   const email = (formData.get("email") as string)?.trim();
   const password = formData.get("password") as string;
+  const redirectTo = (formData.get("redirectTo") as string) || "/attekintes";
+
+  const safeRedirect =
+    redirectTo.startsWith("/") && !redirectTo.startsWith("//")
+      ? redirectTo
+      : "/attekintes";
 
   if (!email || !isValidEmail(email) || !password) {
     redirect("/login?error=login_failed");
@@ -28,7 +34,7 @@ export async function login(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/attekintes");
+  redirect(safeRedirect);
 }
 
 export async function signup(formData: FormData) {

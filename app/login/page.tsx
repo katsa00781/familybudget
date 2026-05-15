@@ -20,27 +20,32 @@ import { toast } from "sonner";
 function LoginContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirect') || '/attekintes';
 
   useEffect(() => {
     const error = searchParams.get('error');
-    
+    if (!error) return;
+
     if (error === 'login_failed') {
       toast.error(
-        "Bejelentkezés sikertelen! ❌", 
+        "Bejelentkezés sikertelen!",
         {
           description: "Helytelen email cím vagy jelszó. Kérjük, próbálja újra.",
           duration: 5000,
+          id: `login-error-${Date.now()}`,
         }
       );
     }
-    
+
     if (error === 'email_not_confirmed') {
       toast.warning(
-        "Email megerősítés szükséges! ⚠️", 
+        "Email megerősítés szükséges!",
         {
           description: "Kérjük, ellenőrizze email fiókját és erősítse meg a regisztrációt a bejelentkezés előtt.",
           duration: 8000,
+          id: `email-error-${Date.now()}`,
         }
       );
     }
@@ -87,7 +92,8 @@ function LoginContent() {
             <h2 className="text-2xl font-bold text-familybudget-blue mb-2">Bejelentkezés</h2>
           </div>
 
-          <form action={login} className="space-y-6">
+          <form action={login} className="space-y-6" onSubmit={() => setIsLoading(true)}>
+            <input type="hidden" name="redirectTo" value={redirectTo} />
             {/* Email mező */}
             <div className="space-y-2">
               <Label htmlFor="email" className="text-gray-700">Email cím</Label>
@@ -150,10 +156,11 @@ function LoginContent() {
             {/* Bejelentkezés gomb */}
             <Button
               type="submit"
+              disabled={isLoading}
               className="w-full h-12 bg-familybudget-teal hover:bg-familybudget-teal/90 text-white font-medium text-lg border-0"
               style={{ backgroundColor: '#00B4DB', color: 'white' }}
             >
-              Bejelentkezés
+              {isLoading ? "Bejelentkezés..." : "Bejelentkezés"}
             </Button>
 
             {/* Regisztráció link */}

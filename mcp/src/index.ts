@@ -4,6 +4,8 @@ import { z } from 'zod'
 import { budgetComparisonHandler } from './tools/budget-comparison.js'
 import { savePriceHistoryHandler, getPriceChangesHandler } from './tools/price-history.js'
 import { getInflationReportHandler } from './tools/inflation.js'
+import { getProductsHandler } from './tools/products.js'
+import { getShoppingStatisticsHandler } from './tools/shopping-statistics.js'
 
 const server = new McpServer({
   name: 'familybudget',
@@ -66,6 +68,33 @@ server.tool(
     months_back: z.number().optional().describe('Hány hónapra visszamenőleg — default: 12')
   },
   getInflationReportHandler
+)
+
+server.tool(
+  'get_products',
+  'Termékadatbázis lekérése. Szűrhető kategória, bolt, névkeresés és elérhetőség szerint. ' +
+  'Ugyanaz az adatforrás, mint a /termekek oldal.',
+  {
+    category: z.string().optional().describe('Kategória szűrő, pl. "Tejtermékek", "Pékáruk", "Húsok"'),
+    store_name: z.string().optional().describe('Bolt neve szerinti szűrő, pl. "Lidl", "Tesco"'),
+    search: z.string().optional().describe('Névrészlet szerinti keresés (kis-nagybetű érzéketlen)'),
+    available_only: z.boolean().optional().describe('Csak elérhető termékek — default: false'),
+    limit: z.number().optional().describe('Max visszaadott rekordok száma — default: 200')
+  },
+  getProductsHandler
+)
+
+server.tool(
+  'get_shopping_statistics',
+  'Bevásárlási statisztikák lekérése a shopping_statistics táblából. ' +
+  'Ugyanaz az adatforrás, mint a /statisztika oldal vásárlási összesítői. ' +
+  'Visszaad összesítőket idő, termék, kategória és bolt szerint.',
+  {
+    start_date: z.string().optional().describe('Kezdő dátum YYYY-MM-DD formátumban'),
+    end_date: z.string().optional().describe('Záró dátum YYYY-MM-DD formátumban'),
+    group_by: z.enum(['day', 'week', 'month']).optional().describe('Időbeli csoportosítás — default: "month"')
+  },
+  getShoppingStatisticsHandler
 )
 
 const transport = new StdioServerTransport()

@@ -134,15 +134,31 @@ Migrációk helye: `supabase/migrations/`. Az összes tábla egybén is létreho
 
 ## Bérkalkulátor specifikus info
 
-A `KULCSOK` konstans az aktuális 2025-ös bérpapír adatain alapul:
+A `KULCSOK` konstans az aktuális 2026-os bérpapír (MVM bérjegyzék) adatain alapul:
 - TB járulék: 18.5%
 - SZJA: 15%
-- Műszakpótlék: 45%
-- Túlórapótlék: 150%
-- Ünnepnapi szorzó: 200%
+- Műszakpótlék: 45% (minden ledolgozott + túlóra órára)
 - Betegszabadság: 70%
 
-A kalkuláció a `salary_calculations` táblába mentődik, a `name` mezővel azonosítható, és visszatölthető módosításhoz.
+### Túlóra-pótlékok (KSZ szerint)
+
+A túlóra alap-órabére `alapbér / 157` (`TULORA_OSZTÓ` — műszakos éves átlag 1884 h/év = 157 h/hó).
+Minden túlóra-órára jár a 100% alap (a *Túlóraalap* tételben) **és** +45% műszakpótlék. Ezen felül a
+pótlékok:
+
+| Kategória | Bemenet | Pótlék (alap fölött) |
+|-----------|---------|----------------------|
+| **12 órás műszak** (sávos napi túlóra) | db (műszak) | 1 műszak = 4 TÓ-óra: első 2 óra +50%, 3-4. óra +70% (4 óra felett +100%) |
+| **Pihenőnapi túlóra** | óra | +125% (nem sávos) |
+| **Munkaszüneti túlóra** | óra | +225% |
+| **Munkaszüneti munkavégzés** (rostán) | óra | +100% + 45% műszakpótlék |
+
+A sávos kulcsokat a januári bérjegyzék *Üzemz.TÓ munkanapi 0-2óra / 3-4óra / 5.óra* sorai igazolják.
+
+A kalkuláció a `salary_calculations` táblába mentődik (a túlóra-kategóriák a `tizenket_oras_muszak`,
+`pihenonapi_tulora_orak`, `munkaszuneti_tulora_orak` oszlopokba — lásd migráció `012`), a `name`
+mezővel azonosítható, és visszatölthető módosításhoz. A régi `tulora_orak` / `muszakpotlek_orak`
+oszlopok legacy státuszúak (0-ra mentve).
 
 ## Statisztika oldal — Wallet CSV import
 

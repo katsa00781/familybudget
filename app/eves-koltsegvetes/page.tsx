@@ -10,14 +10,17 @@ import { Separator } from '@/src/components/ui/separator'
 import { Label } from '@/src/components/ui/label'
 import { Textarea } from '@/src/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select'
-import { 
-  Calendar, Plus, Trash2, Save, TrendingUp, PiggyBank, 
-  DollarSign, Target, AlertCircle, Check, Calculator
+import {
+  Plus, Trash2, Save, TrendingUp, PiggyBank,
+  DollarSign, Target, AlertCircle, Check,
+  Wallet, Scale, ArrowDownUp
 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { 
-  AnnualBudgetPlan, MonthlyIncome, AnnualExpense, 
-  RecurringExpense, MonthlySavingsPlan, MonthlyBudgetSummary 
+import { getActiveBudgetPlan } from '@/lib/userPreferences'
+import type {
+  AnnualBudgetPlan, MonthlyIncome, AnnualExpense,
+  RecurringExpense, MonthlySavingsPlan,
+  MonthlyBudgetedExpense, CashflowMonth
 } from '@/types/annual-budget'
 
 const MONTHS = [
@@ -43,11 +46,23 @@ export default function EvesKoltsegvetesPage() {
   const [planDescription, setPlanDescription] = useState('')
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   
+  // Cashflow: év nyitó egyenleg és cél év végi egyenleg
+  const [openingBalance, setOpeningBalance] = useState(0)
+  const [targetEndBalance, setTargetEndBalance] = useState(0)
+
+  // Havi általános (megélhetési) kiadások — a cashflow fő kiadás-vivője
+  const [monthlyBudgetedExpenses, setMonthlyBudgetedExpenses] = useState<MonthlyBudgetedExpense[]>(
+    Array.from({ length: 12 }, (_, i) => ({ month: i + 1, amount: 0 }))
+  )
+
+  // Aktív havi költségvetés összege (alapérték a havi kiadásokhoz)
+  const [activeBudgetTotal, setActiveBudgetTotal] = useState(0)
+
   // Havi bevételek (12 hónap)
   const [monthlyIncomes, setMonthlyIncomes] = useState<MonthlyIncome[]>(
     Array.from({ length: 12 }, (_, i) => ({ month: i + 1, amount: 0 }))
   )
-  
+
   // Nagyobb éves kiadások
   const [annualExpenses, setAnnualExpenses] = useState<AnnualExpense[]>([])
   
@@ -70,12 +85,25 @@ export default function EvesKoltsegvetesPage() {
     getUser()
   }, [supabase.auth])
 
-  // Mentett tervek betöltése
+  // Mentett tervek és aktív havi költségvetés betöltése
   useEffect(() => {
     if (currentUser) {
       loadSavedPlans()
+      loadActiveBudgetTotal()
     }
   }, [currentUser])
+
+  // Aktív havi költségvetés összegének betöltése (alapérték a havi kiadásokhoz)
+  const loadActiveBudgetTotal = async () => {
+    try {
+      const plan = await getActiveBudgetPlan(currentUser.id)
+      if (plan?.total_amount) {
+        setActiveBudgetTotal(plan.total_amount)
+      }
+    } catch (error) {
+      console.error('Hiba az aktív költségvetés betöltésekor:', error)
+    }
+  }
 
   const loadSavedPlans = async () => {
     try {
@@ -96,9 +124,26 @@ export default function EvesKoltsegvetesPage() {
 
   // Havi bevétel frissítése
   const updateMonthlyIncome = (month: number, amount: number) => {
-    setMonthlyIncomes(prev => 
+    setMonthlyIncomes(prev =>
       prev.map(mi => mi.month === month ? { ...mi, amount } : mi)
     )
+  }
+
+  // Havi általános kiadás frissítése
+  const updateMonthlyBudgetedExpense = (month: number, amount: number) => {
+    setMonthlyBudgetedExpenses(prev =>
+      prev.map(me => me.month === month ? { ...me, amount } : me)
+    )
+  }
+
+  // Mind a 12 hónap feltöltése az aktív havi költségvetés összegével
+  const fillFromActiveBudget = () => {
+    if (activeBudgetTotal <= 0) {
+      toast.error('Nincs aktív havi költségvetés, vagy az összege 0.')
+      return
+    }
+    setMonthlyBudgetedExpenses(prev => prev.map(me => ({ ...me, amount: activeBudgetTotal })))
+    toast.success(`Minden hónap feltöltve: ${activeBudgetTotal.toLocaleString('hu-HU')} Ft`)
   }
 
   // Új éves kiadás hozzáadása
@@ -190,24 +235,42 @@ export default function EvesKoltsegvetesPage() {
     return plan
   }
 
-  // Havi összefoglalók számítása
-  const getMonthlyBudgetSummaries = (): MonthlyBudgetSummary[] => {
-    const savingsPlan = calculateMonthlySavingsPlan()
-    
+  // Éves cashflow számítása — göngyölített egyenleggel
+  const getCashflow = (): CashflowMonth[] => {
+    let running = openingBalance
+
     return MONTHS.map((monthName, index) => {
       const month = index + 1
       const income = monthlyIncomes.find(mi => mi.month === month)?.amount || 0
-      const savings = savingsPlan.find(sp => sp.month === month)?.totalAmount || 0
+
       const recurring = recurringExpenses.filter(re => re.month === month)
       const recurringTotal = recurring.reduce((sum, re) => sum + re.amount, 0)
-      
+
+      // Valódi cashflow: a nagy kiadás teljes összege a célhónapban esedékes
+      const annualDue = annualExpenses.filter(e => e.targetMonth === month)
+      const annualDueTotal = annualDue.reduce((sum, e) => sum + e.amount, 0)
+
+      const generalExpense = monthlyBudgetedExpenses.find(me => me.month === month)?.amount || 0
+
+      const totalExpense = recurringTotal + annualDueTotal + generalExpense
+      const netCashflow = income - totalExpense
+
+      const opening = running
+      running += netCashflow
+
       return {
         month,
         monthName,
         income,
-        plannedSavings: savings,
+        recurringTotal,
+        annualDueTotal,
+        generalExpense,
+        totalExpense,
+        netCashflow,
+        openingBalance: opening,
+        closingBalance: running,
         recurringExpenses: recurring,
-        availableForBudget: income - savings - recurringTotal
+        annualExpensesDue: annualDue
       }
     })
   }
@@ -217,8 +280,9 @@ export default function EvesKoltsegvetesPage() {
     const totalIncome = monthlyIncomes.reduce((sum, mi) => sum + mi.amount, 0)
     const totalAnnualExpenses = annualExpenses.reduce((sum, e) => sum + e.amount, 0)
     const totalRecurringExpenses = recurringExpenses.reduce((sum, e) => sum + e.amount, 0)
-    
-    return { totalIncome, totalAnnualExpenses, totalRecurringExpenses }
+    const totalGeneralExpenses = monthlyBudgetedExpenses.reduce((sum, me) => sum + me.amount, 0)
+
+    return { totalIncome, totalAnnualExpenses, totalRecurringExpenses, totalGeneralExpenses }
   }
 
   // Terv mentése
@@ -247,6 +311,9 @@ export default function EvesKoltsegvetesPage() {
         annual_expenses: annualExpenses,
         recurring_expenses: recurringExpenses,
         monthly_savings_plan: savingsPlan,
+        opening_balance: openingBalance,
+        monthly_budgeted_expenses: monthlyBudgetedExpenses,
+        target_end_balance: targetEndBalance,
         total_annual_income: totalIncome,
         total_annual_expenses: totalAnnualExpenses,
         total_recurring_expenses: totalRecurringExpenses
@@ -306,6 +373,13 @@ export default function EvesKoltsegvetesPage() {
       setAnnualExpenses(data.annual_expenses)
       setRecurringExpenses(data.recurring_expenses)
       setMonthlySavingsPlan(data.monthly_savings_plan)
+      setOpeningBalance(data.opening_balance ?? 0)
+      setTargetEndBalance(data.target_end_balance ?? 0)
+      setMonthlyBudgetedExpenses(
+        data.monthly_budgeted_expenses?.length
+          ? data.monthly_budgeted_expenses
+          : Array.from({ length: 12 }, (_, i) => ({ month: i + 1, amount: 0 }))
+      )
 
       toast.success('Terv betöltve!')
     } catch (error) {
@@ -324,10 +398,17 @@ export default function EvesKoltsegvetesPage() {
     setAnnualExpenses([])
     setRecurringExpenses([])
     setMonthlySavingsPlan([])
+    setOpeningBalance(0)
+    setTargetEndBalance(0)
+    setMonthlyBudgetedExpenses(Array.from({ length: 12 }, (_, i) => ({ month: i + 1, amount: 0 })))
   }
 
-  const { totalIncome, totalAnnualExpenses, totalRecurringExpenses } = calculateTotals()
-  const monthlyBudgetSummaries = getMonthlyBudgetSummaries()
+  const { totalIncome, totalAnnualExpenses, totalRecurringExpenses, totalGeneralExpenses } = calculateTotals()
+  const cashflow = getCashflow()
+  const yearEndBalance = cashflow[cashflow.length - 1]?.closingBalance ?? openingBalance
+  const totalExpenses = totalAnnualExpenses + totalRecurringExpenses + totalGeneralExpenses
+  const hasNegativeMonth = cashflow.some(c => c.closingBalance < 0)
+  const balanceDiff = yearEndBalance - targetEndBalance
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-3 sm:p-4 md:p-6 relative overflow-hidden">
@@ -338,14 +419,14 @@ export default function EvesKoltsegvetesPage() {
         <div className="mb-4 md:mb-6 bg-white/80 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/20">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
             <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl shadow-lg animate-pulse-slow">
-              <Calendar className="text-white" size={32} />
+              <ArrowDownUp className="text-white" size={32} />
             </div>
             <div className="flex-1">
               <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 bg-clip-text text-transparent tracking-tight leading-tight">
-                Éves Költségvetés Tervező
+                Éves Cashflow
               </h1>
               <p className="text-sm sm:text-base md:text-lg text-gray-600 font-medium mt-2">
-                Tervezd meg az éves bevételeidet, nagyobb kiadásaidat és a megtakarítás ütemezését
+                Kövesd a havi nettó egyenleget és a göngyölített pénzállományt — a cél az év végi egyensúly
               </p>
             </div>
           </div>
@@ -419,6 +500,30 @@ export default function EvesKoltsegvetesPage() {
                     </Select>
                   </div>
                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-semibold text-gray-700">Nyitó egyenleg (Ft)</Label>
+                    <Input
+                      type="number"
+                      value={openingBalance || ''}
+                      onChange={(e) => setOpeningBalance(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                      className="mt-1 border-2 border-gray-200 focus:border-emerald-400 transition-colors rounded-xl font-mono"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Induló pénzállomány az év elején</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-semibold text-gray-700">Cél év végi egyenleg (Ft)</Label>
+                    <Input
+                      type="number"
+                      value={targetEndBalance || ''}
+                      onChange={(e) => setTargetEndBalance(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                      className="mt-1 border-2 border-gray-200 focus:border-emerald-400 transition-colors rounded-xl font-mono"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Egyensúly = 0, pozitív = tervezett többlet</p>
+                  </div>
+                </div>
                 <div>
                   <Label className="text-sm font-semibold text-gray-700">Leírás (opcionális)</Label>
                   <Textarea
@@ -467,6 +572,65 @@ export default function EvesKoltsegvetesPage() {
                     <span className="text-sm font-semibold text-green-800">Éves bevétel összesen:</span>
                     <span className="text-lg font-extrabold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
                       {totalIncome.toLocaleString('hu-HU')} Ft
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Havi általános kiadások */}
+            <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                      <div className="p-1.5 bg-gradient-to-br from-rose-500 to-pink-600 rounded-lg">
+                        <Wallet size={18} className="text-white" />
+                      </div>
+                      <span className="bg-gradient-to-r from-rose-600 to-pink-600 bg-clip-text text-transparent">
+                        Havi kiadások (költségvetés)
+                      </span>
+                    </CardTitle>
+                    <CardDescription className="text-sm mt-1">
+                      A havi megélhetési költség, ami a göngyölített egyenleget viszi
+                    </CardDescription>
+                  </div>
+                  <Button
+                    onClick={fillFromActiveBudget}
+                    size="sm"
+                    variant="outline"
+                    className="border-2 border-rose-200 hover:border-rose-400 hover:bg-rose-50 text-rose-600 transition-all rounded-xl shrink-0"
+                  >
+                    <Wallet size={14} className="mr-1" />
+                    Aktív költségvetésből
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {activeBudgetTotal > 0 && (
+                  <p className="text-xs text-gray-500 mb-3">
+                    Aktív havi költségvetés: <span className="font-semibold text-rose-600">{activeBudgetTotal.toLocaleString('hu-HU')} Ft</span> — a gombbal mind a 12 hónapra kitölthető, majd havonta felülírható.
+                  </p>
+                )}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {MONTHS.map((month, index) => (
+                    <div key={index}>
+                      <Label className="text-xs font-semibold text-gray-700">{month}</Label>
+                      <Input
+                        type="number"
+                        value={monthlyBudgetedExpenses[index].amount || ''}
+                        onChange={(e) => updateMonthlyBudgetedExpense(index + 1, parseInt(e.target.value) || 0)}
+                        placeholder="0"
+                        className="mt-1 h-9 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors rounded-xl font-mono"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 p-3 bg-gradient-to-br from-rose-50 to-pink-50 rounded-xl border-2 border-rose-200/50">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-rose-800">Éves általános kiadás összesen:</span>
+                    <span className="text-lg font-extrabold bg-gradient-to-r from-rose-600 to-pink-600 bg-clip-text text-transparent">
+                      {totalGeneralExpenses.toLocaleString('hu-HU')} Ft
                     </span>
                   </div>
                 </div>
@@ -750,76 +914,100 @@ export default function EvesKoltsegvetesPage() {
             </div>
           </div>
 
-          {/* Jobb oldal: Havi összefoglalók */}
+          {/* Jobb oldal: Éves cashflow */}
           <div className="space-y-4 md:space-y-6">
             <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl">
               <CardHeader>
                 <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-2">
                   <div className="p-1.5 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-lg">
-                    <Calculator size={18} className="text-white" />
+                    <ArrowDownUp size={18} className="text-white" />
                   </div>
                   <span className="bg-gradient-to-r from-teal-600 to-cyan-600 bg-clip-text text-transparent">
-                    Havi összefoglalók
+                    Éves cashflow
                   </span>
                 </CardTitle>
                 <CardDescription className="text-sm">
-                  Bevétel, megtakarítás és rendelkezésre álló összeg havonta
+                  Havi nettó és göngyölített egyenleg — nyitóból kiindulva
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 max-h-[800px] overflow-y-auto">
-                {monthlyBudgetSummaries.map((summary) => (
+                <div className="flex justify-between items-center text-sm px-1 pb-1 text-gray-500">
+                  <span>Nyitó egyenleg:</span>
+                  <span className={`font-bold ${openingBalance >= 0 ? 'text-gray-700' : 'text-red-600'}`}>
+                    {openingBalance.toLocaleString('hu-HU')} Ft
+                  </span>
+                </div>
+                {cashflow.map((c) => (
                   <div
-                    key={summary.month}
-                    className="p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-gray-200/50 shadow-sm hover:shadow-md transition-shadow"
+                    key={c.month}
+                    className={`p-4 rounded-xl border-2 shadow-sm hover:shadow-md transition-shadow ${
+                      c.closingBalance < 0
+                        ? 'bg-gradient-to-br from-red-50 to-rose-50 border-red-200/60'
+                        : 'bg-gradient-to-br from-gray-50 to-white border-gray-200/50'
+                    }`}
                   >
                     <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-bold text-gray-900">{summary.monthName}</h4>
-                      {summary.availableForBudget < 0 && (
+                      <h4 className="font-bold text-gray-900">{c.monthName}</h4>
+                      {c.closingBalance < 0 ? (
                         <Badge variant="destructive" className="text-xs">
                           <AlertCircle size={12} className="mr-1" />
-                          Deficit
+                          Likviditási hiány
                         </Badge>
-                      )}
-                      {summary.availableForBudget >= 0 && summary.plannedSavings > 0 && (
+                      ) : c.netCashflow >= 0 ? (
                         <Badge className="text-xs bg-green-500 text-white border-0">
-                          <Check size={12} className="mr-1" />
-                          Terv szerint
+                          <TrendingUp size={12} className="mr-1" />
+                          Pozitív
+                        </Badge>
+                      ) : (
+                        <Badge className="text-xs bg-amber-500 text-white border-0">
+                          Negatív hó
                         </Badge>
                       )}
                     </div>
-                    <div className="space-y-2 text-sm">
+                    <div className="space-y-1.5 text-sm">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Bevétel:</span>
                         <span className="font-semibold text-green-600">
-                          +{summary.income.toLocaleString('hu-HU')} Ft
+                          +{c.income.toLocaleString('hu-HU')} Ft
                         </span>
                       </div>
-                      {summary.plannedSavings > 0 && (
+                      {c.generalExpense > 0 && (
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Megtakarítás:</span>
-                          <span className="font-semibold text-orange-600">
-                            -{summary.plannedSavings.toLocaleString('hu-HU')} Ft
+                          <span className="text-gray-600">Havi kiadás:</span>
+                          <span className="font-semibold text-rose-600">
+                            -{c.generalExpense.toLocaleString('hu-HU')} Ft
                           </span>
                         </div>
                       )}
-                      {summary.recurringExpenses.length > 0 && (
-                        <div>
-                          <span className="text-gray-600">Ismétlődő kiadások:</span>
-                          {summary.recurringExpenses.map(re => (
-                            <div key={re.id} className="flex justify-between ml-2 mt-1">
-                              <span className="text-xs text-gray-500">{re.name}:</span>
-                              <span className="text-xs font-semibold text-purple-600">
-                                -{re.amount.toLocaleString('hu-HU')} Ft
-                              </span>
-                            </div>
-                          ))}
+                      {c.recurringTotal > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Ismétlődő:</span>
+                          <span className="font-semibold text-purple-600">
+                            -{c.recurringTotal.toLocaleString('hu-HU')} Ft
+                          </span>
+                        </div>
+                      )}
+                      {c.annualDueTotal > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">
+                            Nagy kiadás{c.annualExpensesDue.length === 1 ? ` (${c.annualExpensesDue[0].name || '–'})` : ''}:
+                          </span>
+                          <span className="font-semibold text-orange-600">
+                            -{c.annualDueTotal.toLocaleString('hu-HU')} Ft
+                          </span>
                         </div>
                       )}
                       <Separator className="my-2" />
                       <div className="flex justify-between">
-                        <span className="font-semibold text-gray-700">Költségvetésre:</span>
-                        <span className={`font-bold ${summary.availableForBudget >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                          {summary.availableForBudget.toLocaleString('hu-HU')} Ft
+                        <span className="font-semibold text-gray-700">Havi nettó:</span>
+                        <span className={`font-bold ${c.netCashflow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {c.netCashflow >= 0 ? '+' : ''}{c.netCashflow.toLocaleString('hu-HU')} Ft
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-gray-700">Göngyölített egyenleg:</span>
+                        <span className={`font-extrabold ${c.closingBalance >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                          {c.closingBalance.toLocaleString('hu-HU')} Ft
                         </span>
                       </div>
                     </div>
@@ -831,31 +1019,58 @@ export default function EvesKoltsegvetesPage() {
             {/* Összesítő */}
             <Card className="bg-gradient-to-br from-teal-500 to-cyan-600 text-white shadow-2xl border border-white/20 rounded-2xl">
               <CardHeader>
-                <CardTitle className="text-lg font-bold">Éves összesítő</CardTitle>
+                <CardTitle className="text-lg font-bold flex items-center gap-2">
+                  <Scale size={20} />
+                  Éves egyensúly
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex justify-between items-center">
+                  <span className="text-white/90">Nyitó egyenleg:</span>
+                  <span className="text-xl font-bold">{openingBalance.toLocaleString('hu-HU')} Ft</span>
+                </div>
+                <div className="flex justify-between items-center">
                   <span className="text-white/90">Összes bevétel:</span>
-                  <span className="text-2xl font-bold">{totalIncome.toLocaleString('hu-HU')} Ft</span>
+                  <span className="text-xl font-bold">+{totalIncome.toLocaleString('hu-HU')} Ft</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-white/90">Nagyobb kiadások:</span>
-                  <span className="text-2xl font-bold">-{totalAnnualExpenses.toLocaleString('hu-HU')} Ft</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-white/90">Ismétlődő kiadások:</span>
-                  <span className="text-2xl font-bold">-{totalRecurringExpenses.toLocaleString('hu-HU')} Ft</span>
+                  <span className="text-white/90">Összes kiadás:</span>
+                  <span className="text-xl font-bold">-{totalExpenses.toLocaleString('hu-HU')} Ft</span>
                 </div>
                 <Separator className="bg-white/20" />
                 <div className="flex justify-between items-center">
-                  <span className="font-bold text-lg">Maradvány:</span>
-                  <span className={`text-3xl font-extrabold ${
-                    (totalIncome - totalAnnualExpenses - totalRecurringExpenses) >= 0 
-                      ? 'text-white' 
-                      : 'text-red-200'
-                  }`}>
-                    {(totalIncome - totalAnnualExpenses - totalRecurringExpenses).toLocaleString('hu-HU')} Ft
+                  <span className="font-bold text-lg">Év végi egyenleg:</span>
+                  <span className={`text-3xl font-extrabold ${yearEndBalance >= 0 ? 'text-white' : 'text-red-200'}`}>
+                    {yearEndBalance.toLocaleString('hu-HU')} Ft
                   </span>
+                </div>
+
+                {/* Egyensúly státusz */}
+                <div className="mt-2 p-3 rounded-xl bg-white/15 backdrop-blur border border-white/20">
+                  {Math.abs(balanceDiff) === 0 ? (
+                    <div className="flex items-center gap-2 font-semibold">
+                      <Check size={18} /> Egyensúlyban a cél szerint
+                    </div>
+                  ) : balanceDiff > 0 ? (
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-2 font-semibold">
+                        <TrendingUp size={18} /> Többlet a célhoz képest
+                      </span>
+                      <span className="font-bold">+{balanceDiff.toLocaleString('hu-HU')} Ft</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between text-red-100">
+                      <span className="flex items-center gap-2 font-semibold">
+                        <AlertCircle size={18} /> Hiány a célhoz képest
+                      </span>
+                      <span className="font-bold">{balanceDiff.toLocaleString('hu-HU')} Ft</span>
+                    </div>
+                  )}
+                  {hasNegativeMonth && (
+                    <p className="text-xs text-red-100 mt-2 flex items-center gap-1">
+                      <AlertCircle size={12} /> Év közben van negatív göngyölített egyenleg (likviditási hiány)
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>

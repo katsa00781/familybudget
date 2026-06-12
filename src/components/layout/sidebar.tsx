@@ -14,7 +14,7 @@ import {
   ShoppingCart, TrendingUpIcon, Package, PiggyBank,
   Users, Home, HelpCircle, TrendingUp, BarChart3, Calendar
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useUserProfile } from '@/src/hooks/useUserProfile';
 
 interface SidebarProps {
@@ -23,13 +23,17 @@ interface SidebarProps {
 
 export default function Sidebar({ className = "" }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
+  // A mobil Sheet csak mount után renderelődik: a Radix useId-generált
+  // aria-controls ID-k különben hidratálási eltérést okoznak (SSR ≠ kliens).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const { getUserDisplayName, getUserInitials, getUserLastName, getFamilyName } = useUserProfile();
 
   const sidebarMenuItems = [
     { icon: <BarChart2 size={20} />, label: 'Áttekintés', href: '/attekintes' },
     { icon: <CircleDollarSign size={20} />, label: 'Bérkalkulátor', href: '/berkalkulator' },
     { icon: <Home size={20} />, label: 'Költségvetés', href: '/koltsegvetes' },
-    { icon: <Calendar size={20} />, label: 'Éves költségvetés', href: '/eves-koltsegvetes' },
+    { icon: <Calendar size={20} />, label: 'Éves Cashflow', href: '/eves-koltsegvetes' },
     { icon: <TrendingUpIcon size={20} />, label: 'Bevételek', href: '/bevetelek' },
     { icon: <ShoppingCart size={20} />, label: 'Bevásárlás', href: '/bevasarlas' },
     { icon: <Package size={20} />, label: 'Termékek', href: '/termekek' },
@@ -96,21 +100,28 @@ export default function Sidebar({ className = "" }: SidebarProps) {
 
       {/* Mobile/Tablet Hamburger Menu */}
       <div className="lg:hidden fixed top-4 left-4 z-50">
-        <Sheet open={isOpen} onOpenChange={setIsOpen}>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="icon" className="bg-white shadow-md">
-              <Menu className="h-5 w-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-64 p-0">
-            <VisuallyHidden>
-              <SheetTitle>Navigáció</SheetTitle>
-            </VisuallyHidden>
-            <div className="flex flex-col h-full">
-              <SidebarContent />
-            </div>
-          </SheetContent>
-        </Sheet>
+        {mounted ? (
+          <Sheet open={isOpen} onOpenChange={setIsOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="icon" className="bg-white shadow-md">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-64 p-0">
+              <VisuallyHidden>
+                <SheetTitle>Navigáció</SheetTitle>
+              </VisuallyHidden>
+              <div className="flex flex-col h-full">
+                <SidebarContent />
+              </div>
+            </SheetContent>
+          </Sheet>
+        ) : (
+          // Placeholder a mount előtti renderhez — vizuálisan azonos, így nincs elcsúszás.
+          <Button variant="outline" size="icon" className="bg-white shadow-md" aria-label="Menü megnyitása">
+            <Menu className="h-5 w-5" />
+          </Button>
+        )}
       </div>
     </>
   );

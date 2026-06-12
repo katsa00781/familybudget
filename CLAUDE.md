@@ -85,7 +85,7 @@ if (!user) redirect('/login')
 | `/attekintes` | `app/attekintes/page.tsx` | `<Dashboard>` komponenst renderel |
 | `/berkalkulator` | `app/berkalkulator/page.tsx` | 2025-ös magyar adókulcsok alapján számít |
 | `/koltsegvetes` | `app/koltsegvetes/page.tsx` | Havi költségvetés tervezés |
-| `/eves-koltsegvetes` | `app/eves-koltsegvetes/page.tsx` | Éves tervek nagy kiadásokhoz |
+| `/eves-koltsegvetes` | `app/eves-koltsegvetes/page.tsx` | Éves cashflow — havi nettó + göngyölített egyenleg, év végi egyensúly |
 | `/bevetelek` | `app/bevetelek/page.tsx` | Bevételi tervek mentése |
 | `/bevasarlas` | `app/bevasarlas/page.tsx` | Bevásárlólista szerkesztés |
 | `/bevasarlas-quick` | `app/bevasarlas-quick/page.tsx` | Gyors checklist mód |

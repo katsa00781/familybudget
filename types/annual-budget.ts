@@ -26,6 +26,11 @@ export interface RecurringExpense {
   addToMonthlyBudget: boolean; // Automatikusan hozzáadja a havi költségvetéshez
 }
 
+export interface MonthlyBudgetedExpense {
+  month: number; // 1-12
+  amount: number; // Havi általános (megélhetési) kiadás
+}
+
 export interface MonthlySavingsAllocation {
   expenseId: string;
   expenseName: string;
@@ -49,11 +54,16 @@ export interface AnnualBudgetPlan {
   annual_expenses: AnnualExpense[];
   recurring_expenses: RecurringExpense[];
   monthly_savings_plan: MonthlySavingsPlan[];
-  
+
+  // Cashflow mezők (migráció 015)
+  opening_balance: number; // Év nyitó egyenleg
+  monthly_budgeted_expenses: MonthlyBudgetedExpense[]; // Havi általános kiadások
+  target_end_balance: number; // Cél év végi egyenleg (egyensúly = 0)
+
   total_annual_income: number;
   total_annual_expenses: number;
   total_recurring_expenses: number;
-  
+
   created_at: string;
   updated_at?: string;
 }
@@ -65,4 +75,20 @@ export interface MonthlyBudgetSummary {
   plannedSavings: number;
   recurringExpenses: RecurringExpense[];
   availableForBudget: number; // income - plannedSavings - recurringExpenses
+}
+
+// Éves cashflow — havonta egy göngyölített egyenleg sor
+export interface CashflowMonth {
+  month: number; // 1-12
+  monthName: string;
+  income: number;
+  recurringTotal: number; // ismétlődő kiadások ebben a hónapban
+  annualDueTotal: number; // nagy kiadások esedékes ebben a hónapban (teljes összeg)
+  generalExpense: number; // havi általános (megélhetési) kiadás
+  totalExpense: number; // recurringTotal + annualDueTotal + generalExpense
+  netCashflow: number; // income - totalExpense
+  openingBalance: number; // hónap nyitó göngyölített egyenlege
+  closingBalance: number; // hónap záró göngyölített egyenlege
+  recurringExpenses: RecurringExpense[];
+  annualExpensesDue: AnnualExpense[];
 }

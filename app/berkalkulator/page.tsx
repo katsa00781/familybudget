@@ -23,6 +23,7 @@ interface SavedCalculation {
   tulora_orak?: number;
   muszakpotlek_orak?: number;
   tizenket_oras_muszak?: number;
+  szabadnapi_tulora_orak?: number;
   pihenonapi_tulora_orak?: number;
   munkaszuneti_tulora_orak?: number;
   unnepnapi_orak?: number;
@@ -30,6 +31,7 @@ interface SavedCalculation {
   kikuldes_napok?: number;
   gyed_mellett?: number;
   formaruha_kompenzacio?: number;
+  formaruha_ak?: number;
   csaladi_adokedvezmeny?: number;
   brutto_ber: number;
   netto_ber: number;
@@ -57,9 +59,11 @@ interface AdditionalIncome {
 // 2026-os kulcsok a bérpapír alapján (konstansként a komponens kívül)
 const KULCSOK = {
   // TB és járulékok
-  TB_JARULÉK: 0.185, // 18.5%
+  TB_JARULÉK: 0.185, // 18.5% (a TB járulékalapra — bruttó + formaruha + vállalati pénztári befizetések)
   SZJA_KULCS: 0.15, // 15% (adóelőleg)
-  ÖNKÉNTES_NYUGDIJ: 0.015, // 1.5%
+  ÖNKÉNTES_NYUGDIJ: 0.015, // 1.5% (dolgozói önk. nyugdíjpénztári befizetés — levonás)
+  ÖNK_NYUGDIJ_VALLALATI: 0.054, // 5.4% a bruttó bérből — vállalati önk. nyugdíjpénztári befizetés (TB-alap része)
+  ÖNK_EGESZSEG_VALLALATI_FIX: 20600, // fix vállalati önk. egészségpénztári befizetés (TB-alap része)
   MÉSZ_TAGDIJ: 0.007, // 0.7%
   SZOCIALIS_HOZZAJARULAS: 0.13, // 13% munkáltatói teher
 
@@ -80,6 +84,8 @@ const KULCSOK = {
   TULORA_SAV_2: 0.70, // 3-4. óra
   TULORA_SAV_3: 1.00, // 4 óra felett
   ORAK_PER_MUSZAK: 4, // egy 12 órás műszakra eső túlóra-órák (12 - 8)
+  // Szabadnapi túlóra: +100% pótlék (fix, nem sávos — bérjegyzék "TÓ szabadnapon")
+  TULORA_SZABADNAPON: 1.00,
   // Pihenőnapi túlóra: +125% pótlék (nem sávos, MVM KSz)
   TULORA_PIHENONAPON: 1.25,
   // Munkaszüneti napon végzett túlóra: +225% pótlék (KSZ)
@@ -106,6 +112,7 @@ export default function BerkalkulatorPage() {
   const [munkarendNapok, setMunkarendNapok] = useState(20); // Munkarend szerinti napok
   const [szabadsagNapok, setSzabadsagNapok] = useState(0); // Fizetett szabadság: 0 nap (default)
   const [tizenketOrasMuszak, setTizenketOrasMuszak] = useState(0); // 12 órás műszakok száma (db) — sávos túlóra
+  const [szabadnapiTuloraOrak, setSzabadnapiTuloraOrak] = useState(0); // Szabadnapi túlóra (óra) — +100% fix
   const [pihenonapiTuloraOrak, setPihenonapiTuloraOrak] = useState(0); // Pihenőnapi túlóra (óra) — +125%
   const [munkaszunetiTuloraOrak, setMunkaszunetiTuloraOrak] = useState(0); // Munkaszüneti túlóra (óra) — +225%
   const [unnepnapiOrak, setUnnepnapiOrak] = useState(0); // Munkaszüneti munkavégzés (rostán): 0 óra (default)
@@ -113,7 +120,10 @@ export default function BerkalkulatorPage() {
   const [additionalIncomes, setAdditionalIncomes] = useState<AdditionalIncome[]>([]);
 
   // Számított értékek a munkarend alapján (8.17 óra/nap a műszakos munkarendben)
-  const ledolgozottNapok = munkarendNapok - szabadsagNapok;
+  // A fizetett szabadság ÉS a fizetett (állami) távollét is csökkenti a ledolgozott időt
+  // (a bérjegyzéken: munkarend = ledolgozott + szabadság + egésznapos távollét)
+  const fizTavollétNapok = fizTavollétOrak / KULCSOK.NAPI_ÓRASZÁM;
+  const ledolgozottNapok = munkarendNapok - szabadsagNapok - fizTavollétNapok;
   const munkarendSzerintiOrak = munkarendNapok * KULCSOK.NAPI_ÓRASZÁM;
   const ledolgozottOrak = ledolgozottNapok * KULCSOK.NAPI_ÓRASZÁM;
   const szabadsagOrak = szabadsagNapok * KULCSOK.NAPI_ÓRASZÁM;
@@ -123,6 +133,7 @@ export default function BerkalkulatorPage() {
   const [kikuldetesNapok, setKikuldetesNapok] = useState(0);
   const [gyedMellett, setGyedMellett] = useState(0); // GYED munkavégzés mellett: 0 nap (default)
   const [formaruhakompenzacio, setFormaruhakompenzacio] = useState(0);
+  const [formaruhaAK, setFormaruhaAK] = useState(0); // Formaruha AK (adóköteles, nem kifizetendő) — TB-alap része, évente 1×
   const [családiAdókedvezmény, setCsaládiAdókedvezmény] = useState(800000); // Családi adókedvezmény: 500,000 Ft (default)
   interface SalaryResult {
     alapber: number;
@@ -134,6 +145,7 @@ export default function BerkalkulatorPage() {
     fizTavollét: number;
     tuloraAlapossszeg: number;
     savPotlek: number;
+    szabadnapiPotlek: number;
     pihenonapiPotlek: number;
     munkaszunetiTuloraPotlek: number;
     muszakpotlek: number;
@@ -144,8 +156,10 @@ export default function BerkalkulatorPage() {
     kikuldetesTobblet: number;
     gyedMunkavMellett: number;
     formaruhakompenzacio: number;
+    formaruhaAK: number;
     bruttoBer: number;
     osszesJarandsag: number;
+    tbAlap: number;
     tbJarulék: number;
     nyugdijJarulék: number;
     onkentesNyugdij: number;
@@ -208,29 +222,33 @@ export default function BerkalkulatorPage() {
     const tuloraOraber = alapber / KULCSOK.TULORA_OSZTÓ;
 
     // Havibéres időbér: ténylegesen ledolgozott órák × rendes órabér
-    // (a fizetett állami táv. levonandó, az a saját tételként kerül elszámolásra)
-    const tenylegesLedolgozottOrak = ledolgozottOrak - fizTavollétOrak;
-    const haviberesIdober = Math.round(tenylegesLedolgozottOrak * oraber);
+    // (a fizetett szabadság és az állami távollét már levonva a ledolgozottOrak-ból,
+    //  azok külön tételként kerülnek elszámolásra)
+    const haviberesIdober = Math.round(ledolgozottOrak * oraber);
 
-    // Fizetett szabadság: távolléti díj (Mt. 149.§) × szabadság-órák
-    // Távolléti = alapórabér + műszakpótlék átlaga az utolsó ≤3 hónapból
-    const tavolleti = atlagOrabErManual ? Number(atlagOrabErManual) : (atlagOrabErAuto || oraber);
+    // Fizetett szabadság: távolléti díj (Mt. 151.§) × szabadság-órák
+    // Távolléti díj alapja = alapbér-órabér + rendszeres műszakpótlék (45%).
+    // A pontos érték a 6 havi pótlékátlagot is tartalmazza (~+5-6%) — ez kézzel felülírható.
+    const tavolletiAlap = oraber * (1 + KULCSOK.MUSZAKPOTLEK);
+    const tavolleti = atlagOrabErManual ? Number(atlagOrabErManual) : (atlagOrabErAuto || tavolletiAlap);
     const fizetettSzabadsag = Math.round(szabadsagOrak * tavolleti);
 
     // Fizetett távollét állami kötelezettség (pl. veszélyelhárítás, behívó stb.) – távolléti díj
     const fizTavollét = Math.round(fizTavollétOrak * tavolleti);
 
     // Összes túlóra-óra (100% alap minden túlóra-órára jár, a Túlóraalap sorban)
-    const osszTuloraOra = muszakTuloraOrak + pihenonapiTuloraOrak + munkaszunetiTuloraOrak;
+    const osszTuloraOra = muszakTuloraOrak + szabadnapiTuloraOrak + pihenonapiTuloraOrak + munkaszunetiTuloraOrak;
     const tuloraAlapossszeg = Math.round(osszTuloraOra * tuloraOraber);
 
     // Túlóra pótlékok (KSZ szerint, a 100% alap fölött):
     //   12 órás műszak (4 TÓ-óra): sávos → 2ó @+50% + 2ó @+70% = műszakonként 2,4× órabér
+    //   szabadnapi túlóra: +100% (fix, bérjegyzék "TÓ szabadnapon")
     //   pihenőnapi túlóra: +125% (nem sávos)
     //   munkaszüneti túlóra: +225%
     const savPotlek = Math.round(
       tizenketOrasMuszak * (2 * KULCSOK.TULORA_SAV_1 + 2 * KULCSOK.TULORA_SAV_2) * tuloraOraber
     );
+    const szabadnapiPotlek = Math.round(szabadnapiTuloraOrak * tuloraOraber * KULCSOK.TULORA_SZABADNAPON);
     const pihenonapiPotlek = Math.round(pihenonapiTuloraOrak * tuloraOraber * KULCSOK.TULORA_PIHENONAPON);
     const munkaszunetiTuloraPotlek = Math.round(munkaszunetiTuloraOrak * tuloraOraber * KULCSOK.MUNKASZUNETI_TULORA);
 
@@ -253,7 +271,7 @@ export default function BerkalkulatorPage() {
 
     // Bruttó bér összesen
     const bruttoBer = haviberesIdober + fizetettSzabadsag + fizTavollét +
-                     tuloraAlapossszeg + savPotlek + pihenonapiPotlek + munkaszunetiTuloraPotlek +
+                     tuloraAlapossszeg + savPotlek + szabadnapiPotlek + pihenonapiPotlek + munkaszunetiTuloraPotlek +
                      muszakpotlek + tuloraMuszakpotlek + unnepnapiMunka + unnepnapiMuszakpotlek +
                      betegszabadsag + kikuldetesTobblet + jutalom;
     
@@ -266,8 +284,15 @@ export default function BerkalkulatorPage() {
     // Önkéntes nyugdíj: 24 213 Ft
     // MÉSZ: 11 299 Ft
     
-    // TB járulék: 18.5% a bruttó bérből
-    const tbJarulék = Math.round(bruttoBer * KULCSOK.TB_JARULÉK);
+    // TB járulékalap: bruttó bér + formaruha (kompenzáció + AK) + vállalati önkéntes pénztári befizetések.
+    //   Vállalati önk. nyugdíj: 5,4% a bruttó bérből; vállalati önk. egészség: fix 20.600 Ft.
+    //   (A SZÉP béren kívüli juttatás NEM része a TB-alapnak.)
+    const onkNyugdijVallalati = Math.round(bruttoBer * KULCSOK.ÖNK_NYUGDIJ_VALLALATI);
+    const onkEgesszegVallalati = KULCSOK.ÖNK_EGESZSEG_VALLALATI_FIX;
+    const tbAlap = bruttoBer + formaruhakompenzacio + formaruhaAK + onkNyugdijVallalati + onkEgesszegVallalati;
+
+    // TB járulék: 18.5% a TB járulékalapból
+    const tbJarulék = Math.round(tbAlap * KULCSOK.TB_JARULÉK);
     
     // Önkéntes nyugdíjpénztári befizetés: 1.5%
     const onkentesNyugdij = Math.round(bruttoBer * KULCSOK.ÖNKÉNTES_NYUGDIJ);
@@ -305,6 +330,7 @@ export default function BerkalkulatorPage() {
       fizTavollét,
       tuloraAlapossszeg,
       savPotlek,
+      szabadnapiPotlek,
       pihenonapiPotlek,
       munkaszunetiTuloraPotlek,
       muszakpotlek,
@@ -315,8 +341,10 @@ export default function BerkalkulatorPage() {
       kikuldetesTobblet,
       gyedMunkavMellett,
       formaruhakompenzacio,
+      formaruhaAK,
       bruttoBer,
       osszesJarandsag,
+      tbAlap,
       tbJarulék,
       nyugdijJarulék: 0,
       onkentesNyugdij,
@@ -331,9 +359,9 @@ export default function BerkalkulatorPage() {
       levonasArany: ((osszesLevonas / osszesJarandsag) * 100).toFixed(1),
       munkaltaroiTerhek: ((szocHozzjarulas / osszesJarandsag) * 100).toFixed(1)
     });
-  }, [alapber, jutalom, munkarendNapok, szabadsagNapok, tizenketOrasMuszak, pihenonapiTuloraOrak,
+  }, [alapber, jutalom, munkarendNapok, szabadsagNapok, tizenketOrasMuszak, szabadnapiTuloraOrak, pihenonapiTuloraOrak,
       munkaszunetiTuloraOrak, muszakTuloraOrak, fizTavollétOrak, unnepnapiOrak, betegszabadsagNapok,
-      kikuldetesNapok, gyedMellett, formaruhakompenzacio, családiAdókedvezmény,
+      kikuldetesNapok, gyedMellett, formaruhakompenzacio, formaruhaAK, családiAdókedvezmény,
       munkarendSzerintiOrak, ledolgozottOrak, szabadsagOrak,
       atlagOrabErAuto, atlagOrabErManual, setEredmény]);
 
@@ -410,9 +438,9 @@ export default function BerkalkulatorPage() {
     }, 100); // Kis késleltetéssel, hogy ne legyen túl gyakori
 
     return () => clearTimeout(timer);
-  }, [alapber, munkarendNapok, szabadsagNapok, tizenketOrasMuszak, pihenonapiTuloraOrak,
+  }, [alapber, munkarendNapok, szabadsagNapok, tizenketOrasMuszak, szabadnapiTuloraOrak, pihenonapiTuloraOrak,
       munkaszunetiTuloraOrak, fizTavollétOrak, unnepnapiOrak, betegszabadsagNapok, kikuldetesNapok,
-      gyedMellett, formaruhakompenzacio, családiAdókedvezmény, additionalIncomes, calculateSalary]);
+      gyedMellett, formaruhakompenzacio, formaruhaAK, családiAdókedvezmény, additionalIncomes, calculateSalary]);
 
   // Kezdeti számítás az oldal betöltésekor
   useEffect(() => {
@@ -452,14 +480,19 @@ export default function BerkalkulatorPage() {
         //             = Σ(ledOrak × oraber × 1.45) / Σ(ledOrak)
         const last3 = (data || []).slice(0, 3);
         if (last3.length > 0) {
-          let sumBrutto = 0;
-          let sumMhOrak = 0;
+          // Mt. 151.§ távolléti díj ≈ alapbér-órabér + rendszeres műszakpótlék (45%).
+          // A bruttó bér NEM használható, mert tartalmazza az eseti túlórát/munkaszünetit is,
+          // ami erősen felfelé torzítaná a szabadság- és távollét-elszámolást.
+          let sumTavolleti = 0;
+          let count = 0;
           last3.forEach(r => {
-            // Mt. 149.§: távolléti = Σ(bruttó bér) / Σ(munkarend szerinti óra)
-            sumBrutto += r.brutto_ber;
-            sumMhOrak += (r.munkarend_napok || 20) * KULCSOK.NAPI_ÓRASZÁM;
+            const rMunkarendOrak = (r.munkarend_napok || 20) * KULCSOK.NAPI_ÓRASZÁM;
+            if (rMunkarendOrak > 0) {
+              sumTavolleti += (r.alapber / rMunkarendOrak) * (1 + KULCSOK.MUSZAKPOTLEK);
+              count++;
+            }
           });
-          if (sumMhOrak > 0) setAtlagOrabErAuto(Math.round(sumBrutto / sumMhOrak));
+          if (count > 0) setAtlagOrabErAuto(Math.round(sumTavolleti / count));
         } else {
           setAtlagOrabErAuto(null);
         }
@@ -479,6 +512,7 @@ export default function BerkalkulatorPage() {
     setMunkarendNapok(calc.munkarend_napok || 20);
     setSzabadsagNapok(calc.szabadsag_napok || 0);
     setTizenketOrasMuszak(calc.tizenket_oras_muszak || 0);
+    setSzabadnapiTuloraOrak(calc.szabadnapi_tulora_orak || 0);
     setPihenonapiTuloraOrak(calc.pihenonapi_tulora_orak || 0);
     setMunkaszunetiTuloraOrak(calc.munkaszuneti_tulora_orak || 0);
     setUnnepnapiOrak(calc.unnepnapi_orak || 0);
@@ -486,6 +520,7 @@ export default function BerkalkulatorPage() {
     setKikuldetesNapok(calc.kikuldes_napok || 0);
     setGyedMellett(calc.gyed_mellett || 0);
     setFormaruhakompenzacio(calc.formaruha_kompenzacio || 0);
+    setFormaruhaAK(calc.formaruha_ak || 0);
     setCsaládiAdókedvezmény(calc.csaladi_adokedvezmeny || 0);
     
     // Egyéb jövedelmek betöltése
@@ -565,6 +600,7 @@ export default function BerkalkulatorPage() {
         tulora_orak: 0, // legacy oszlop — már nem használt
         muszakpotlek_orak: 0, // legacy oszlop — már nem használt
         tizenket_oras_muszak: tizenketOrasMuszak,
+        szabadnapi_tulora_orak: szabadnapiTuloraOrak,
         pihenonapi_tulora_orak: pihenonapiTuloraOrak,
         munkaszuneti_tulora_orak: munkaszunetiTuloraOrak,
         unnepnapi_orak: unnepnapiOrak,
@@ -572,6 +608,7 @@ export default function BerkalkulatorPage() {
         kikuldes_napok: kikuldetesNapok,
         gyed_mellett: gyedMellett,
         formaruha_kompenzacio: formaruhakompenzacio,
+        formaruha_ak: formaruhaAK,
         csaladi_adokedvezmeny: családiAdókedvezmény,
         // Számított eredmények
         brutto_ber: eredmény.bruttoBer,
@@ -878,12 +915,12 @@ export default function BerkalkulatorPage() {
                       <Input
                         type="number"
                         step="0.01"
-                        value={ledolgozottNapok || ''}
+                        value={ledolgozottNapok > 0 ? ledolgozottNapok.toFixed(2) : ''}
                         readOnly
                         className="mt-1 h-9 md:h-10 text-sm bg-gray-50 cursor-not-allowed border-2 border-gray-200 rounded-xl font-mono"
                       />
                       <p className="text-xs text-gray-500 mt-1 font-medium">
-                        Automatikusan számított: munkanapok ({munkarendNapok}) - szabadság ({szabadsagNapok}) = {ledolgozottNapok} nap
+                        Automatikusan számított: munkanapok ({munkarendNapok}) - szabadság ({szabadsagNapok}) - távollét ({fizTavollétNapok.toFixed(2)}) = {ledolgozottNapok.toFixed(2)} nap
                       </p>
                       <p className="text-xs text-gray-500 font-medium">
                         Ledolgozott órák: {ledolgozottOrak.toFixed(2)} óra
@@ -918,15 +955,15 @@ export default function BerkalkulatorPage() {
                           value={atlagOrabErManual}
                           onChange={(e) => setAtlagOrabErManual(e.target.value)}
                           onFocus={handleInputFocus}
-                          placeholder={atlagOrabErAuto ? String(atlagOrabErAuto) : String(Math.round(alapber / (munkarendNapok * KULCSOK.NAPI_ÓRASZÁM)))}
+                          placeholder={atlagOrabErAuto ? String(atlagOrabErAuto) : String(Math.round((alapber / (munkarendNapok * KULCSOK.NAPI_ÓRASZÁM)) * (1 + KULCSOK.MUSZAKPOTLEK)))}
                           className="pr-8 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
                         />
                         <span className="absolute right-2 md:right-3 top-2 md:top-3 text-xs md:text-sm text-gray-500 font-medium">Ft</span>
                       </div>
                       <p className="text-xs text-gray-500 mt-1 font-medium">
                         {atlagOrabErAuto
-                          ? `Auto (utolsó ≤3 hónapból): ${atlagOrabErAuto.toLocaleString('hu-HU')} Ft/óra — felülírható`
-                          : 'Nincs mentett adat — az alapórabér kerül alkalmazásra'}
+                          ? `Auto (utolsó ≤3 hónap, alapbér + 45% műszakpótlék): ${atlagOrabErAuto.toLocaleString('hu-HU')} Ft/óra — felülírható`
+                          : 'Nincs mentett adat — alapórabér + 45% műszakpótlék kerül alkalmazásra (a pontos 6 havi pótlékátlaghoz írd be kézzel)'}
                       </p>
                     </div>
 
@@ -947,6 +984,22 @@ export default function BerkalkulatorPage() {
                         Műszakonként 4 túlóra-óra, sávosan: első 2 óra +50%, 3-4. óra +70%
                         {tizenketOrasMuszak > 0 && ` (összesen: ${muszakTuloraOrak} túlóra-óra)`}
                       </p>
+                    </div>
+
+                    <div>
+                      <Label className="text-xs md:text-sm font-semibold text-gray-700">
+                        Szabadnapi túlóra (óra)
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={szabadnapiTuloraOrak || ''}
+                        onChange={handleInputChange(setSzabadnapiTuloraOrak)}
+                        onFocus={handleInputFocus}
+                        placeholder="0"
+                        className="mt-1 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
+                      />
+                      <p className="text-xs text-gray-500 mt-1 font-medium">+100% alap + 100% pótlék (fix, bérjegyzék &bdquo;TÓ szabadnapon&rdquo;)</p>
                     </div>
 
                     <div>
@@ -1081,6 +1134,21 @@ export default function BerkalkulatorPage() {
                       />
                     </div>
 
+                    <div>
+                      <Label className="text-xs md:text-sm font-semibold text-gray-700">
+                        Formaruha AK (Ft)
+                      </Label>
+                      <Input
+                        type="number"
+                        value={formaruhaAK || ''}
+                        onChange={handleInputChange(setFormaruhaAK)}
+                        onFocus={handleInputFocus}
+                        placeholder="0"
+                        className="mt-1 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
+                      />
+                      <p className="mt-1 text-[10px] md:text-xs text-gray-500">Adóköteles formaruha-juttatás (TB-alap része, általában évente egyszer)</p>
+                    </div>
+
                     <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-3 md:p-4 rounded-xl border-2 border-blue-200/50 shadow-sm">
                       <p className="text-xs md:text-sm font-bold text-blue-800 mb-2">Számított értékek:</p>
                       <div className="text-xs text-blue-600 space-y-1 font-medium">
@@ -1089,6 +1157,7 @@ export default function BerkalkulatorPage() {
                         <div>• Ledolgozott órák: {ledolgozottOrak.toFixed(2)} óra</div>
                         <div>• Szabadság órák: {szabadsagOrak.toFixed(2)} óra</div>
                         <div>• 12 órás műszak: {tizenketOrasMuszak} db ({muszakTuloraOrak} túlóra-óra)</div>
+                        <div>• Szabadnapi túlóra: {szabadnapiTuloraOrak} óra</div>
                         <div>• Pihenőnapi túlóra: {pihenonapiTuloraOrak} óra</div>
                         <div>• Munkaszüneti túlóra: {munkaszunetiTuloraOrak} óra</div>
                         <div>• Munkaszüneti munka: {unnepnapiOrak} óra</div>
@@ -1162,9 +1231,9 @@ export default function BerkalkulatorPage() {
                           <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.fizTavollét)}</span>
                         </div>
                       )}
-                      {(muszakTuloraOrak + pihenonapiTuloraOrak + munkaszunetiTuloraOrak) > 0 && (
+                      {(muszakTuloraOrak + szabadnapiTuloraOrak + pihenonapiTuloraOrak + munkaszunetiTuloraOrak) > 0 && (
                         <div className="flex justify-between">
-                          <span className="truncate pr-2">Túlóraalap ({(muszakTuloraOrak + pihenonapiTuloraOrak + munkaszunetiTuloraOrak).toFixed(2)} óra):</span>
+                          <span className="truncate pr-2">Túlóraalap ({(muszakTuloraOrak + szabadnapiTuloraOrak + pihenonapiTuloraOrak + munkaszunetiTuloraOrak).toFixed(2)} óra):</span>
                           <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.tuloraAlapossszeg)}</span>
                         </div>
                       )}
@@ -1172,6 +1241,12 @@ export default function BerkalkulatorPage() {
                         <div className="flex justify-between">
                           <span className="truncate pr-2">12 órás műszak sáv-pótlék ({tizenketOrasMuszak} db, 50/70%):</span>
                           <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.savPotlek)}</span>
+                        </div>
+                      )}
+                      {eredmény.szabadnapiPotlek > 0 && (
+                        <div className="flex justify-between">
+                          <span className="truncate pr-2">Szabadnapi túlóra ({szabadnapiTuloraOrak} óra, +100%):</span>
+                          <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.szabadnapiPotlek)}</span>
                         </div>
                       )}
                       {eredmény.pihenonapiPotlek > 0 && (
@@ -1235,6 +1310,10 @@ export default function BerkalkulatorPage() {
                       <div className="flex justify-between">
                         <span className="truncate pr-2">TB járulék (18,5%):</span>
                         <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.tbJarulék)}</span>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-red-500/80 -mt-0.5">
+                        <span className="truncate pr-2 pl-2">↳ TB-alap:</span>
+                        <span className="whitespace-nowrap">{formatCurrency(eredmény.tbAlap)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="truncate pr-2">Önkéntes nyugdíj (1,5%):</span>

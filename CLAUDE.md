@@ -135,7 +135,12 @@ Migrációk helye: `supabase/migrations/`. Az összes tábla egybén is létreho
 ## Bérkalkulátor specifikus info
 
 A `KULCSOK` konstans az aktuális 2026-os bérpapír (MVM bérjegyzék) adatain alapul:
-- TB járulék: 18.5%
+- TB járulék: 18.5% (a hivatalos kulcs), de **nem a bruttó bérre**, hanem a tágabb **TB járulékalapra** vetítve:
+  - TB-alap = bruttó bér + formaruha kompenzáció + formaruha AK + vállalati önk. nyugdíj + vállalati önk. egészség
+  - Vállalati önk. nyugdíj: **5,4%** a bruttó bérből (`ÖNK_NYUGDIJ_VALLALATI`)
+  - Vállalati önk. egészség: **fix 20.600 Ft** (`ÖNK_EGESZSEG_VALLALATI_FIX`)
+  - A SZÉP (béren kívüli juttatás) NEM része a TB-alapnak
+  - A *Formaruha AK* külön beviteli mező (`formaruha_ak`, migráció `014`) — általában évente egyszer
 - SZJA: 15%
 - Műszakpótlék: 45% (minden ledolgozott + túlóra órára)
 - Betegszabadság: 70%
@@ -149,14 +154,17 @@ pótlékok:
 | Kategória | Bemenet | Pótlék (alap fölött) |
 |-----------|---------|----------------------|
 | **12 órás műszak** (sávos napi túlóra) | db (műszak) | 1 műszak = 4 TÓ-óra: első 2 óra +50%, 3-4. óra +70% (4 óra felett +100%) |
+| **Szabadnapi túlóra** (bérjegyzék *TÓ szabadnapon*) | óra | +100% (fix, **nem** sávos) |
 | **Pihenőnapi túlóra** | óra | +125% (nem sávos) |
 | **Munkaszüneti túlóra** | óra | +225% |
 | **Munkaszüneti munkavégzés** (rostán) | óra | +100% + 45% műszakpótlék |
 
+> A *szabadnapi* túlóra a januári/áprilisi bérjegyzéken fix +100% pótlékkal szerepel (8,31 óra × alap-órabér × 1,00), **nem** sávosan. Ezt a felhasználó a bérjegyzékkel egyeztetve erősítette meg.
+
 A sávos kulcsokat a januári bérjegyzék *Üzemz.TÓ munkanapi 0-2óra / 3-4óra / 5.óra* sorai igazolják.
 
 A kalkuláció a `salary_calculations` táblába mentődik (a túlóra-kategóriák a `tizenket_oras_muszak`,
-`pihenonapi_tulora_orak`, `munkaszuneti_tulora_orak` oszlopokba — lásd migráció `012`), a `name`
+`szabadnapi_tulora_orak` (migráció `013`), `pihenonapi_tulora_orak`, `munkaszuneti_tulora_orak` oszlopokba — lásd migráció `012`), a `name`
 mezővel azonosítható, és visszatölthető módosításhoz. A régi `tulora_orak` / `muszakpotlek_orak`
 oszlopok legacy státuszúak (0-ra mentve).
 

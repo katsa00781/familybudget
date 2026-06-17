@@ -16,7 +16,7 @@ import {
   Wallet, Scale, ArrowDownUp
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { getActiveBudgetPlan } from '@/lib/userPreferences'
+import { getActiveBudgetPlan, getActiveIncomePlan } from '@/lib/userPreferences'
 import type {
   AnnualBudgetPlan, MonthlyIncome, AnnualExpense,
   RecurringExpense, MonthlySavingsPlan,
@@ -35,6 +35,55 @@ const CATEGORIES = [
 ]
 
 const generateId = () => Math.random().toString(36).substr(2, 9)
+
+// Hónap-nevek parsing: a plan.name-ből kinyerjük a hónapot és az évet
+const MONTH_NAMES_PARSE: [string, number][] = [
+  ['január', 1], ['januar', 1],
+  ['február', 2], ['februar', 2],
+  ['március', 3], ['marcius', 3],
+  ['április', 4], ['aprilis', 4],
+  ['május', 5], ['majus', 5],
+  ['június', 6], ['junius', 6],
+  ['július', 7], ['julius', 7],
+  ['augusztus', 8],
+  ['szeptember', 9],
+  ['október', 10], ['oktober', 10],
+  ['november', 11],
+  ['december', 12],
+]
+
+function parseMonthYear(name: string): { month: number | null; year: number | null } {
+  const lower = name.toLowerCase()
+  const yearMatch = lower.match(/\b(20\d\d)\b/)
+  const year = yearMatch ? parseInt(yearMatch[1]) : null
+  let month: number | null = null
+  for (const [key, val] of MONTH_NAMES_PARSE) {
+    if (lower.includes(key)) { month = val; break }
+  }
+  return { month, year }
+}
+
+// Adott hónap+év-hez keresi a legjobb tervet a listából.
+// Elsőbbség: pontos hónap+év egyezés → csak hónap egyezés → fallback értéke.
+function findAmountForMonth<T extends { name: string }>(
+  plans: T[],
+  getAmount: (p: T) => number,
+  month: number,
+  year: number,
+  fallback: number
+): number {
+  const exact = plans.find(p => {
+    const { month: m, year: y } = parseMonthYear(p.name)
+    return m === month && y === year
+  })
+  if (exact) return getAmount(exact)
+  const monthOnly = plans.find(p => {
+    const { month: m, year: y } = parseMonthYear(p.name)
+    return m === month && y === null
+  })
+  if (monthOnly) return getAmount(monthOnly)
+  return fallback
+}
 
 export default function EvesKoltsegvetesPage() {
   const supabase = createClient()
@@ -55,8 +104,12 @@ export default function EvesKoltsegvetesPage() {
     Array.from({ length: 12 }, (_, i) => ({ month: i + 1, amount: 0 }))
   )
 
-  // Aktív havi költségvetés összege (alapérték a havi kiadásokhoz)
+  // Fallback: aktív terv összege (ha nincs hónap-specifikus terv)
   const [activeBudgetTotal, setActiveBudgetTotal] = useState(0)
+  const [activeIncomePlanTotal, setActiveIncomePlanTotal] = useState(0)
+  // Az összes budget/income plan neve és összege a hónap-matching-hez
+  const [allBudgetPlans, setAllBudgetPlans] = useState<{ name: string; total_amount: number }[]>([])
+  const [allIncomePlans, setAllIncomePlans] = useState<{ name: string; total_income: number }[]>([])
 
   // Havi bevételek (12 hónap)
   const [monthlyIncomes, setMonthlyIncomes] = useState<MonthlyIncome[]>(
@@ -85,23 +138,29 @@ export default function EvesKoltsegvetesPage() {
     getUser()
   }, [supabase.auth])
 
-  // Mentett tervek és aktív havi költségvetés betöltése
+  // Mentett tervek és aktív tervek alapértékeinek betöltése
   useEffect(() => {
     if (currentUser) {
       loadSavedPlans()
-      loadActiveBudgetTotal()
+      loadActivePlanDefaults()
     }
   }, [currentUser])
 
-  // Aktív havi költségvetés összegének betöltése (alapérték a havi kiadásokhoz)
-  const loadActiveBudgetTotal = async () => {
+  // Összes terv betöltése (hónap-matching), + aktív terv a fallback-hoz
+  const loadActivePlanDefaults = async () => {
     try {
-      const plan = await getActiveBudgetPlan(currentUser.id)
-      if (plan?.total_amount) {
-        setActiveBudgetTotal(plan.total_amount)
-      }
+      const [budgetResult, incomeResult, budgetPlan, incomePlan] = await Promise.all([
+        supabase.from('budget_plans').select('name, total_amount').eq('user_id', currentUser.id),
+        supabase.from('income_plans').select('name, total_income').eq('user_id', currentUser.id),
+        getActiveBudgetPlan(currentUser.id),
+        getActiveIncomePlan(currentUser.id),
+      ])
+      if (budgetResult.data) setAllBudgetPlans(budgetResult.data)
+      if (incomeResult.data) setAllIncomePlans(incomeResult.data)
+      if (budgetPlan?.total_amount) setActiveBudgetTotal(budgetPlan.total_amount)
+      if (incomePlan?.total_income) setActiveIncomePlanTotal(incomePlan.total_income)
     } catch (error) {
-      console.error('Hiba az aktív költségvetés betöltésekor:', error)
+      console.error('Hiba a tervek betöltésekor:', error)
     }
   }
 
@@ -136,14 +195,28 @@ export default function EvesKoltsegvetesPage() {
     )
   }
 
-  // Mind a 12 hónap feltöltése az aktív havi költségvetés összegével
+  // Havi kiadások feltöltése: minden hónaphoz a nevében szereplő terv kiadása kerül be
   const fillFromActiveBudget = () => {
-    if (activeBudgetTotal <= 0) {
-      toast.error('Nincs aktív havi költségvetés, vagy az összege 0.')
-      return
-    }
-    setMonthlyBudgetedExpenses(prev => prev.map(me => ({ ...me, amount: activeBudgetTotal })))
-    toast.success(`Minden hónap feltöltve: ${activeBudgetTotal.toLocaleString('hu-HU')} Ft`)
+    const newExpenses = Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1,
+      amount: findAmountForMonth(
+        allBudgetPlans, p => p.total_amount, i + 1, selectedYear, activeBudgetTotal
+      )
+    }))
+    setMonthlyBudgetedExpenses(newExpenses)
+    toast.success('Kiadások feltöltve a havi tervekből')
+  }
+
+  // Havi bevételek feltöltése: minden hónaphoz a nevében szereplő terv bevétele kerül be
+  const fillFromActiveIncomePlan = () => {
+    const newIncomes = Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1,
+      amount: findAmountForMonth(
+        allIncomePlans, p => p.total_income, i + 1, selectedYear, activeIncomePlanTotal
+      )
+    }))
+    setMonthlyIncomes(newIncomes)
+    toast.success('Bevételek feltöltve a havi tervekből')
   }
 
   // Új éves kiadás hozzáadása
@@ -388,19 +461,29 @@ export default function EvesKoltsegvetesPage() {
     }
   }
 
-  // Új terv kezdése
+  // Új terv kezdése — minden hónaphoz a megfelelő nevű terv töltődik be
   const startNewPlan = () => {
+    const newYear = new Date().getFullYear()
     setSelectedPlanId('')
     setPlanName('')
     setPlanDescription('')
-    setSelectedYear(new Date().getFullYear())
-    setMonthlyIncomes(Array.from({ length: 12 }, (_, i) => ({ month: i + 1, amount: 0 })))
+    setSelectedYear(newYear)
     setAnnualExpenses([])
     setRecurringExpenses([])
     setMonthlySavingsPlan([])
     setOpeningBalance(0)
     setTargetEndBalance(0)
-    setMonthlyBudgetedExpenses(Array.from({ length: 12 }, (_, i) => ({ month: i + 1, amount: 0 })))
+
+    setMonthlyIncomes(Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1,
+      amount: findAmountForMonth(allIncomePlans, p => p.total_income, i + 1, newYear, activeIncomePlanTotal)
+    })))
+    setMonthlyBudgetedExpenses(Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1,
+      amount: findAmountForMonth(allBudgetPlans, p => p.total_amount, i + 1, newYear, activeBudgetTotal)
+    })))
+
+    toast.success('Új terv — bevételek és kiadások a havi tervekből betöltve')
   }
 
   const { totalIncome, totalAnnualExpenses, totalRecurringExpenses, totalGeneralExpenses } = calculateTotals()
@@ -540,19 +623,35 @@ export default function EvesKoltsegvetesPage() {
             {/* Havi bevételek */}
             <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl">
               <CardHeader>
-                <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                  <div className="p-1.5 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
-                    <DollarSign size={18} className="text-white" />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                      <div className="p-1.5 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
+                        <DollarSign size={18} className="text-white" />
+                      </div>
+                      <span className="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                        Havi bevételek
+                      </span>
+                    </CardTitle>
+                    <CardDescription className="text-sm mt-1">
+                      Tervezett havi bevétel — automatikusan az aktív bevételi tervből
+                    </CardDescription>
                   </div>
-                  <span className="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-                    Havi bevételek
-                  </span>
-                </CardTitle>
-                <CardDescription className="text-sm">
-                  Add meg minden hónapra a tervezett bevételt
-                </CardDescription>
+                  <Button
+                    onClick={fillFromActiveIncomePlan}
+                    size="sm"
+                    variant="outline"
+                    className="border-2 border-green-200 hover:border-green-400 hover:bg-green-50 text-green-600 transition-all rounded-xl shrink-0"
+                  >
+                    <DollarSign size={14} className="mr-1" />
+                    Aktív tervből
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
+                <p className="text-xs text-gray-500 mb-3">
+                  A gombbal minden hónap a nevét tartalmazó bevételi tervből töltődik be (pl. <span className="font-mono">{selectedYear} január</span>). Ha nincs ilyen nevű terv, az aktív terv értéke kerül be.
+                </p>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {MONTHS.map((month, index) => (
                     <div key={index}>
@@ -607,11 +706,9 @@ export default function EvesKoltsegvetesPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                {activeBudgetTotal > 0 && (
-                  <p className="text-xs text-gray-500 mb-3">
-                    Aktív havi költségvetés: <span className="font-semibold text-rose-600">{activeBudgetTotal.toLocaleString('hu-HU')} Ft</span> — a gombbal mind a 12 hónapra kitölthető, majd havonta felülírható.
-                  </p>
-                )}
+                <p className="text-xs text-gray-500 mb-3">
+                  A gombbal minden hónap a nevét tartalmazó költségvetési tervből töltődik be (pl. <span className="font-mono">{selectedYear} január</span>). Ha nincs ilyen nevű terv, az aktív terv értéke kerül be.
+                </p>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {MONTHS.map((month, index) => (
                     <div key={index}>

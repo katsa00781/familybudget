@@ -9,10 +9,10 @@ import {
   SheetTrigger
 } from "../ui/sheet";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
-import { 
-  Menu, BarChart2, CircleDollarSign, User, ChefHat, 
+import {
+  Menu, BarChart2, CircleDollarSign, User, ChefHat,
   ShoppingCart, TrendingUpIcon, Package, PiggyBank,
-  Users, Home, HelpCircle, TrendingUp, BarChart3, Calendar
+  Users, Home, HelpCircle, TrendingUp, BarChart3, Calendar, Milestone
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useUserProfile } from '@/src/hooks/useUserProfile';
@@ -42,6 +42,7 @@ export default function Sidebar({ className = "" }: SidebarProps) {
     { icon: <BarChart3 size={20} />, label: 'Infláció', href: '/inflacio' },
     { icon: <TrendingUpIcon size={20} />, label: 'Befektetések', href: '/befektetesek' },
     { icon: <PiggyBank size={20} />, label: 'Megtakarítások', href: '/jelentesek' },
+    { icon: <Milestone size={20} />, label: 'Hosszú Távú Tervek', href: '/tervezes' },
     { icon: <ChefHat size={20} />, label: 'Receptek', href: '/receptek' },
     { icon: <User size={20} />, label: 'Profil', href: '/profil' },
     { icon: <HelpCircle size={20} />, label: 'Segítség', href: '/segitseg' }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/utils/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/src/components/ui/card'
 import { Input } from '@/src/components/ui/input'
@@ -13,10 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Plus, Trash2, Save, TrendingUp, PiggyBank,
   DollarSign, Target, AlertCircle, Check,
-  Wallet, Scale, ArrowDownUp
+  Wallet, Scale, ArrowDownUp, RefreshCw, FileSpreadsheet
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getActiveBudgetPlan, getActiveIncomePlan } from '@/lib/userPreferences'
+import { fetchWalletAnnualActuals } from '@/lib/walletApi'
+import type { MonthlyActuals } from '@/lib/walletCsv'
 import type {
   AnnualBudgetPlan, MonthlyIncome, AnnualExpense,
   RecurringExpense, MonthlySavingsPlan,
@@ -129,6 +131,76 @@ export default function EvesKoltsegvetesPage() {
   const [savedPlans, setSavedPlans] = useState<AnnualBudgetPlan[]>([])
   const [selectedPlanId, setSelectedPlanId] = useState<string>('')
 
+  // Wallet tényadatok (élő, a wallet-annual-cashflow Edge Function-ből)
+  const [apiActuals, setApiActuals] = useState<MonthlyActuals[] | null>(null)
+  const [isFetchingWallet, setIsFetchingWallet] = useState(false)
+  const [walletError, setWalletError] = useState<string | null>(null)
+  const [walletSyncedAt, setWalletSyncedAt] = useState<string | null>(null)
+  // A göngyölített cashflow alapja: tervezett vagy a Wallet tényadatok
+  const [cashflowBasis, setCashflowBasis] = useState<'terv' | 'teny'>('terv')
+
+  // Havi tény bevétel/kiadás összesítés a kiválasztott évre (12 elem, nullákkal ha nincs adat)
+  const actualsByMonth = useMemo<MonthlyActuals[]>(
+    () => apiActuals ?? Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1, income: 0, expense: 0, hasData: false
+    })),
+    [apiActuals]
+  )
+  const hasActualData = useMemo(() => actualsByMonth.some(a => a.hasData), [actualsByMonth])
+
+  // Havi terv vs. tény összevetés (a táblázathoz)
+  const comparisonRows = useMemo(() => {
+    return MONTHS.map((monthName, index) => {
+      const month = index + 1
+      const plannedIncome = monthlyIncomes.find(mi => mi.month === month)?.amount || 0
+      const recurringTotal = recurringExpenses
+        .filter(re => re.month === month)
+        .reduce((sum, e) => sum + e.amount, 0)
+      const annualDueTotal = annualExpenses
+        .filter(e => e.targetMonth === month)
+        .reduce((sum, e) => sum + e.amount, 0)
+      const general = monthlyBudgetedExpenses.find(me => me.month === month)?.amount || 0
+      const plannedExpense = recurringTotal + annualDueTotal + general
+      const actual = actualsByMonth[index]
+      // Eltérések (csak ott értelmes, ahol van tényadat):
+      // - bevétel: tény − terv (pozitív = a tervnél több jött be)
+      // - kiadás: tény − terv (pozitív = a tervnél többet költöttünk)
+      // - nettó: a tényleges nettó (bev−kiad) és a tervezett nettó különbsége
+      const diffIncome = actual.hasData ? actual.income - plannedIncome : 0
+      const diffExpense = actual.hasData ? actual.expense - plannedExpense : 0
+      const diffNet = actual.hasData
+        ? (actual.income - actual.expense) - (plannedIncome - plannedExpense)
+        : 0
+      return {
+        month,
+        monthName,
+        plannedIncome,
+        plannedExpense,
+        actualIncome: actual.income,
+        actualExpense: actual.expense,
+        diffIncome,
+        diffExpense,
+        diffNet,
+        hasData: actual.hasData
+      }
+    })
+  }, [monthlyIncomes, recurringExpenses, annualExpenses, monthlyBudgetedExpenses, actualsByMonth])
+
+  // Eltérés-összesítők — CSAK a tényadattal rendelkező hónapokra (fair terv-vs-tény).
+  const comparisonTotals = useMemo(() => {
+    return comparisonRows.reduce(
+      (acc, r) => {
+        if (r.hasData) {
+          acc.diffIncome += r.diffIncome
+          acc.diffExpense += r.diffExpense
+          acc.diffNet += r.diffNet
+        }
+        return acc
+      },
+      { diffIncome: 0, diffExpense: 0, diffNet: 0 }
+    )
+  }, [comparisonRows])
+
   // Felhasználó betöltése
   useEffect(() => {
     const getUser = async () => {
@@ -180,6 +252,35 @@ export default function EvesKoltsegvetesPage() {
       toast.error('Hiba történt a tervek betöltésekor!')
     }
   }
+
+  // Wallet élő tényadatok lekérése a kiválasztott évre
+  const fetchWalletActuals = useCallback(async (silent = false) => {
+    setIsFetchingWallet(true)
+    setWalletError(null)
+    try {
+      const res = await fetchWalletAnnualActuals(selectedYear)
+      setApiActuals(res.months)
+      setWalletSyncedAt(res.syncedAt)
+      if (res.months.some(m => m.hasData)) {
+        setCashflowBasis('teny')
+        if (!silent) toast.success(`Wallet tényadatok frissítve (${selectedYear}).`)
+      } else if (!silent) {
+        toast.info(`Nincs Wallet tranzakció a(z) ${selectedYear}. évre.`)
+      }
+    } catch (error) {
+      console.error('Wallet lekérési hiba:', error)
+      const msg = error instanceof Error ? error.message : 'Nem sikerült lekérni a Wallet adatokat'
+      setWalletError(msg)
+      if (!silent) toast.error(msg)
+    } finally {
+      setIsFetchingWallet(false)
+    }
+  }, [selectedYear])
+
+  // Élő Wallet-adatok automatikus frissítése bejelentkezés után és év váltáskor
+  useEffect(() => {
+    if (currentUser) fetchWalletActuals(true)
+  }, [currentUser, fetchWalletActuals])
 
   // Havi bevétel frissítése
   const updateMonthlyIncome = (month: number, amount: number) => {
@@ -308,24 +409,43 @@ export default function EvesKoltsegvetesPage() {
     return plan
   }
 
-  // Éves cashflow számítása — göngyölített egyenleggel
+  // Éves cashflow számítása — göngyölített egyenleggel.
+  // Ha az alap "tény" és az adott hónaphoz van Wallet-adat, a hónap bevétele és
+  // teljes kiadása a tényleges összegekből jön; egyébként a tervezett értékekből.
   const getCashflow = (): CashflowMonth[] => {
     let running = openingBalance
 
     return MONTHS.map((monthName, index) => {
       const month = index + 1
-      const income = monthlyIncomes.find(mi => mi.month === month)?.amount || 0
+      const actual = actualsByMonth[index]
+      const useActual = cashflowBasis === 'teny' && actual.hasData
 
       const recurring = recurringExpenses.filter(re => re.month === month)
-      const recurringTotal = recurring.reduce((sum, re) => sum + re.amount, 0)
-
-      // Valódi cashflow: a nagy kiadás teljes összege a célhónapban esedékes
       const annualDue = annualExpenses.filter(e => e.targetMonth === month)
-      const annualDueTotal = annualDue.reduce((sum, e) => sum + e.amount, 0)
 
-      const generalExpense = monthlyBudgetedExpenses.find(me => me.month === month)?.amount || 0
+      let income: number
+      let recurringTotal: number
+      let annualDueTotal: number
+      let generalExpense: number
+      let totalExpense: number
 
-      const totalExpense = recurringTotal + annualDueTotal + generalExpense
+      if (useActual) {
+        // Tény hónap: a Wallet összesítés tartalmazza az összes valós ki-/bevételt
+        income = actual.income
+        recurringTotal = 0
+        annualDueTotal = 0
+        generalExpense = actual.expense
+        totalExpense = actual.expense
+      } else {
+        // Terv hónap: a tervezett tételekből
+        income = monthlyIncomes.find(mi => mi.month === month)?.amount || 0
+        recurringTotal = recurring.reduce((sum, re) => sum + re.amount, 0)
+        // Valódi cashflow: a nagy kiadás teljes összege a célhónapban esedékes
+        annualDueTotal = annualDue.reduce((sum, e) => sum + e.amount, 0)
+        generalExpense = monthlyBudgetedExpenses.find(me => me.month === month)?.amount || 0
+        totalExpense = recurringTotal + annualDueTotal + generalExpense
+      }
+
       const netCashflow = income - totalExpense
 
       const opening = running
@@ -342,8 +462,8 @@ export default function EvesKoltsegvetesPage() {
         netCashflow,
         openingBalance: opening,
         closingBalance: running,
-        recurringExpenses: recurring,
-        annualExpensesDue: annualDue
+        recurringExpenses: useActual ? [] : recurring,
+        annualExpensesDue: useActual ? [] : annualDue
       }
     })
   }
@@ -489,9 +609,15 @@ export default function EvesKoltsegvetesPage() {
   const { totalIncome, totalAnnualExpenses, totalRecurringExpenses, totalGeneralExpenses } = calculateTotals()
   const cashflow = getCashflow()
   const yearEndBalance = cashflow[cashflow.length - 1]?.closingBalance ?? openingBalance
+  // Az összesítő a cashflow tényleges alapját tükrözi (terv vagy tény keverék)
+  const effectiveTotalIncome = cashflow.reduce((sum, c) => sum + c.income, 0)
+  const effectiveTotalExpenses = cashflow.reduce((sum, c) => sum + c.totalExpense, 0)
   const totalExpenses = totalAnnualExpenses + totalRecurringExpenses + totalGeneralExpenses
   const hasNegativeMonth = cashflow.some(c => c.closingBalance < 0)
   const balanceDiff = yearEndBalance - targetEndBalance
+  // Éves tény összesítés (összevetéshez)
+  const actualTotalIncome = actualsByMonth.reduce((sum, a) => sum + a.income, 0)
+  const actualTotalExpense = actualsByMonth.reduce((sum, a) => sum + a.expense, 0)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 p-3 sm:p-4 md:p-6 relative overflow-hidden">
@@ -731,6 +857,152 @@ export default function EvesKoltsegvetesPage() {
                     </span>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Wallet tényadatok — terv vs. tény összevetés */}
+            <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                      <div className="p-1.5 bg-gradient-to-br from-emerald-500 to-cyan-600 rounded-lg">
+                        <FileSpreadsheet size={18} className="text-white" />
+                      </div>
+                      <span className="bg-gradient-to-r from-emerald-600 to-cyan-600 bg-clip-text text-transparent">
+                        Wallet tényadatok
+                      </span>
+                    </CardTitle>
+                    <CardDescription className="text-sm mt-1">
+                      Élő Wallet-adatok ({selectedYear}) — vesd össze a tervet a tényleges bevételekkel/kiadásokkal
+                    </CardDescription>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => fetchWalletActuals(false)}
+                    disabled={isFetchingWallet}
+                    variant="outline"
+                    className="border-2 border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50 text-emerald-600 transition-all rounded-xl shrink-0"
+                  >
+                    <RefreshCw size={14} className={`mr-1 ${isFetchingWallet ? 'animate-spin' : ''}`} />
+                    {isFetchingWallet ? 'Frissítés...' : 'Frissítés a Wallet-ből'}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-sm">
+                  {walletError ? (
+                    <span className="text-red-600">{walletError}</span>
+                  ) : isFetchingWallet && !hasActualData ? (
+                    <span className="text-gray-500">Wallet tényadatok betöltése…</span>
+                  ) : walletSyncedAt ? (
+                    <span className="text-gray-500">
+                      Utolsó szinkron: {new Date(walletSyncedAt).toLocaleString('hu-HU')}
+                      {!hasActualData && ` — nincs tranzakció a(z) ${selectedYear}. évre`}
+                    </span>
+                  ) : (
+                    <span className="text-gray-500">A {selectedYear}. évi Wallet-tranzakciók betöltése automatikus.</span>
+                  )}
+                </div>
+
+                {hasActualData && (
+                  <>
+                    {/* Cashflow alap kapcsoló */}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-700">Cashflow alapja:</span>
+                      <div className="inline-flex rounded-xl border-2 border-gray-200 p-1 bg-gray-50 w-fit">
+                        <button
+                          type="button"
+                          onClick={() => setCashflowBasis('terv')}
+                          className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition-all ${
+                            cashflowBasis === 'terv'
+                              ? 'bg-white text-emerald-700 shadow'
+                              : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          Terv
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCashflowBasis('teny')}
+                          className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition-all ${
+                            cashflowBasis === 'teny'
+                              ? 'bg-white text-emerald-700 shadow'
+                              : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          Tény (ahol van)
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      „Tény” módban azokban a hónapokban, ahol van Wallet-adat, a tényleges bevétel és kiadás viszi a göngyölített egyenleget; a többi hónap a tervezett értékekből számol.
+                    </p>
+
+                    {/* Terv vs. tény táblázat */}
+                    <div className="overflow-x-auto rounded-xl border-2 border-gray-200/60">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 text-gray-600">
+                            <th className="text-left font-semibold px-3 py-2">Hónap</th>
+                            <th className="text-right font-semibold px-3 py-2">Terv bev.</th>
+                            <th className="text-right font-semibold px-3 py-2">Tény bev.</th>
+                            <th className="text-right font-semibold px-3 py-2">Terv kiad.</th>
+                            <th className="text-right font-semibold px-3 py-2">Tény kiad.</th>
+                            <th className="text-right font-semibold px-3 py-2 border-l border-gray-200">Elt. bev.</th>
+                            <th className="text-right font-semibold px-3 py-2">Elt. kiad.</th>
+                            <th className="text-right font-semibold px-3 py-2">Elt. nettó</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {comparisonRows.map((row) => (
+                            <tr key={row.month} className={`border-t border-gray-100 ${row.hasData ? '' : 'text-gray-400'}`}>
+                              <td className="px-3 py-1.5 font-medium">{row.monthName}</td>
+                              <td className="px-3 py-1.5 text-right font-mono">{row.plannedIncome.toLocaleString('hu-HU')}</td>
+                              <td className="px-3 py-1.5 text-right font-mono text-green-600">
+                                {row.hasData ? row.actualIncome.toLocaleString('hu-HU') : '—'}
+                              </td>
+                              <td className="px-3 py-1.5 text-right font-mono">{row.plannedExpense.toLocaleString('hu-HU')}</td>
+                              <td className="px-3 py-1.5 text-right font-mono text-rose-600">
+                                {row.hasData ? row.actualExpense.toLocaleString('hu-HU') : '—'}
+                              </td>
+                              <td className={`px-3 py-1.5 text-right font-mono border-l border-gray-200 ${row.diffIncome >= 0 ? 'text-green-600' : 'text-rose-600'}`}>
+                                {row.hasData ? `${row.diffIncome >= 0 ? '+' : ''}${row.diffIncome.toLocaleString('hu-HU')}` : '—'}
+                              </td>
+                              <td className={`px-3 py-1.5 text-right font-mono ${row.diffExpense <= 0 ? 'text-green-600' : 'text-rose-600'}`}>
+                                {row.hasData ? `${row.diffExpense >= 0 ? '+' : ''}${row.diffExpense.toLocaleString('hu-HU')}` : '—'}
+                              </td>
+                              <td className={`px-3 py-1.5 text-right font-mono font-semibold ${row.diffNet >= 0 ? 'text-green-600' : 'text-rose-600'}`}>
+                                {row.hasData ? `${row.diffNet >= 0 ? '+' : ''}${row.diffNet.toLocaleString('hu-HU')}` : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
+                            <td className="px-3 py-2">Összesen</td>
+                            <td className="px-3 py-2 text-right font-mono">{totalIncome.toLocaleString('hu-HU')}</td>
+                            <td className="px-3 py-2 text-right font-mono text-green-700">{actualTotalIncome.toLocaleString('hu-HU')}</td>
+                            <td className="px-3 py-2 text-right font-mono">{totalExpenses.toLocaleString('hu-HU')}</td>
+                            <td className="px-3 py-2 text-right font-mono text-rose-700">{actualTotalExpense.toLocaleString('hu-HU')}</td>
+                            <td className={`px-3 py-2 text-right font-mono border-l border-gray-200 ${comparisonTotals.diffIncome >= 0 ? 'text-green-700' : 'text-rose-700'}`}>
+                              {comparisonTotals.diffIncome >= 0 ? '+' : ''}{comparisonTotals.diffIncome.toLocaleString('hu-HU')}
+                            </td>
+                            <td className={`px-3 py-2 text-right font-mono ${comparisonTotals.diffExpense <= 0 ? 'text-green-700' : 'text-rose-700'}`}>
+                              {comparisonTotals.diffExpense >= 0 ? '+' : ''}{comparisonTotals.diffExpense.toLocaleString('hu-HU')}
+                            </td>
+                            <td className={`px-3 py-2 text-right font-mono ${comparisonTotals.diffNet >= 0 ? 'text-green-700' : 'text-rose-700'}`}>
+                              {comparisonTotals.diffNet >= 0 ? '+' : ''}{comparisonTotals.diffNet.toLocaleString('hu-HU')}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Eltérés = tény − terv. <span className="text-green-600 font-semibold">Zöld</span> = a tervhez képest kedvező (több bevétel, kevesebb kiadás, jobb nettó), <span className="text-rose-600 font-semibold">piros</span> = kedvezőtlen. Az összesítő csak a tényadattal rendelkező hónapokat veszi figyelembe.
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -1015,13 +1287,18 @@ export default function EvesKoltsegvetesPage() {
           <div className="space-y-4 md:space-y-6">
             <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl">
               <CardHeader>
-                <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-2 flex-wrap">
                   <div className="p-1.5 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-lg">
                     <ArrowDownUp size={18} className="text-white" />
                   </div>
                   <span className="bg-gradient-to-r from-teal-600 to-cyan-600 bg-clip-text text-transparent">
                     Éves cashflow
                   </span>
+                  {hasActualData && (
+                    <Badge className={`text-xs border-0 ${cashflowBasis === 'teny' ? 'bg-emerald-500 text-white' : 'bg-gray-400 text-white'}`}>
+                      {cashflowBasis === 'teny' ? 'Tény alap' : 'Terv alap'}
+                    </Badge>
+                  )}
                 </CardTitle>
                 <CardDescription className="text-sm">
                   Havi nettó és göngyölített egyenleg — nyitóból kiindulva
@@ -1044,7 +1321,12 @@ export default function EvesKoltsegvetesPage() {
                     }`}
                   >
                     <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-bold text-gray-900">{c.monthName}</h4>
+                      <h4 className="font-bold text-gray-900 flex items-center gap-1.5">
+                        {c.monthName}
+                        {cashflowBasis === 'teny' && actualsByMonth[c.month - 1].hasData && (
+                          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">TÉNY</span>
+                        )}
+                      </h4>
                       {c.closingBalance < 0 ? (
                         <Badge variant="destructive" className="text-xs">
                           <AlertCircle size={12} className="mr-1" />
@@ -1128,11 +1410,11 @@ export default function EvesKoltsegvetesPage() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-white/90">Összes bevétel:</span>
-                  <span className="text-xl font-bold">+{totalIncome.toLocaleString('hu-HU')} Ft</span>
+                  <span className="text-xl font-bold">+{effectiveTotalIncome.toLocaleString('hu-HU')} Ft</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-white/90">Összes kiadás:</span>
-                  <span className="text-xl font-bold">-{totalExpenses.toLocaleString('hu-HU')} Ft</span>
+                  <span className="text-xl font-bold">-{effectiveTotalExpenses.toLocaleString('hu-HU')} Ft</span>
                 </div>
                 <Separator className="bg-white/20" />
                 <div className="flex justify-between items-center">

@@ -915,9 +915,9 @@ export default function Dashboard() {
                 Hozzon létre bevételi és költségvetési terveket a részletes áttekintéshez.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
-                <a href="/bevetelek" className="w-full sm:w-auto">
+                <a href="/berkalkulator" className="w-full sm:w-auto">
                   <Button className="w-full bg-teal-600 hover:bg-teal-700 text-white py-2 text-sm sm:text-base">
-                    Bevételi terv létrehozása
+                    Bér kalkulálása
                   </Button>
                 </a>
                 <a href="/koltsegvetes" className="w-full sm:w-auto">

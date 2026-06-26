@@ -86,11 +86,11 @@ if (!user) redirect('/login')
 | `/berkalkulator` | `app/berkalkulator/page.tsx` | 2025-ös magyar adókulcsok alapján számít |
 | `/koltsegvetes` | `app/koltsegvetes/page.tsx` | Havi költségvetés tervezés |
 | `/eves-koltsegvetes` | `app/eves-koltsegvetes/page.tsx` | Éves cashflow — havi nettó + göngyölített egyenleg, év végi egyensúly |
-| `/bevetelek` | `app/bevetelek/page.tsx` | Bevételi tervek mentése |
+| `/bevetelek` | `app/bevetelek/page.tsx` | **Terv vs. Tény** — Wallet CSV import + havi költségvetési terv összehasonlító (a régi bevételi terv UI megszűnt, funkcióját a bérkalkulátor vette át) |
 | `/bevasarlas` | `app/bevasarlas/page.tsx` | Bevásárlólista szerkesztés |
 | `/bevasarlas-quick` | `app/bevasarlas-quick/page.tsx` | Gyors checklist mód |
 | `/termekek` | `app/termekek/page.tsx` | Termékadatbázis |
-| `/statisztika` | `app/statisztika/page.tsx` | Wallet CSV import + elemzés |
+| `/statisztika` | `app/statisztika/page.tsx` | Bevásárlási statisztikák (idő/kategória/termék/bolt szerinti elemzés) |
 | `/arfigyeles` | `app/arfigyeles/page.tsx` | Árváltozás riasztások |
 | `/inflacio` | `app/inflacio/page.tsx` | Inflációs trendek |
 | `/befektetesek`, `/szamlak`, `/receptek` | — | Placeholder oldalak |
@@ -168,9 +168,16 @@ A kalkuláció a `salary_calculations` táblába mentődik (a túlóra-kategóri
 mezővel azonosítható, és visszatölthető módosításhoz. A régi `tulora_orak` / `muszakpotlek_orak`
 oszlopok legacy státuszúak (0-ra mentve).
 
-## Statisztika oldal — Wallet CSV import
+## Terv vs. Tény oldal (`/bevetelek`) — élő Wallet összehasonlító
 
-A `/statisztika` oldal importálja a **Wallet** (budgetbakers.com) app CSV exportját. A kategóriák leképezése a `WALLET_CATEGORIES` objektumban van definiálva a `/app/koltsegvetes/page.tsx`-ben és a `/app/statisztika/page.tsx`-ben. Az elemzés összehasonlítja a Wallet-ból importált tényleges kiadásokat a mentett `budget_plans` tervekkel.
+A `/bevetelek` oldal (UI: **Terv vs. Tény**) a **Wallet** (budgetbakers.com) havi tényadatait **élőben** kéri le (nincs CSV-feltöltés), és az azonos havi `budget_plans` tervvel veti össze a tényleges kiadásokat.
+
+- **Adatforrás:** a `wallet-monthly-spending` Supabase Edge Function (`supabase/functions/wallet-monthly-spending/index.ts`) — egy hónap kiadásait/bevételeit **kategória (UUID) szerinti bontásban** adja vissza a Wallet REST API-ból. A `BUDGETBAKERS_API_TOKEN` secret a szerveren marad, a hívót Supabase JWT azonosítja, a belső átvezetések (Transfer/Debt/Shopping list) kategória szerint kihagyva. Testvérfüggvény: `wallet-annual-cashflow` (teljes év, csak havi összesítés — érintetlen).
+- **Kliens helper:** `lib/walletApi.ts` → `fetchWalletMonthlySpending(monthKey)` (`supabase.functions.invoke`).
+- **Kategória-illesztés:** a Wallet REST API a **valódi, globális rendszer-kategória UUID-kat** adja vissza (pl. `5c5c03e8-...` = „Groceries”, angolul), a FamilyBudget viszont a saját **belső** UUID-jaival (`WALLET_CATEGORIES`, magyar nevek) hivatkozik, és a tervek `walletCategories` mezője is ezeket tárolja. A `WALLET_SYSTEM_UUID_TO_INTERNAL` híd + `resolveWalletCategory()` (`lib/walletCategories.ts`) fordítja a valódi UUID-t a belső UUID-ra és magyar névre — ez teszi egyeztethetővé és magyar nyelvűvé a megjelenítést. (Custom kategória, pl. Mamci `7bed4dc9`, valódi UUID-ja már egyezik a belsővel.) A `WALLET_CATEGORIES` lista két részből áll: a régi bejegyzések a belső (fake) UUID-kkal + híd-bejegyzéssel, az újabbak közvetlenül a **valódi Wallet rendszer-UUID-jukkal** (ezeknek nincs híd-bejegyzés — a `resolveWalletCategory` önmagát adja vissza). Új kategóriát ezért elég a valódi UUID-jával felvenni a `WALLET_CATEGORIES`-be (a valódi UUID-kat a Wallet MCP `get_categories` adja). A Költségvetés oldal kategória-választója a `group` mező szerint csoportosítja a listát.
+- **Hónap ↔ terv párosítás:** a `budget_plans.plan_month` (`YYYY-MM`, migráció `20260626_001`) oszlop alapján — a Költségvetés oldalon állítható „Vonatkozási hónap” mező. Hónapváltáskor automatikusan az azonos havi terv töltődik be (visszaesésként a `created_at` hónapja). Hónapváltáskor a Wallet adat is automatikusan újratöltődik; „Frissítés a Wallet-ből” gomb is van.
+
+> A `/bevetelek` route korábban a bevételi tervek (`income_plans`) szerkesztője volt; ezt a funkciót a bérkalkulátor vette át. Az `income_plans` tábla és a `lib/userPreferences.ts` / `src/services/income.ts` helper-ek továbbra is élnek (dashboard, költségvetés, éves cashflow használja), csak a régi szerkesztő UI szűnt meg. A `lib/walletCsv.ts` CSV parser-t már csak az éves cashflow oldal használja.
 
 ## Sidebar navigáció
 

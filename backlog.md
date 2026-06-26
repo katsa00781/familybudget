@@ -14,7 +14,7 @@
 | S3 | `.env.local` + `.env.example` + `.gitignore` | ✅ Kész | Supabase env kulcsok |
 | S4 | shadcn/ui init | ✅ Kész | src/components/ui/ alatt |
 | S5 | Supabase projekt + kliensek (client.ts, server.ts) | ✅ Kész | createBrowserClient / aszinkron szerver kliens |
-| S6 | DB táblák + RLS | ✅ Kész | 015 migrációig; profiles, families, salary_calculations, income_plans, budget_plans, annual_budget_plans, shopping_lists, products, product_price_history, user_preferences |
+| S6 | DB táblák + RLS | ✅ Kész | profiles, families, salary_calculations, income_plans, budget_plans (+`plan_month`, migráció 20260626_001), annual_budget_plans, shopping_lists, products, product_price_history, user_preferences |
 | S7 | `@/*` kettős path alias (tsconfig) | ✅ Kész | `["./src/*", "./"]` — src/ és root/ egyaránt elérhető |
 | S8 | Sidebar navigáció (desktop fix + mobil hamburger) | ✅ Kész | src/components/layout/sidebar.tsx, useUserProfile hook |
 | S9 | Auth (login, signup, signout, middleware) | ✅ Kész | Server Actions (app/actions/auth.ts); oldalak saját user-ellenőrzéssel |
@@ -29,12 +29,12 @@
 | F1 | Áttekintés / Dashboard (`/attekintes`) | ✅ Kész | Valódi dashboard komponens, összesített adatok |
 | F2 | Bérkalkulátor (`/berkalkulator`) | ✅ Kész | 2026-os MVM bérjegyzék alapján; TB-alap, SZJA, műszakpótlék, túlóra-kategóriák, betegszabadság; mentés + visszatöltés |
 | F3 | Havi költségvetés (`/koltsegvetes`) | ✅ Kész | Tervezés, Wallet CSV import + kategória-leképezés, budget_plans mentése |
-| F4 | Bevételi tervek (`/bevetelek`) | ✅ Kész | income_plans mentése, aktív terv kezelése (userPreferences) |
+| F4 | Terv vs. Tény (`/bevetelek`) | ✅ Kész | **Élő** Wallet havi tényadat (kategória-UUID szerint, `wallet-monthly-spending` Edge Function) + azonos havi `budget_plans` (`plan_month`) összehasonlítás. CSV már nem kell. A régi bevételi terv szerkesztő UI megszűnt, funkcióját a bérkalkulátor vette át |
 | F5 | Éves cashflow (`/eves-koltsegvetes`) | ✅ Kész | Havi nettó + göngyölített egyenleg, év végi egyensúly, cashflow oszlop (migráció 015) |
 | F6 | Bevásárlólista szerkesztő (`/bevasarlas`) | ✅ Kész | Lista szerkesztés, items JSONB |
 | F7 | Gyors checklist mód (`/bevasarlas-quick`) | ✅ Kész | Gyors kipipálás, shopping_lists |
 | F8 | Termékadatbázis (`/termekek`) | ✅ Kész | products tábla, árkövetés (product_price_history) |
-| F9 | Statisztika – Wallet CSV import (`/statisztika`) | ✅ Kész | CSV elemzés, tényleges vs. tervezett kiadások összehasonlítása |
+| F9 | Statisztika (`/statisztika`) | ✅ Kész | Bevásárlási statisztikák (idő/kategória/termék/bolt); a Wallet CSV terv-vs-tény összehasonlító átkerült a `/bevetelek` (Terv vs. Tény) oldalra |
 | F10 | Árváltozás riasztások (`/arfigyeles`) | ✅ Kész | getPriceChanges() alapján |
 | F11 | Inflációs trendek (`/inflacio`) | ✅ Kész | getInflationData() havi aggregáció |
 | F12 | Profil oldal (`/profil`) | ✅ Kész | Felhasználói adatok, família kezelés |
@@ -65,5 +65,11 @@
 ## Napló
 > Új bejegyzés legfelülre. Formátum: `YYYY-MM-DD · feladat # · mi történt`
 
+- 2026-06-26 · F4 · Terv vs. Tény **élő Wallet** integrációra állítva (CSV megszüntetve): új `wallet-monthly-spending` Edge Function (egy hónap kiadás/bevétel kategória-UUID szerinti bontásban, BUDGETBAKERS_API_TOKEN, JWT-auth, belső átvezetések kihagyva) — deployolva. Kliens helper `lib/walletApi.ts` → `fetchWalletMonthlySpending(monthKey)`. Kategória-illesztés közvetlenül UUID ↔ terv `walletCategories` alapján (nincs név-alias). Új `budget_plans.plan_month` oszlop (migráció `20260626_001`) + a Költségvetés oldalon „Vonatkozási hónap” mező; a Terv vs. Tény hónapváltáskor automatikusan az azonos havi tervet tölti be és frissít a Wallet-ből. Mellékes: `tsconfig.json` kizárja a `supabase/functions`-t (Deno) a Next build típusellenőrzéséből.
+- 2026-06-26 · F4/F9 · Wallet CSV terv-vs-tény összehasonlító átköltöztetve a `/statisztika`-ból a `/bevetelek` oldalra (új UI: **Terv vs. Tény**, Scale ikon a sidebaron). A régi bevételi terv (`income_plans`) szerkesztő UI megszűnt — funkcióját a bérkalkulátor vette át; az `income_plans` tábla/helper-ek érintetlenek. Új: a hónap kiválasztásakor automatikusan az azonos `created_at` hónapú `budget_plans` terv töltődik be. A statisztika oldal mostantól csak a bevásárlási statisztikákat tartalmazza. Nav-frissítés: sidebar/main-nav „Terv vs. Tény”, dashboard üres-állapot CTA a bérkalkulátorra mutat.
+- 2026-06-26 · F5 · Éves cashflow terv-vs-tény eltérés oszlopok: a Wallet tényadatok táblázat 3 új oszloppal bővült — Elt. bev. (tény−terv), Elt. kiad. (tény−terv), Elt. nettó ((tény bev−kiad) − (terv bev−kiad)); havi + összesítő sor (csak tényadatos hónapokra), szín-kódolás (zöld=kedvező, piros=kedvezőtlen).
+- 2026-06-26 · F5 · Éves cashflow Wallet tényadatok hibajavítás: a `wallet-annual-cashflow` Edge Function (v2) minden `paymentType === "transfer"` rekordot eldobott, de a bank-szinkronizált (Revolut) tételek mind „transfer” paymentType-pal érkeznek → minden hónap `hasData:false`, így a Wallet szekció sosem jelent meg. A belső átvezetés szűrése immár CSAK kategória szerint (Transfer/Debt/Shopping list — mint a `wallet-spending`), a paymentType-szűrés törölve. Edge Function forrás immár a repóban is (`supabase/functions/wallet-annual-cashflow/index.ts`).
+- 2026-06-26 · F5 · Éves cashflow Wallet integráció ÉLŐ adatra állítva (CSV helyett): új `wallet-annual-cashflow` Supabase Edge Function (BUDGETBAKERS_API_TOKEN secret, JWT-auth, teljes év havi bevétel+kiadás aggregálás, convertTo=base, átvezetések kihagyva); kliens helper `lib/walletApi.ts` (`supabase.functions.invoke`); az éves oldal auto-frissít bejelentkezéskor/év váltáskor + „Frissítés a Wallet-ből” gomb. A `wallet-spending` (familyshopping, havi/kategória) kontraktusa érintetlen.
+- 2026-06-26 · F5 · Éves cashflow terv vs. tény összefésülés: havi terv/tény összevető táblázat, „Cashflow alapja: Terv/Tény” kapcsoló (tény ahol van Wallet-adat, terv ahol nincs). Wallet CSV parser kiemelve közös `lib/walletCsv.ts`-be (statisztika oldal is innen importál).
 - 2026-06-17 · F17 · Hosszú Távú Tervezés oldal megvalósítva (savings_goals + savings_transactions); éves cashflow auto-betöltés aktív tervekből; sidebar Tervezés link hozzáadva.
 - 2026-06-17 · — · Backlog létrehozva az aktuális projekt-állapot alapján. Setup (S1–S11) és F1–F12 teljesnek jelölve a CLAUDE.md és a git-history alapján. F13–F14 folyamatban, F15–F20 placeholder/teendő.

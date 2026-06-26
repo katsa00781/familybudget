@@ -346,6 +346,8 @@ export default function KoltsegvetesPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [budgetName, setBudgetName] = useState('')
   const [budgetDescription, setBudgetDescription] = useState('')
+  // A terv vonatkozási hónapja (YYYY-MM) — a Terv vs. Tény oldal ez alapján párosít.
+  const [planMonth, setPlanMonth] = useState<string>(() => new Date().toISOString().slice(0, 7))
   const [selectedBudgetId, setSelectedBudgetId] = useState<string>('')
   const [expectedIncome, setExpectedIncome] = useState<number>(0)
   const [incomePlans, setIncomePlans] = useState<IncomePlan[]>([])
@@ -594,7 +596,8 @@ export default function KoltsegvetesPage() {
         total_amount: total,
         name: budgetName || `Költségvetés ${new Date().toLocaleDateString('hu-HU')}`,
         description: budgetDescription || null,
-        actual_income: actualIncome > 0 ? actualIncome : null // Tényleges bevétel mentése
+        actual_income: actualIncome > 0 ? actualIncome : null, // Tényleges bevétel mentése
+        plan_month: planMonth || null // Vonatkozási hónap (Terv vs. Tény párosításhoz)
       }
 
       console.log('budgetToSave:', budgetToSave)
@@ -747,6 +750,7 @@ export default function KoltsegvetesPage() {
       toast.success('Új üres költségvetés indítva! Töltsd ki az adatokat és mentsd el.')
     }
     
+    setPlanMonth(new Date().toISOString().slice(0, 7)) // Új terv: alapból az aktuális hónap
     setSelectedBudgetId('') // Ürítjük a kiválasztást (ez jelzi, hogy új költségvetés)
     console.log('selectedBudgetId törölve, új költségvetés létrehozva másolással')
   }
@@ -786,6 +790,7 @@ export default function KoltsegvetesPage() {
         'Július', 'Augusztus', 'Szeptember', 'Október', 'November', 'December'
       ]
       const monthName = monthNames[currentMonth - 1]
+      setPlanMonth(`${new Date().getFullYear()}-${String(currentMonth).padStart(2, '0')}`) // Vonatkozási hónap az éves tervből
       setBudgetName(`${monthName} ${new Date().getFullYear()} - Éves terv alapján`)
       setBudgetDescription(
         `Automatikusan generált az éves tervből. ` +
@@ -835,6 +840,7 @@ export default function KoltsegvetesPage() {
         setBudgetName(data.name || '')
         setBudgetDescription(data.description || '')
         setActualIncome(data.actual_income || 0) // Tényleges bevétel betöltése
+        setPlanMonth(data.plan_month || new Date(data.created_at).toISOString().slice(0, 7)) // Vonatkozási hónap (régi terveknél a created_at hónapja)
         setSelectedBudgetId(budgetId)
         setIsCreatingNew(false) // Betöltés esetén nem újat hozunk létre
         
@@ -1586,6 +1592,19 @@ export default function KoltsegvetesPage() {
                   />
                 </div>
                 <div>
+                  <label htmlFor="budget-month" className="block text-sm font-semibold text-gray-700 mb-2">
+                    Vonatkozási hónap
+                  </label>
+                  <Input
+                    id="budget-month"
+                    type="month"
+                    value={planMonth}
+                    onChange={(e) => setPlanMonth(e.target.value)}
+                    className="w-full h-9 sm:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">A Terv vs. Tény oldal ehhez a hónaphoz párosítja a Wallet tényadatokat.</p>
+                </div>
+                <div className="lg:col-span-2">
                   <label htmlFor="budget-description" className="block text-sm font-semibold text-gray-700 mb-2">
                     Leírás (opcionális)
                   </label>

@@ -41,7 +41,7 @@ const MainNav = () => {
                   Költségvetés
                 </Link>
                 <Link href="/bevetelek" className="text-lg hover:text-blue-600 transition-colors">
-                  Bevételek
+                  Terv vs. Tény
                 </Link>
                 <Link href="/bevasarlas" className="text-lg hover:text-blue-600 transition-colors">
                   Bevásárlás

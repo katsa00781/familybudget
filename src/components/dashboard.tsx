@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/utils/supabase/client';
 import { useUserProfile } from '@/src/hooks/useUserProfile';
 import { getActiveIncomePlan, getActiveBudgetPlan } from '@/lib/userPreferences';
+import { fetchWalletMonthlySpending, type WalletMonthlyResponse } from '@/lib/walletApi';
+import { resolveWalletCategory } from '@/lib/walletCategories';
 import { Button } from "@/src/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/src/components/ui/card";
 import { Badge } from "@/src/components/ui/badge";
@@ -46,10 +48,6 @@ interface BudgetStorageV2 {
 
 type BudgetStoragePayload = BudgetCategory[] | BudgetItem[] | BudgetStorageV2;
 
-const isBudgetStorageV2 = (data: BudgetStoragePayload): data is BudgetStorageV2 => {
-  return typeof data === 'object' && !Array.isArray(data) && data !== null && 'categories' in data;
-};
-
 interface BudgetPlan {
   id: string;
   name: string;
@@ -86,8 +84,16 @@ export default function Dashboard() {
   const [incomePlans, setIncomePlans] = useState<IncomePlan[]>([]);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
   const [shoppingLists, setShoppingLists] = useState<ShoppingList[]>([]);
+  const [walletData, setWalletData] = useState<WalletMonthlyResponse | null>(null);
+  const [walletLoading, setWalletLoading] = useState(true);
+  const [walletError, setWalletError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  // Aktuális hónap kulcsa (YYYY-MM) és magyar megnevezése a Wallet tényadathoz
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const currentMonthLabel = now.toLocaleDateString('hu-HU', { year: 'numeric', month: 'long' });
 
   const { getUserDisplayName } = useUserProfile();
   const supabase = createClient();
@@ -188,142 +194,75 @@ export default function Dashboard() {
     checkUser();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Wallet havi tényadat betöltése (aktuális hónap) — a kezdőlap fő mutatóihoz
+  const loadWalletData = async () => {
+    try {
+      setWalletLoading(true);
+      setWalletError(null);
+      const data = await fetchWalletMonthlySpending(currentMonthKey);
+      setWalletData(data);
+    } catch (error) {
+      console.error('Error loading Wallet monthly data:', error);
+      setWalletError(error instanceof Error ? error.message : 'Nem sikerült lekérni a Wallet adatokat');
+      setWalletData(null);
+    } finally {
+      setWalletLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (currentUser) {
       loadData();
+      loadWalletData();
     }
   }, [currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Számítások
   const currentBudget = budgetPlans[0];
   const currentIncome = incomePlans[0];
-  
-  // Költségvetési tételek kinyerése (támogatjuk a régi és új formátumot is)
-  const getBudgetItems = (): BudgetItem[] => {
-    if (!currentBudget?.budget_data) return [];
-    
-    const budgetDataRaw = currentBudget.budget_data;
-    
-    // Ha tömb és van eleme
-    if (Array.isArray(budgetDataRaw) && budgetDataRaw.length > 0) {
-      const firstItem = budgetDataRaw[0];
-      
-      // Type guard függvény kategória ellenőrzéshez
-      const isBudgetCategory = (item: unknown): item is BudgetCategory => {
-        return !!(item && 
-               typeof item === 'object' && 
-               item !== null &&
-               'items' in item && 
-               Array.isArray((item as { items: unknown }).items));
-      };
-      
-      // Ellenőrizzük, hogy az első elem kategória-e (új formátum)
-      if (isBudgetCategory(firstItem)) {
-        // Új formátum: kategóriák, ki kell szedni az összes item-et
-        const allItems: BudgetItem[] = [];
-        (budgetDataRaw as BudgetCategory[]).forEach((category) => {
-          if (category.items && Array.isArray(category.items)) {
-            allItems.push(...category.items);
-          }
-        });
-        return allItems;
-      }
 
-      // Régi formátum: közvetlenül tételek
-      return budgetDataRaw as BudgetItem[];
-    }
+  // Tényleges havi értékek a Wallet-ből (a kezdőlap fő mutatói ezt jelenítik meg)
+  const actualIncome = walletData?.totalIncome || 0;
+  const actualExpenses = walletData?.totalExpense || 0;
+  const actualBalance = actualIncome - actualExpenses;
 
-    if (isBudgetStorageV2(budgetDataRaw)) {
-      const categories = Array.isArray(budgetDataRaw.categories) ? budgetDataRaw.categories : [];
-      const allItems: BudgetItem[] = [];
-      categories.forEach(category => {
-        if (category.items && Array.isArray(category.items)) {
-          allItems.push(...category.items);
-        }
-      });
-      return allItems;
-    }
-    
-    return [];
-  };
-
-  const budgetItems = getBudgetItems();
-  
-  const totalIncome = currentIncome?.total_income || 0;
-  const totalExpenses = budgetItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-  const balance = totalIncome - totalExpenses;
-
-  // Költségvetési kategóriák a pie chart-hoz
-  const getBudgetCategories = () => {
-    if (budgetItems.length === 0) return [];
-    
-    const categories = budgetItems.reduce((acc: Record<string, number>, item: BudgetItem) => {
-      const category = item.category || 'Egyéb';
-      acc[category] = (acc[category] || 0) + item.amount;
-      return acc;
-    }, {});
-
+  // Tényleges havi kiadás-kategóriák a pie chart-hoz (Wallet adatból, magyar nevekkel)
+  const getActualCategories = () => {
+    const categories = walletData?.categories ?? [];
     const colors = ['#1fb6ff', '#00d4aa', '#ff9500', '#a855f7', '#f43f5e', '#10b981', '#8b5cf6'];
-    
-    return Object.entries(categories).map(([name, value], index) => ({
-      name,
-      value: value as number,
-      color: colors[index % colors.length]
-    }));
+
+    return categories
+      .filter((cat) => cat.expense > 0)
+      .map((cat) => {
+        const { name } = resolveWalletCategory(cat.categoryId, cat.categoryName);
+        return { name, value: cat.expense };
+      })
+      .sort((a, b) => b.value - a.value)
+      .map((cat, index) => ({ ...cat, color: colors[index % colors.length] }));
   };
 
-  // Szükséglet, vágyak, megtakarítás százalékos eloszlása (50/30/20 szabály)
-  const getBudgetBreakdown = () => {
-    if (budgetItems.length === 0) return [];
-
-    // 50/30/20 szabály alapján - a type mező használata
-    const needs = budgetItems
-      .filter((item: BudgetItem) => item.type === 'Szükséglet')
-      .reduce((sum: number, item: BudgetItem) => sum + item.amount, 0);
-
-    const wants = budgetItems
-      .filter((item: BudgetItem) => item.type === 'Vágyak')
-      .reduce((sum: number, item: BudgetItem) => sum + item.amount, 0);
-
-    const savings = budgetItems
-      .filter((item: BudgetItem) => item.type === 'Megtakarítás')
-      .reduce((sum: number, item: BudgetItem) => sum + item.amount, 0);
-
-    // Nem kategorizált tételek (üres vagy null type)
-    const uncategorized = budgetItems
-      .filter((item: BudgetItem) => !item.type || (item.type as string) === '' || item.type === null)
-      .reduce((sum: number, item: BudgetItem) => sum + item.amount, 0);
-
-    const total = needs + wants + savings + uncategorized;
-    if (total === 0) return [];
-
-    const result = [
-      { name: 'Szükségletek (50%)', value: needs, percentage: ((needs / total) * 100).toFixed(1), color: '#10b981', target: 50 },
-      { name: 'Vágyak (30%)', value: wants, percentage: ((wants / total) * 100).toFixed(1), color: '#8b5cf6', target: 30 },
-      { name: 'Megtakarítások (20%)', value: savings, percentage: ((savings / total) * 100).toFixed(1), color: '#f59e0b', target: 20 }
-    ];
-
-    // Ha vannak nem kategorizált tételek, adjuk hozzá
-    if (uncategorized > 0) {
-      result.push({
-        name: 'Egyéb/Nem kategorizált',
-        value: uncategorized,
-        percentage: ((uncategorized / total) * 100).toFixed(1),
-        color: '#94a3b8',
-        target: 0
+  // Havi trend adatok — a Wallet napi bontásából göngyölített (kumulált) bevétel/kiadás
+  const getMonthlyTrend = () => {
+    const daily = walletData?.daily;
+    if (daily && daily.length > 0) {
+      let cumIncome = 0;
+      let cumExpense = 0;
+      return daily.map((d) => {
+        cumIncome += d.income;
+        cumExpense += d.expense;
+        return {
+          name: String(d.day),
+          Bevételek: cumIncome,
+          Kiadások: cumExpense,
+        };
       });
     }
-
-    return result;
-  };
-
-  // Havi trend adatok (dummy data, később lehet bővíteni)
-  const getMonthlyTrend = () => {
+    // Visszaesés: lineáris vetület, ha a napi adat nem érhető el (régebbi Edge Function)
     const days = Array.from({ length: 30 }, (_, i) => i + 1);
     return days.map(day => ({
       name: day.toString(),
-      Bevételek: totalIncome * (day / 30),
-      Kiadások: totalExpenses * (day / 30)
+      Bevételek: actualIncome * (day / 30),
+      Kiadások: actualExpenses * (day / 30)
     }));
   };
 
@@ -336,8 +275,7 @@ export default function Dashboard() {
     }).format(amount);
   };
 
-  const categoryData = getBudgetCategories();
-  const budgetBreakdown = getBudgetBreakdown();
+  const categoryData = getActualCategories();
   const monthlyData = getMonthlyTrend();
   const todayShoppingTotal = shoppingLists.reduce((sum, list) => sum + (list.total_amount || 0), 0);
 
@@ -378,10 +316,10 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-lg sm:text-2xl lg:text-3xl font-extrabold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent tabular-nums">
-                {formatCurrency(totalIncome)}
+                {walletLoading ? '…' : formatCurrency(actualIncome)}
               </div>
               <p className="text-xs text-emerald-600 mt-2 font-medium">
-                {currentIncome ? 'Aktuális terv alapján' : 'Nincs bevételi terv'}
+                {walletError ? 'Wallet adat nem elérhető' : `Tényleges – ${currentMonthLabel}`}
               </p>
             </CardContent>
           </Card>
@@ -395,10 +333,10 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-lg sm:text-2xl lg:text-3xl font-extrabold bg-gradient-to-r from-red-500 to-rose-600 bg-clip-text text-transparent tabular-nums">
-                {formatCurrency(totalExpenses)}
+                {walletLoading ? '…' : formatCurrency(actualExpenses)}
               </div>
               <p className="text-xs text-red-500 mt-2 font-medium">
-                {currentBudget ? 'Tervezett kiadások' : 'Nincs költségvetési terv'}
+                {walletError ? 'Wallet adat nem elérhető' : `Tényleges – ${currentMonthLabel}`}
               </p>
             </CardContent>
           </Card>
@@ -411,11 +349,11 @@ export default function Dashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className={`text-lg sm:text-2xl lg:text-3xl font-extrabold tabular-nums ${balance >= 0 ? 'bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent' : 'bg-gradient-to-r from-red-500 to-rose-600 bg-clip-text text-transparent'}`}>
-                {formatCurrency(balance)}
+              <div className={`text-lg sm:text-2xl lg:text-3xl font-extrabold tabular-nums ${actualBalance >= 0 ? 'bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent' : 'bg-gradient-to-r from-red-500 to-rose-600 bg-clip-text text-transparent'}`}>
+                {walletLoading ? '…' : formatCurrency(actualBalance)}
               </div>
               <p className="text-xs text-gray-500 mt-2 font-medium">
-                Bevétel - Kiadás
+                Tényleges bevétel − kiadás
               </p>
             </CardContent>
           </Card>
@@ -532,256 +470,58 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Aktuális költségvetési terv */}
-        {currentBudget && (
-          <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-emerald-500/20 transition-all duration-300 rounded-2xl">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl">
-                    <BarChart2 className="h-5 w-5 text-white" />
-                  </div>
-                  <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent font-bold">Aktuális Költségvetési Terv</span>
+        {/* Tényleges havi bevétel/kiadás összevetés (Wallet) */}
+        <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 hover:shadow-emerald-500/20 transition-all duration-300 rounded-2xl">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl">
+                  <Wallet className="h-5 w-5 text-white" />
                 </div>
-                <Badge className="bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-700 text-sm border border-emerald-300 font-semibold">
-                  {currentBudget.name}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Fő költségvetési összeg */}
-                <div className="p-4 bg-gradient-to-r from-teal-50 to-green-50 rounded-lg border border-teal-200">
-                  <div className="flex justify-between items-center flex-wrap gap-2">
-                    <span className="text-sm font-medium text-gray-700">Összes tervezett kiadás:</span>
-                    <span className="text-lg sm:text-xl font-bold text-teal-700">
-                      {formatCurrency(totalExpenses)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center mt-2">
-                    <span className="text-xs text-gray-600">Tételek száma:</span>
-                    <span className="text-sm font-medium text-gray-700">
-                      {budgetItems.length} db
-                    </span>
-                  </div>
-                </div>
-                
-                {/* Bevétel vs Kiadás összehasonlítás */}
-                <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium text-gray-700">Tervezett bevétel:</span>
-                    <span className="text-lg font-bold text-blue-600">
-                      {formatCurrency(totalIncome)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium text-gray-700">Tervezett kiadás:</span>
-                    <span className="text-lg font-bold text-red-600">
-                      {formatCurrency(totalExpenses)}
-                    </span>
-                  </div>
-                  <hr className="my-2 border-gray-300" />
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-gray-700">Egyenleg:</span>
-                    <span className={`text-lg font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {balance >= 0 ? '+' : ''}{formatCurrency(balance)}
-                    </span>
-                  </div>
-                </div>
-                
-                {/* Főbb költségvetési tételek */}
-                {budgetItems && budgetItems.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-800 mb-3">Főbb kiadások:</h3>
-                    <div className="space-y-2">
-                      {budgetItems
-                        .sort((a, b) => (b.amount || 0) - (a.amount || 0)) // Összeg szerint csökkenő sorrend
-                        .slice(0, 8) // Csak a 8 legnagyobb tétel
-                        .map((item: BudgetItem, index: number) => {
-                          const getItemName = (item: BudgetItem) => {
-                            if (item.subcategory && item.subcategory.trim()) {
-                              return item.subcategory.trim();
-                            }
-                            if (item.category && item.category.trim()) {
-                              return item.category.trim();
-                            }
-                            return `Tétel #${index + 1}`;
-                          };
-
-                          const getItemType = (item: BudgetItem) => {
-                            return item.type || 'Egyéb';
-                          };
-
-                          return (
-                            <div key={item.id || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <span className="font-medium text-gray-800 text-sm truncate">
-                                  {getItemName(item)}
-                                </span>
-                                <Badge variant="secondary" className="text-xs whitespace-nowrap">
-                                  {getItemType(item)}
-                                </Badge>
-                              </div>
-                              <span className="text-sm font-bold text-teal-600 ml-2">
-                                {formatCurrency(item.amount || 0)}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      
-                      {budgetItems.length > 8 && (
-                        <div className="text-center pt-2">
-                          <span className="text-xs text-gray-500">
-                            ... és még {budgetItems.length - 8} további tétel
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
+                <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent font-bold">Havi tényleges (Wallet)</span>
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Aktuális bevételi terv */}
-        {currentIncome && (
-          <Card className="bg-white/90 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between text-teal-700">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Aktuális Bevételi Terv
+              <Badge className="bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-700 text-sm border border-emerald-300 font-semibold">
+                {currentMonthLabel}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {walletLoading ? (
+              <p className="text-gray-500 text-center py-6 text-sm sm:text-base">Wallet adatok betöltése…</p>
+            ) : walletError ? (
+              <p className="text-red-500 text-center py-6 text-sm sm:text-base">{walletError}</p>
+            ) : (
+              <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-gray-700">Tényleges bevétel:</span>
+                  <span className="text-lg font-bold text-green-600">
+                    {formatCurrency(actualIncome)}
+                  </span>
                 </div>
-                <Badge className="bg-green-100 text-green-700 text-sm">
-                  Bevételi terv
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 sm:space-y-4">
-                <div className="p-3 sm:p-4 bg-gradient-to-r from-green-50 to-teal-50 rounded-lg border border-green-200">
-                  <div className="flex justify-between items-center flex-wrap gap-2">
-                    <span className="font-medium text-gray-800 text-sm sm:text-base">Havi alapbevétel</span>
-                    <span className="text-base sm:text-lg font-bold text-green-600">
-                      {formatCurrency(currentIncome.base_income || 0)}
-                    </span>
-                  </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-gray-700">Tényleges kiadás:</span>
+                  <span className="text-lg font-bold text-red-600">
+                    {formatCurrency(actualExpenses)}
+                  </span>
                 </div>
-                
-                {currentIncome.other_income && currentIncome.other_income.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-gray-700">További bevételek:</h4>
-                    {currentIncome.other_income.map((income: OtherIncome, index: number) => (
-                      <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="flex justify-between items-center flex-wrap gap-2">
-                          <span className="text-sm font-medium text-gray-800 truncate flex-1 min-w-0">
-                            {income.name || 'Névtelen bevétel'}
-                          </span>
-                          <span className="font-bold text-green-600 whitespace-nowrap">
-                            {formatCurrency(income.amount || 0)}
-                          </span>
-                        </div>
-                        {income.description && (
-                          <p className="text-xs text-gray-600 mt-1 line-clamp-2">{income.description}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                
-                <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gradient-to-r from-green-50 to-teal-50 rounded-lg border border-green-200">
-                  <div className="flex justify-between items-center flex-wrap gap-2">
-                    <span className="text-sm font-medium text-gray-700">Összes bevétel:</span>
-                    <span className="text-lg sm:text-xl font-bold text-green-700">
-                      {formatCurrency(totalIncome)}
-                    </span>
-                  </div>
+                <hr className="my-2 border-gray-300" />
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-700">Egyenleg:</span>
+                  <span className={`text-lg font-bold ${actualBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {actualBalance >= 0 ? '+' : ''}{formatCurrency(actualBalance)}
+                  </span>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        )}
+            )}
+          </CardContent>
+        </Card>
 
-        {/* Költségvetési breakdown és kategóriák */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-          {budgetBreakdown.length > 0 && (
-            <Card className="bg-white/90 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle className="text-teal-700 text-base sm:text-lg">50/30/20 Szabály</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 sm:space-y-4">
-                  {budgetBreakdown.map((item, index) => (
-                    <div key={index} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                          <div 
-                            className="w-3 h-3 sm:w-4 sm:h-4 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: item.color }}
-                          ></div>
-                          <span className="font-medium text-gray-800 text-sm sm:text-base truncate">{item.name}</span>
-                        </div>
-                        <div className="text-right ml-2">
-                          <div className="font-bold text-gray-800 text-sm sm:text-base">{item.percentage}%</div>
-                          <div className="text-xs sm:text-sm text-gray-600">{formatCurrency(item.value)}</div>
-                        </div>
-                      </div>
-                      
-                      {/* Célkitűzés vs aktuális állapot */}
-                      {'target' in item && item.target > 0 && (
-                        <div className="ml-5 sm:ml-7">
-                          <div className="flex justify-between text-xs text-gray-500 mb-1">
-                            <span>Cél: {item.target}%</span>
-                            <span className={`font-medium ${
-                              parseFloat(item.percentage) > item.target + 5 ? 'text-red-600' :
-                              parseFloat(item.percentage) < item.target - 5 ? 'text-yellow-600' :
-                              'text-green-600'
-                            }`}>
-                              {parseFloat(item.percentage) > item.target 
-                                ? `+${(parseFloat(item.percentage) - item.target).toFixed(1)}%` 
-                                : parseFloat(item.percentage) < item.target
-                                ? `-${(item.target - parseFloat(item.percentage)).toFixed(1)}%`
-                                : 'Megfelelő'
-                              }
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
-                              className={`h-2 rounded-full transition-all duration-300 ${
-                                parseFloat(item.percentage) > item.target + 5 ? 'bg-red-400' :
-                                parseFloat(item.percentage) < item.target - 5 ? 'bg-yellow-400' :
-                                'bg-green-400'
-                              }`}
-                              style={{ 
-                                width: `${Math.min(parseFloat(item.percentage), 100)}%`,
-                                maxWidth: '100%'
-                              }}
-                            ></div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Összefoglaló */}
-                <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-                  <h4 className="text-sm font-semibold text-blue-800 mb-2">50/30/20 Szabály</h4>
-                  <div className="text-xs text-blue-700 space-y-1">
-                    <div>• <strong>50% Szükségletek:</strong> Lakhatás, étel, közlekedés, egészség</div>
-                    <div>• <strong>30% Vágyak:</strong> Szórakozás, hobbi, utazás, nem alapvető dolgok</div>
-                    <div>• <strong>20% Megtakarítások:</strong> Befektetések, vészhelyzeti tartalék</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
+        {/* Tényleges kiadások kategóriánként (Wallet) */}
+        <div className="grid grid-cols-1 gap-4 sm:gap-6">
           {categoryData.length > 0 && (
             <Card className="bg-white/90 backdrop-blur-sm">
               <CardHeader>
-                <CardTitle className="text-teal-700 text-base sm:text-lg">Kategóriák szerinti bontás</CardTitle>
+                <CardTitle className="text-teal-700 text-base sm:text-lg">Tényleges kiadások kategóriánként – {currentMonthLabel}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-1 xl:grid-cols-2 lg:gap-6">
@@ -858,12 +598,12 @@ export default function Dashboard() {
         </div>
 
         {/* Havi trend grafikon */}
-        {(totalIncome > 0 || totalExpenses > 0) && (
+        {(actualIncome > 0 || actualExpenses > 0) && (
           <Card className="bg-white/90 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-teal-700 text-base sm:text-lg">
                 <BarChart2 className="h-4 w-4 sm:h-5 sm:w-5" />
-                Havi trend
+                Havi trend (göngyölített) – {currentMonthLabel}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -902,7 +642,7 @@ export default function Dashboard() {
         )}
 
         {/* Üres állapot, ha nincs adat */}
-        {!currentBudget && !currentIncome && savingsGoals.length === 0 && (
+        {!currentBudget && !currentIncome && savingsGoals.length === 0 && !walletData && (
           <Card className="bg-white/90 backdrop-blur-sm">
             <CardContent className="text-center py-8 sm:py-12 px-4">
               <div className="text-gray-400 mb-4">

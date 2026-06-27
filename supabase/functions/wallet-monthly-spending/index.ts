@@ -87,6 +87,16 @@ function recordCategoryName(rec: WalletRecord): string {
   return typeof name === "string" && name.length > 0 ? name : "Ismeretlen";
 }
 
+// A rekord napja a hónapon belül (1-31) a recordDate "YYYY-MM-DD..." mezőből.
+function recordDayOfMonth(rec: WalletRecord): number | null {
+  const d = rec.recordDate;
+  if (typeof d === "string" && d.length >= 10) {
+    const day = parseInt(d.slice(8, 10), 10);
+    return Number.isInteger(day) && day >= 1 && day <= 31 ? day : null;
+  }
+  return null;
+}
+
 // recordType: elsődlegesen a mező; fallback az amount előjele (negatív = kiadás).
 function recordKind(rec: WalletRecord): "income" | "expense" {
   const t = typeof rec.recordType === "string" ? rec.recordType.toLowerCase() : "";
@@ -166,8 +176,14 @@ Deno.serve(async (req: Request) => {
     return errorResponse(500, "CONFIGURATION_ERROR", "A Wallet API token nincs beállítva a szerveren");
   }
 
-  // 4. A hónap lapozott lekérése (bevétel + kiadás) és kategória szerinti aggregálás
+  // A hónap napjainak száma (a napi trend feltöltéséhez)
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+  // 4. A hónap lapozott lekérése (bevétel + kiadás) és kategória + nap szerinti aggregálás
   const catMap = new Map<string, { categoryId: string; categoryName: string; expense: number; income: number }>();
+  // Napi bontás: index 0 = 1. nap ... index daysInMonth-1 = utolsó nap
+  const dailyExpense = new Array<number>(daysInMonth).fill(0);
+  const dailyIncome = new Array<number>(daysInMonth).fill(0);
   let totalExpense = 0;
   let totalIncome = 0;
   let recordCount = 0;
@@ -217,12 +233,17 @@ Deno.serve(async (req: Request) => {
         const name = recordCategoryName(rec);
         const entry = catMap.get(id) ?? { categoryId: id, categoryName: name, expense: 0, income: 0 };
 
+        const day = recordDayOfMonth(rec);
+        const dayIdx = day !== null && day <= daysInMonth ? day - 1 : null;
+
         if (recordKind(rec) === "income") {
           entry.income += amount;
           totalIncome += amount;
+          if (dayIdx !== null) dailyIncome[dayIdx] += amount;
         } else {
           entry.expense += amount;
           totalExpense += amount;
+          if (dayIdx !== null) dailyExpense[dayIdx] += amount;
         }
         catMap.set(id, entry);
       }
@@ -243,10 +264,18 @@ Deno.serve(async (req: Request) => {
     income: Math.round(c.income),
   }));
 
+  // Napi bontás: minden naphoz (1..daysInMonth) a tényleges bevétel/kiadás
+  const daily = Array.from({ length: daysInMonth }, (_, i) => ({
+    day: i + 1,
+    income: Math.round(dailyIncome[i]),
+    expense: Math.round(dailyExpense[i]),
+  }));
+
   const result = {
     month: monthKey,
     currency: "HUF",
     categories,
+    daily,
     totalExpense: Math.round(totalExpense),
     totalIncome: Math.round(totalIncome),
     recordCount,

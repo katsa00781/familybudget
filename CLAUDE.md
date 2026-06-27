@@ -82,7 +82,7 @@ if (!user) redirect('/login')
 
 | URL | Fájl | Státusz |
 |-----|------|---------|
-| `/attekintes` | `app/attekintes/page.tsx` | `<Dashboard>` komponenst renderel |
+| `/attekintes` | `app/attekintes/page.tsx` | `<Dashboard>` komponenst renderel — a fő mutatók (havi bevétel/kiadás/egyenleg) az **aktuális hónap tényleges Wallet adatát** mutatják (`fetchWalletMonthlySpending`), nem a terveket |
 | `/berkalkulator` | `app/berkalkulator/page.tsx` | 2025-ös magyar adókulcsok alapján számít |
 | `/koltsegvetes` | `app/koltsegvetes/page.tsx` | Havi költségvetés tervezés |
 | `/eves-koltsegvetes` | `app/eves-koltsegvetes/page.tsx` | Éves cashflow — havi nettó + göngyölített egyenleg, év végi egyensúly |

@@ -7,17 +7,19 @@ import { Input } from '@/src/components/ui/input'
 import { Button } from '@/src/components/ui/button'
 import { Separator } from '@/src/components/ui/separator'
 import { Badge } from '@/src/components/ui/badge'
-import { 
-  Calculator, PiggyBank, Car, Home, Heart, 
+import {
+  Calculator, PiggyBank, Car, Home, Heart,
   Gamepad2, TrendingUp, Wallet, CreditCard,
   Save, DollarSign, Target, Gift, Plus, X, Calendar,
-  ArrowLeftRight, RefreshCcw
+  ArrowLeftRight, RefreshCcw, ChevronDown, ChevronRight, Link2,
+  ChevronsDownUp, ChevronsUpDown, Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/src/components/ui/select'
 import { getUserPreferences, setActiveIncomePlan, setActiveBudgetPlan } from '@/lib/userPreferences'
 import { prepareBudgetFromAnnualPlan } from '@/lib/annualBudgetIntegration'
-import { WALLET_CATEGORIES, WALLET_CATEGORY_MAP, OLD_SUBCATEGORY_TO_IDS } from '@/lib/walletCategories'
+import { WALLET_CATEGORIES, WALLET_CATEGORY_MAP, OLD_SUBCATEGORY_TO_IDS, resolveWalletCategory } from '@/lib/walletCategories'
+import { fetchWalletMonthlySpending, type WalletMonthlyResponse } from '@/lib/walletApi'
 
 interface BudgetItem {
   id: string
@@ -357,6 +359,12 @@ export default function KoltsegvetesPage() {
   const [isCreatingNew, setIsCreatingNew] = useState(false) // Új költségvetés létrehozás jelzője
   const [actualIncome, setActualIncome] = useState<number>(0) // Tényleges bevétel
   const [transferPlan, setTransferPlan] = useState<TransferPlanState>(createDefaultTransferPlan())
+  // Összecsukható kategóriák — az itt szereplő nevek vannak kinyitva (alapból minden csukva a kevesebb görgetésért)
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  // Wallet havi tényadatok (a nem hozzárendelt kategóriák felderítéséhez)
+  const [walletData, setWalletData] = useState<WalletMonthlyResponse | null>(null)
+  const [walletLoading, setWalletLoading] = useState(false)
+  const [walletError, setWalletError] = useState<string | null>(null)
   const supabase = createClient()
 
   // Felhasználó betöltése
@@ -560,6 +568,76 @@ export default function KoltsegvetesPage() {
     return ids
   }, [budgetData])
 
+  // Kategória összecsukás/kinyitás
+  const toggleCategory = (name: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
+  const expandAllCategories = () => setExpandedCategories(new Set(budgetData.map(c => c.name)))
+  const collapseAllCategories = () => setExpandedCategories(new Set())
+
+  // Wallet havi tényadatok lekérése (a nem hozzárendelt kategóriák felderítéséhez)
+  const loadWalletMonth = useCallback(async (monthKey: string) => {
+    if (!monthKey) return
+    setWalletLoading(true)
+    setWalletError(null)
+    try {
+      const data = await fetchWalletMonthlySpending(monthKey)
+      setWalletData(data)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Nem sikerült lekérni a Wallet adatokat'
+      setWalletError(message)
+      setWalletData(null)
+    } finally {
+      setWalletLoading(false)
+    }
+  }, [])
+
+  // A vonatkozási hónap változásakor automatikusan frissítjük a Wallet tényadatokat
+  useEffect(() => {
+    if (!currentUser || !planMonth) return
+    loadWalletMonth(planMonth)
+  }, [currentUser, planMonth, loadWalletMonth])
+
+  // Wallet kategória név (belső UUID szerint) — a badge-ek szebb megjelenítéséhez,
+  // ha a kategória nincs a statikus WALLET_CATEGORIES listában
+  const walletNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    walletData?.categories.forEach((wc) => {
+      const { internalId, name } = resolveWalletCategory(wc.categoryId, wc.categoryName)
+      map.set(internalId, name)
+    })
+    return map
+  }, [walletData])
+
+  // Nem hozzárendelt Wallet kategóriák: van tényleges kiadásuk, de egyik költségvetési
+  // kategóriához sincsenek rendelve. Ezeket a felhasználó itt rendelheti hozzá.
+  const unmappedWalletCategories = useMemo(() => {
+    if (!walletData?.categories.length) return []
+    const seen = new Map<string, { internalId: string; name: string; amount: number }>()
+    walletData.categories.forEach((wc) => {
+      if (wc.expense <= 0) return
+      const { internalId, name } = resolveWalletCategory(wc.categoryId, wc.categoryName)
+      if (allUsedWalletIds.has(internalId)) return
+      const existing = seen.get(internalId)
+      if (existing) existing.amount += wc.expense
+      else seen.set(internalId, { internalId, name, amount: wc.expense })
+    })
+    return Array.from(seen.values()).sort((a, b) => b.amount - a.amount)
+  }, [walletData, allUsedWalletIds])
+
+  // Wallet kategória hozzárendelése egy költségvetési kategóriához (a Select-ből)
+  const assignWalletCategoryToBudget = (walletId: string, categoryName: string) => {
+    const categoryIndex = budgetData.findIndex(c => c.name === categoryName)
+    if (categoryIndex === -1) return
+    addWalletCategory(categoryIndex, walletId)
+    toast.success(`Hozzárendelve a(z) "${categoryName}" kategóriához. Ne felejtsd el menteni a költségvetést!`)
+  }
+
   // Kategória összegzése
   const getCategoryTotal = (category: BudgetCategory) => {
     return category.items.reduce((sum, item) => sum + item.amount, 0)
@@ -690,6 +768,40 @@ export default function KoltsegvetesPage() {
       toast.error('Hiba történt a költségvetések betöltésekor!')
     }
   }, [currentUser, supabase])
+
+  // Költségvetés törlése
+  const deleteBudget = useCallback(async (budgetId: string) => {
+    const budget = savedBudgets.find(b => b.id === budgetId)
+    if (!confirm(`Biztosan törlöd ezt a költségvetést?\n\n${budget?.name || 'Névtelen terv'}`)) {
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      const { error } = await supabase
+        .from('budget_plans')
+        .delete()
+        .eq('id', budgetId)
+
+      if (error) throw error
+
+      // Ha az éppen betöltött/aktív tervet töröltük, állapot visszaállítása
+      if (selectedBudgetId === budgetId) {
+        setSelectedBudgetId('')
+      }
+      if (activeBudgetId === budgetId) {
+        setActiveBudgetId(null)
+      }
+
+      toast.success(`Költségvetés törölve: ${budget?.name || 'Névtelen terv'}`)
+      await loadSavedBudgets()
+    } catch (error) {
+      console.error('Hiba a költségvetés törlésekor:', error)
+      toast.error('Hiba történt a költségvetés törlésekor!')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [savedBudgets, supabase, selectedBudgetId, activeBudgetId, loadSavedBudgets])
 
   // Tényleges bevétel mentése
   const saveActualIncome = async () => {
@@ -1392,7 +1504,7 @@ export default function KoltsegvetesPage() {
 
                 {transferPlan.transfers.length === 0 ? (
                   <div className="p-4 rounded-2xl border border-dashed border-gray-300 text-center text-sm text-gray-500 bg-gray-50">
-                    Még nincs tervezett utalás. Kattints az "Új utalás" gombra a kezdéshez.
+                    Még nincs tervezett utalás. Kattints az &bdquo;Új utalás&rdquo; gombra a kezdéshez.
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -1632,6 +1744,70 @@ export default function KoltsegvetesPage() {
           </Card>
         </div>
 
+        {/* Nem hozzárendelt Wallet kategóriák — a Terv vs. Tény oldalon „nem párosított” tételek */}
+        <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl mb-6 sm:mb-8">
+          <CardHeader>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-bold">
+                  <div className="p-2 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl">
+                    <Wallet size={20} className="text-white sm:w-6 sm:h-6" />
+                  </div>
+                  Nem hozzárendelt Wallet kategóriák
+                </CardTitle>
+                <CardDescription className="text-sm text-gray-600 leading-relaxed mt-1">
+                  A(z) {planMonth} hónap tényleges Wallet kiadásai, amelyek még egyetlen költségvetési kategóriához sincsenek rendelve. Rendeld hozzá őket, hogy a Terv vs. Tény pontos legyen.
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => loadWalletMonth(planMonth)}
+                disabled={walletLoading}
+                className="h-8 text-xs border-2 border-amber-300 text-amber-700 hover:bg-amber-50 rounded-xl"
+              >
+                <RefreshCcw size={14} className={`mr-1 ${walletLoading ? 'animate-spin' : ''}`} />
+                {walletLoading ? 'Frissítés...' : 'Frissítés a Wallet-ből'}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {walletError ? (
+              <p className="text-sm text-red-600">{walletError}</p>
+            ) : walletLoading && !walletData ? (
+              <p className="text-sm text-gray-500 text-center py-3">Wallet adatok betöltése…</p>
+            ) : unmappedWalletCategories.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-3">
+                {walletData ? 'Minden Wallet kategória hozzá van rendelve. 🎉' : 'Nincs betöltött Wallet adat erre a hónapra.'}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {unmappedWalletCategories.map((wc) => (
+                  <div key={wc.internalId} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 rounded-xl border-2 border-dashed border-amber-200 bg-amber-50/60">
+                    <div className="flex-1 flex items-center justify-between gap-2 min-w-0">
+                      <span className="font-semibold text-amber-900 text-sm truncate">{wc.name}</span>
+                      <span className="text-amber-700 font-bold text-sm tabular-nums flex-shrink-0">{formatCurrency(wc.amount)}</span>
+                    </div>
+                    <Select onValueChange={(value) => assignWalletCategoryToBudget(wc.internalId, value)}>
+                      <SelectTrigger className="h-9 w-full sm:w-56 border-2 border-amber-300 focus:border-amber-500 rounded-xl text-sm bg-white flex-shrink-0">
+                        <SelectValue placeholder="Hozzárendelés kategóriához…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {budgetData.map((cat) => (
+                          <SelectItem key={cat.name} value={cat.name}>{cat.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+                <p className="text-xs text-gray-500 mt-2">
+                  Tipp: a hozzárendelés után ne felejtsd el elmenteni a költségvetést a változások megőrzéséhez.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Költségvetési táblázat */}
         <Card className="bg-white/90 backdrop-blur-xl shadow-2xl border border-white/20 rounded-2xl">
           <CardHeader>
@@ -1646,94 +1822,126 @@ export default function KoltsegvetesPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="flex items-center justify-end gap-2 mb-4">
+              <Button
+                onClick={expandAllCategories}
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs border-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 rounded-xl"
+              >
+                <ChevronsUpDown size={14} className="mr-1" />
+                Mind kinyit
+              </Button>
+              <Button
+                onClick={collapseAllCategories}
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs border-2 border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl"
+              >
+                <ChevronsDownUp size={14} className="mr-1" />
+                Mind összecsuk
+              </Button>
+            </div>
             <div className="space-y-4 sm:space-y-6">
-              {budgetData.map((category, categoryIndex) => (
-                <div key={category.name} className="border-l-4 border-gradient-to-b from-emerald-400 to-teal-500 rounded-2xl p-4 sm:p-6 bg-gradient-to-r from-white to-gray-50 shadow-lg hover:shadow-xl transition-all duration-300">
-                  <div className="flex flex-col gap-3 sm:gap-4 mb-3 sm:mb-4">
-                    {/* Első sor: Kategória neve és összeg */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-col gap-2">
-                        <h3 className="font-bold text-lg sm:text-xl text-gray-900 flex items-center gap-2 sm:gap-3">
-                          {getCategoryIcon(category.name)}
-                          {category.name}
-                        </h3>
-                        {/* Wallet kategória badge-ek */}
-                        <div className="flex flex-wrap gap-1.5">
-                          {category.walletCategories && category.walletCategories.length > 0 ? (
-                            category.walletCategories.map((id) => {
-                              const wc = WALLET_CATEGORY_MAP.get(id)
-                              return (
-                                <Badge
-                                  key={id}
-                                  variant="outline"
-                                  className="text-xs bg-gradient-to-r from-blue-50 to-cyan-50 text-blue-700 border-2 border-blue-300 flex items-center gap-1 font-medium rounded-full px-3 py-1 shadow-sm hover:shadow-md transition-all"
-                                >
-                                  {wc ? `${wc.name}` : id}
-                                  <X
-                                    size={12}
-                                    className="cursor-pointer hover:text-blue-900"
-                                    onClick={() => removeWalletCategory(categoryIndex, id)}
-                                  />
-                                </Badge>
-                              )
-                            })
-                          ) : (
-                            <Badge variant="outline" className="text-xs bg-gray-50 text-gray-400 border-gray-200 rounded-full px-3 py-1">
-                              Nincs wallet kategória
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 sm:gap-4">
-                        <div className="text-xs sm:text-sm font-semibold text-gray-600 text-right">
-                          Kategória összesen: <span className="text-base sm:text-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent tabular-nums">{formatCurrency(getCategoryTotal(category))}</span>
-                        </div>
-                        <Button
-                          onClick={() => addItem(categoryIndex)}
-                          variant="outline"
-                          size="sm"
-                          className="w-full sm:w-auto flex items-center justify-center gap-1 text-emerald-600 border-2 border-emerald-300 hover:bg-gradient-to-r hover:from-emerald-50 hover:to-teal-50 hover:border-emerald-400 text-sm h-8 font-semibold shadow-sm hover:shadow-md transition-all duration-200 rounded-xl"
-                        >
-                          <Plus size={14} />
-                          <span className="sm:hidden">Új tétel</span>
-                          <span className="hidden sm:inline">Tétel hozzáadása</span>
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    {/* Második sor: Wallet kategória választó */}
-                    <div className="space-y-2">
-                      <Select
-                        value="add"
-                        onValueChange={(value) => {
-                          if (value !== 'add') addWalletCategory(categoryIndex, value)
-                        }}
-                      >
-                        <SelectTrigger className="h-8 text-xs sm:text-sm border-2 border-gray-200 hover:border-blue-400 focus:border-blue-500 transition-colors duration-200 rounded-xl">
-                          <SelectValue placeholder="+ Wallet kategória hozzáadása" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="add" disabled>Válassz kategóriát</SelectItem>
-                          {Array.from(new Set(WALLET_CATEGORIES.map(c => c.group))).map(group => {
-                            const opts = WALLET_CATEGORIES.filter(
-                              c => c.group === group &&
-                              !category.walletCategories?.includes(c.id) &&
-                              !allUsedWalletIds.has(c.id)
-                            )
-                            if (opts.length === 0) return null
-                            return (
-                              <SelectGroup key={group}>
-                                <SelectLabel>{group}</SelectLabel>
-                                {opts.map(wc => (
-                                  <SelectItem key={wc.id} value={wc.id}>{wc.name}</SelectItem>
-                                ))}
-                              </SelectGroup>
-                            )
-                          })}
-                        </SelectContent>
-                      </Select>
+              {budgetData.map((category, categoryIndex) => {
+                const isExpanded = expandedCategories.has(category.name)
+                return (
+                <div key={category.name} className="border-l-4 border-emerald-400 rounded-2xl p-4 sm:p-6 bg-gradient-to-r from-white to-gray-50 shadow-lg hover:shadow-xl transition-all duration-300">
+                  {/* Kattintható fejléc — nyit/csuk */}
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleCategory(category.name)}
+                      className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 text-left"
+                    >
+                      {isExpanded
+                        ? <ChevronDown size={20} className="text-emerald-600 flex-shrink-0" />
+                        : <ChevronRight size={20} className="text-gray-400 flex-shrink-0" />}
+                      {getCategoryIcon(category.name)}
+                      <h3 className="font-bold text-lg sm:text-xl text-gray-900 truncate">{category.name}</h3>
+                      <span className="hidden sm:inline text-xs text-gray-400 font-medium flex-shrink-0">{category.items.length} tétel</span>
+                      {category.walletCategories && category.walletCategories.length > 0 && (
+                        <Badge variant="outline" className="hidden sm:inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 border-blue-200 rounded-full px-2 py-0 h-5 flex-shrink-0">
+                          <Link2 size={10} />{category.walletCategories.length}
+                        </Badge>
+                      )}
+                    </button>
+                    <div className="text-xs sm:text-sm font-semibold text-gray-600 text-right flex-shrink-0">
+                      <span className="text-base sm:text-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent tabular-nums">{formatCurrency(getCategoryTotal(category))}</span>
                     </div>
                   </div>
+
+                  {isExpanded && (
+                  <div className="mt-4 space-y-4">
+                    {/* Wallet kategória badge-ek + tétel hozzáadása */}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex flex-wrap gap-1.5">
+                        {category.walletCategories && category.walletCategories.length > 0 ? (
+                          category.walletCategories.map((id) => {
+                            const wc = WALLET_CATEGORY_MAP.get(id)
+                            return (
+                              <Badge
+                                key={id}
+                                variant="outline"
+                                className="text-xs bg-gradient-to-r from-blue-50 to-cyan-50 text-blue-700 border-2 border-blue-300 flex items-center gap-1 font-medium rounded-full px-3 py-1 shadow-sm hover:shadow-md transition-all"
+                              >
+                                {wc ? wc.name : (walletNameById.get(id) ?? id)}
+                                <X
+                                  size={12}
+                                  className="cursor-pointer hover:text-blue-900"
+                                  onClick={() => removeWalletCategory(categoryIndex, id)}
+                                />
+                              </Badge>
+                            )
+                          })
+                        ) : (
+                          <Badge variant="outline" className="text-xs bg-gray-50 text-gray-400 border-gray-200 rounded-full px-3 py-1">
+                            Nincs wallet kategória
+                          </Badge>
+                        )}
+                      </div>
+                      <Button
+                        onClick={() => addItem(categoryIndex)}
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto flex items-center justify-center gap-1 text-emerald-600 border-2 border-emerald-300 hover:bg-gradient-to-r hover:from-emerald-50 hover:to-teal-50 hover:border-emerald-400 text-sm h-8 font-semibold shadow-sm hover:shadow-md transition-all duration-200 rounded-xl flex-shrink-0"
+                      >
+                        <Plus size={14} />
+                        <span className="sm:hidden">Új tétel</span>
+                        <span className="hidden sm:inline">Tétel hozzáadása</span>
+                      </Button>
+                    </div>
+
+                    {/* Wallet kategória választó */}
+                    <Select
+                      value="add"
+                      onValueChange={(value) => {
+                        if (value !== 'add') addWalletCategory(categoryIndex, value)
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-xs sm:text-sm border-2 border-gray-200 hover:border-blue-400 focus:border-blue-500 transition-colors duration-200 rounded-xl">
+                        <SelectValue placeholder="+ Wallet kategória hozzáadása" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="add" disabled>Válassz kategóriát</SelectItem>
+                        {Array.from(new Set(WALLET_CATEGORIES.map(c => c.group))).map(group => {
+                          const opts = WALLET_CATEGORIES.filter(
+                            c => c.group === group &&
+                            !category.walletCategories?.includes(c.id) &&
+                            !allUsedWalletIds.has(c.id)
+                          )
+                          if (opts.length === 0) return null
+                          return (
+                            <SelectGroup key={group}>
+                              <SelectLabel>{group}</SelectLabel>
+                              {opts.map(wc => (
+                                <SelectItem key={wc.id} value={wc.id}>{wc.name}</SelectItem>
+                              ))}
+                            </SelectGroup>
+                          )
+                        })}
+                      </SelectContent>
+                    </Select>
                   <div className="space-y-3">
                     {category.items.map((item, itemIndex) => (
                       <div key={item.id} className="grid grid-cols-1 gap-3 sm:gap-4 bg-white/80 backdrop-blur-sm rounded-xl p-3 sm:p-4 shadow-md hover:shadow-xl hover:scale-[1.01] transition-all duration-200 border border-gray-100">
@@ -1863,8 +2071,11 @@ export default function KoltsegvetesPage() {
                       </div>
                     ))}
                   </div>
+                  </div>
+                  )}
                 </div>
-              ))}
+                )
+              })}
             </div>
 
             <Separator className="my-4 sm:my-6" />
@@ -1897,15 +2108,23 @@ export default function KoltsegvetesPage() {
                 Mentett Költségvetések
               </CardTitle>
               <CardDescription className="text-sm text-gray-600 leading-relaxed">
-                Korábban elmentett költségvetési terveid
+                Korábban elmentett költségvetési terveid — a nem megfelelő vagy teszt terveket itt törölheted
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2 sm:space-y-3">
-                {savedBudgets.slice(0, 5).map((budget) => (
-                  <div key={budget.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 p-3 sm:p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border-2 border-emerald-200 shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-200">
-                    <div>
-                      <div className="font-semibold text-gray-900 text-sm sm:text-base">
+                {savedBudgets.map((budget) => (
+                  <div key={budget.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 p-3 sm:p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border-2 border-emerald-200 shadow-md hover:shadow-lg transition-all duration-200">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-gray-900 text-sm sm:text-base truncate">
+                          {budget.name || 'Névtelen terv'}
+                        </span>
+                        {activeBudgetId === budget.id && (
+                          <Badge className="text-xs bg-green-500 text-white border-0 px-2 py-0 h-5">Aktív</Badge>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
                         {new Date(budget.created_at).toLocaleDateString('hu-HU', {
                           year: 'numeric',
                           month: 'long',
@@ -1915,8 +2134,20 @@ export default function KoltsegvetesPage() {
                         })}
                       </div>
                     </div>
-                    <div className="font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent text-lg sm:text-xl tabular-nums">
-                      {formatCurrency(budget.total_amount)}
+                    <div className="flex items-center gap-3 self-end sm:self-auto">
+                      <div className="font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent text-lg sm:text-xl tabular-nums">
+                        {formatCurrency(budget.total_amount)}
+                      </div>
+                      <Button
+                        onClick={() => deleteBudget(budget.id)}
+                        size="sm"
+                        variant="outline"
+                        disabled={isLoading}
+                        className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 border-2 border-red-200 hover:border-red-400 transition-all rounded-lg shrink-0"
+                        title="Költségvetés törlése"
+                      >
+                        <Trash2 size={14} />
+                      </Button>
                     </div>
                   </div>
                 ))}

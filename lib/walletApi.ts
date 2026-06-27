@@ -48,10 +48,17 @@ export interface WalletCategorySpending {
   income: number
 }
 
+export interface WalletDailySpending {
+  day: number // a hónap napja (1-31)
+  income: number
+  expense: number
+}
+
 export interface WalletMonthlyResponse {
   month: string // "YYYY-MM"
   currency: string
   categories: WalletCategorySpending[]
+  daily?: WalletDailySpending[] // napi bontás (a havi trendhez); régebbi függvény-verzióban hiányozhat
   totalExpense: number
   totalIncome: number
   recordCount: number

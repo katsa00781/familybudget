@@ -468,8 +468,7 @@ export default function BerkalkulatorPage() {
         .from('salary_calculations')
         .select('*')
         .eq('family_member_id', familyMember)
-        .order('created_at', { ascending: false })
-        .limit(5);
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching saved calculations:', error);

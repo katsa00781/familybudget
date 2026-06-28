@@ -93,3 +93,51 @@ export async function fetchWalletMonthlySpending(monthKey: string): Promise<Wall
 
   return data as WalletMonthlyResponse
 }
+
+export interface WalletAccount {
+  id: string
+  name: string
+  accountType: string // "CurrentAccount" | "CreditCard" | "SavingAccount" | "Cash" | ...
+  currencyCode: string
+  archived: boolean
+  currentBalance: number // standard számlánál az egyenleg (lehet negatív); hitelkártyánál a tartozás
+  creditLimit: number | null // csak hitelkártyánál
+  creditBalance: number | null // csak hitelkártyánál: aktuális tartozás
+  availableCredit: number | null // csak hitelkártyánál: elérhető keret
+}
+
+export interface WalletAccountsResponse {
+  currency: string
+  accounts: WalletAccount[]
+  syncedAt: string
+}
+
+// A felhasználó számláinak AKTUÁLIS egyenlege a Wallet REST API-ból (a
+// `wallet-accounts` Edge Function-ön keresztül). Az Egyenleg Flow oldal ebből
+// tölti fel a napi előrejelzés induló egyenlegeit.
+export async function fetchWalletAccounts(includeArchived = false): Promise<WalletAccountsResponse> {
+  const supabase = createClient()
+  const { data, error } = await supabase.functions.invoke('wallet-accounts', {
+    body: { includeArchived },
+  })
+
+  if (error) {
+    let message = error.message || 'Nem sikerült lekérni a Wallet számlákat'
+    try {
+      const ctx = (error as { context?: Response }).context
+      if (ctx && typeof ctx.json === 'function') {
+        const body = await ctx.json()
+        if (body?.error?.message) message = body.error.message
+      }
+    } catch {
+      // marad az alap üzenet
+    }
+    throw new Error(message)
+  }
+
+  if (data?.error) {
+    throw new Error(data.error.message || 'Wallet API hiba')
+  }
+
+  return data as WalletAccountsResponse
+}

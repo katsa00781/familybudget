@@ -1074,7 +1074,7 @@ export default function EgyenlegFlowPage() {
                   Nincs tervezett tétel. Vegyél fel fizetést, kiadást vagy átvezetést.
                 </p>
               )}
-              {events.map((ev) => {
+              {[...events].sort((a, b) => a.date.localeCompare(b.date)).map((ev) => {
                 const Icon = ev.type === 'bevetel' ? TrendingUp : ev.type === 'kiadas' ? TrendingDown : ArrowLeftRight
                 const color = ev.type === 'bevetel' ? 'text-green-600' : ev.type === 'kiadas' ? 'text-red-600' : 'text-blue-600'
                 return (

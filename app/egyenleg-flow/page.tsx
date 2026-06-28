@@ -14,8 +14,9 @@ import {
 import {
   Wallet, Plus, Trash2, Save, RefreshCw, CalendarClock, AlertTriangle,
   CreditCard, Banknote, PiggyBank, ArrowLeftRight, TrendingUp, TrendingDown, X, Link2,
-  FolderOpen, FilePlus,
+  FolderOpen, FilePlus, ShoppingCart,
 } from 'lucide-react'
+import { Checkbox } from '@/src/components/ui/checkbox'
 import { toast } from 'sonner'
 import { fetchWalletAccounts, type WalletAccount } from '@/lib/walletApi'
 import { buildForecast, formatFlowDate } from '@/lib/egyenlegFlow'
@@ -26,12 +27,60 @@ import {
 
 const ACCOUNT_COLORS = ['#0891b2', '#7c3aed', '#dc2626', '#16a34a', '#d97706', '#0d9488', '#db2777', '#475569']
 
+// Wallet kategória UUID-k az "Étel" csoportból — napi bevásárlás előszűréséhez
+const ETAL_WALLET_IDS = new Set([
+  'ba1dbb27-cac2-4e9b-b556-391104e383fc', // Élelmiszerek
+  'ea7668b0-8393-472a-bce1-fbc9664aad6a', // Étel és ital
+  'a077f250-e799-4716-a521-baead9cbca02', // Étterem, gyorsétterem
+  'a10361fb-b92b-4afd-95b3-d28721f4915d', // Bár, kávézó
+])
+
+interface BudgetPlanMeta {
+  id: string
+  name?: string
+  plan_month?: string
+  budget_data: unknown
+  created_at: string
+}
+
+interface BudgetCatSummary {
+  name: string
+  amount: number
+  walletCategoryIds: string[]
+}
+
+function extractBudgetCategories(budgetData: unknown): BudgetCatSummary[] {
+  type Cat = { name: string; items: Array<{ amount?: number }>; walletCategories?: string[] }
+  let cats: Cat[] = []
+  if (Array.isArray(budgetData)) {
+    if (budgetData.length === 0) return []
+    const first = budgetData[0] as Record<string, unknown>
+    if ('items' in first) {
+      cats = budgetData as Cat[]
+    } else if ('category' in first) {
+      const grouped = new Map<string, number>()
+      for (const item of budgetData as Array<{ category: string; amount?: number }>) {
+        grouped.set(item.category, (grouped.get(item.category) ?? 0) + (item.amount ?? 0))
+      }
+      return Array.from(grouped.entries()).map(([name, amount]) => ({ name, amount, walletCategoryIds: [] }))
+    }
+  } else if (typeof budgetData === 'object' && budgetData !== null) {
+    const v2 = budgetData as { version?: string; categories?: Cat[] }
+    if (v2.version === 'v2' && Array.isArray(v2.categories)) cats = v2.categories
+  }
+  return cats.map((cat) => ({
+    name: cat.name,
+    amount: (cat.items ?? []).reduce((s, i) => s + (i.amount ?? 0), 0),
+    walletCategoryIds: cat.walletCategories ?? [],
+  }))
+}
+
 const ACCOUNT_TYPES: FlowAccountType[] = ['foszamla', 'hitelkartya', 'megtakaritas', 'keszpenz', 'egyeb']
 const EVENT_TYPES: FlowEventType[] = ['bevetel', 'kiadas', 'atvezetes']
 const EVENT_TYPE_LABELS: Record<FlowEventType, string> = {
   bevetel: 'Bevétel', kiadas: 'Kiadás', atvezetes: 'Átvezetés',
 }
-const RECURRENCES: FlowRecurrence[] = ['egyszeri', 'heti', 'havi']
+const RECURRENCES: FlowRecurrence[] = ['egyszeri', 'napi', 'heti', 'havi']
 
 const ACCOUNT_TYPE_ICON: Record<FlowAccountType, typeof Wallet> = {
   foszamla: Banknote, hitelkartya: CreditCard, megtakaritas: PiggyBank, keszpenz: Wallet, egyeb: Wallet,
@@ -97,6 +146,13 @@ export default function EgyenlegFlowPage() {
 
   const [eventForm, setEventForm] = useState<FlowEvent | null>(null)
 
+  // ── Napi gördülő bevásárlás a tervből ─────────────────────────────────────
+  const [showDailyPanel, setShowDailyPanel] = useState(false)
+  const [budgetPlans, setBudgetPlans] = useState<BudgetPlanMeta[]>([])
+  const [selectedBudgetId, setSelectedBudgetId] = useState<string>('')
+  const [selectedBudgetCategories, setSelectedBudgetCategories] = useState<Set<string>>(new Set())
+  const [dailyAccountId, setDailyAccountId] = useState<string>('')
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user))
   }, [supabase.auth])
@@ -128,6 +184,17 @@ export default function EgyenlegFlowPage() {
     setShowPlans(false)
     toast.success(`„${data.name}" betöltve`)
   }, [supabase])
+
+  // ── Budget tervek listájának betöltése (napi átlaghoz) ───────────────────
+  const loadBudgetPlans = useCallback(async () => {
+    if (!currentUser) return
+    const { data } = await supabase
+      .from('budget_plans')
+      .select('id, name, plan_month, budget_data, created_at')
+      .eq('user_id', currentUser.id)
+      .order('created_at', { ascending: false })
+    if (data) setBudgetPlans(data)
+  }, [currentUser, supabase])
 
   // ── Kezdeti betöltés: a legutóbb módosított terv ──────────────────────────
   const loadLatest = useCallback(async () => {
@@ -303,6 +370,72 @@ export default function EgyenlegFlowPage() {
 
   const trackedWalletIds = new Set(accounts.map((a) => a.walletAccountId).filter(Boolean))
 
+  // ── Napi átlag: budget terv → élelmiszer kategóriák ──────────────────────
+  const selectedBudget = useMemo(
+    () => budgetPlans.find((p) => p.id === selectedBudgetId),
+    [budgetPlans, selectedBudgetId],
+  )
+
+  const budgetCategories = useMemo(
+    () => (selectedBudget ? extractBudgetCategories(selectedBudget.budget_data) : []),
+    [selectedBudget],
+  )
+
+  const selectedCategoryTotal = useMemo(
+    () => budgetCategories.filter((c) => selectedBudgetCategories.has(c.name)).reduce((s, c) => s + c.amount, 0),
+    [budgetCategories, selectedBudgetCategories],
+  )
+
+  const dailyAvg = useMemo(() => {
+    if (selectedCategoryTotal === 0 || !selectedBudget) return 0
+    const month = selectedBudget.plan_month ?? selectedBudget.created_at.slice(0, 7)
+    const [y, m] = month.split('-').map(Number)
+    const daysInMonth = new Date(y, m, 0).getDate()
+    return Math.round(selectedCategoryTotal / daysInMonth)
+  }, [selectedCategoryTotal, selectedBudget])
+
+  // Élelmiszer kategóriák előzetes kijelölése budget terv váltáskor
+  useEffect(() => {
+    if (!selectedBudgetId || budgetCategories.length === 0) return
+    const preSelected = new Set(
+      budgetCategories
+        .filter((c) => c.walletCategoryIds.some((id) => ETAL_WALLET_IDS.has(id)))
+        .map((c) => c.name),
+    )
+    setSelectedBudgetCategories(preSelected)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBudgetId])
+
+  const applyDailyAverage = useCallback(() => {
+    if (!dailyAvg || !dailyAccountId || !selectedBudget) {
+      toast.error('Válassz tervet, kategóriákat és számlát!')
+      return
+    }
+    const month = selectedBudget.plan_month ?? selectedBudget.created_at.slice(0, 7)
+    const [y, m] = month.split('-').map(Number)
+    const firstDay = `${month}-01`
+    const lastDay = new Date(y, m, 0).getDate()
+    const endDate = `${month}-${String(lastDay).padStart(2, '0')}`
+    const today = todayIso()
+    const eventDate = today >= firstDay ? today : firstDay
+    const newEvent: FlowEvent = {
+      id: crypto.randomUUID(),
+      name: 'Napi bevásárlás',
+      amount: dailyAvg,
+      type: 'kiadas',
+      accountId: dailyAccountId,
+      date: eventDate,
+      recurrence: 'napi',
+      endDate,
+    }
+    setEvents((prev) => [
+      ...prev.filter((e) => !(e.recurrence === 'napi' && e.name === 'Napi bevásárlás')),
+      newEvent,
+    ])
+    setShowDailyPanel(false)
+    toast.success(`Napi bevásárlás beállítva: ${fmt(dailyAvg)} Ft/nap (${month})`)
+  }, [dailyAvg, dailyAccountId, selectedBudget])
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-cyan-50 to-teal-50 p-3 sm:p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
@@ -353,6 +486,19 @@ export default function EgyenlegFlowPage() {
               </Button>
             </div>
           </div>
+
+          {/* Napi bevásárlás aktív badge */}
+          {events.filter((e) => e.recurrence === 'napi').length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {events.filter((e) => e.recurrence === 'napi').map((e) => (
+                <Badge key={e.id} variant="outline" className="text-xs border-emerald-300 text-emerald-700 bg-emerald-50">
+                  <ShoppingCart size={10} className="mr-1" />
+                  {e.name}: {fmt(e.amount)}/nap
+                  {e.endDate && ` · −ig: ${e.endDate}`}
+                </Badge>
+              ))}
+            </div>
+          )}
 
           {/* Összesítő sáv */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -405,10 +551,10 @@ export default function EgyenlegFlowPage() {
                 <div key={plan.id}
                   className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${plan.id === rowId ? 'bg-cyan-50 border-cyan-300' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}`}>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-800 truncate flex items-center gap-2">
+                    <div className="text-sm font-semibold text-gray-800 truncate flex items-center gap-2">
                       {plan.name}
                       {plan.id === rowId && <Badge className="text-[10px] px-1.5 py-0 bg-cyan-600 text-white border-0">aktív</Badge>}
-                    </p>
+                    </div>
                     <p className="text-xs text-gray-500">
                       Módosítva: {new Date(plan.updated_at).toLocaleString('hu-HU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </p>
@@ -536,12 +682,117 @@ export default function EgyenlegFlowPage() {
               <CardTitle className="text-base font-bold text-gray-800 flex items-center gap-2">
                 <ArrowLeftRight size={18} className="text-cyan-600" /> Tervezett tételek ({events.length})
               </CardTitle>
-              <Button size="sm" variant="outline" disabled={accounts.length === 0}
-                onClick={() => setEventForm(emptyEvent(accounts[0]?.id ?? ''))} className="h-8 rounded-lg">
-                <Plus size={14} className="mr-1" /> Tétel
-              </Button>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={accounts.length === 0}
+                  onClick={() => {
+                    setShowDailyPanel((v) => !v)
+                    if (!showDailyPanel) {
+                      loadBudgetPlans()
+                      const foszamla = accounts.find((a) => a.type === 'foszamla')
+                      if (foszamla && !dailyAccountId) setDailyAccountId(foszamla.id)
+                    }
+                  }}
+                  className={`h-8 rounded-lg ${showDailyPanel ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : ''}`}>
+                  <ShoppingCart size={14} className="mr-1" /> Napi átlag
+                </Button>
+                <Button size="sm" variant="outline" disabled={accounts.length === 0}
+                  onClick={() => setEventForm(emptyEvent(accounts[0]?.id ?? ''))} className="h-8 rounded-lg">
+                  <Plus size={14} className="mr-1" /> Tétel
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* Napi gördülő bevásárlás panel */}
+              {showDailyPanel && (
+                <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 space-y-3">
+                  <p className="text-xs font-semibold text-emerald-800 flex items-center gap-1.5">
+                    <ShoppingCart size={13} /> Napi gördülő bevásárlás a havi tervből
+                  </p>
+
+                  <div>
+                    <Label className="text-xs text-gray-500">Havi terv</Label>
+                    <Select value={selectedBudgetId} onValueChange={(v) => setSelectedBudgetId(v)}>
+                      <SelectTrigger className="h-8 text-xs border-gray-200 rounded-lg mt-0.5">
+                        <SelectValue placeholder="Válassz tervet…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {budgetPlans.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name ?? 'Névtelen'}{p.plan_month ? ` (${p.plan_month})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {budgetCategories.length > 0 && (
+                    <div>
+                      <Label className="text-xs text-gray-500">
+                        Kategóriák — összesen: {fmt(selectedCategoryTotal)}/hó
+                      </Label>
+                      <div className="mt-1 space-y-0.5 max-h-44 overflow-y-auto rounded-lg border border-emerald-200 bg-white">
+                        {budgetCategories.map((cat) => (
+                          <label key={cat.name}
+                            className="flex items-center gap-2 cursor-pointer px-2.5 py-1.5 hover:bg-emerald-50 transition-colors">
+                            <Checkbox
+                              checked={selectedBudgetCategories.has(cat.name)}
+                              onCheckedChange={(v) => {
+                                setSelectedBudgetCategories((prev) => {
+                                  const next = new Set(prev)
+                                  if (v) next.add(cat.name); else next.delete(cat.name)
+                                  return next
+                                })
+                              }}
+                            />
+                            <span className="text-xs text-gray-700 flex-1 min-w-0 truncate">{cat.name}</span>
+                            {cat.walletCategoryIds.some((id) => ETAL_WALLET_IDS.has(id)) && (
+                              <Badge className="text-[9px] px-1 py-0 bg-green-100 text-green-700 border border-green-300 shrink-0">étel</Badge>
+                            )}
+                            <span className="text-xs font-mono text-gray-500 shrink-0">{fmt(cat.amount)}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedBudgetId && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs text-gray-500">Forrás számla</Label>
+                        <Select value={dailyAccountId} onValueChange={setDailyAccountId}>
+                          <SelectTrigger className="h-8 text-xs border-gray-200 rounded-lg mt-0.5">
+                            <SelectValue placeholder="Számla…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {accounts.map((a) => (
+                              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500">Napi átlag</Label>
+                        <div className="h-8 mt-0.5 flex items-center px-3 bg-white rounded-lg border border-gray-200 text-sm font-mono font-bold text-emerald-700">
+                          {dailyAvg > 0 ? fmt(dailyAvg) : '—'}
+                          <span className="font-normal text-gray-400 text-xs ml-1">/nap</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={applyDailyAverage}
+                      disabled={!dailyAvg || !dailyAccountId}
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg h-8">
+                      <Plus size={13} className="mr-1" /> Beállítás napi kiadásként
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setShowDailyPanel(false)} className="rounded-lg h-8">
+                      Mégsem
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Esemény form */}
               {eventForm && (
                 <div className="p-3 bg-cyan-50 rounded-xl border border-cyan-200 space-y-2">
@@ -703,7 +954,13 @@ export default function EgyenlegFlowPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.filter((r) => r.occurrences.length > 0 || r.foszamlaNegativ || r.hitelkartyaDue).map((r) => (
+                    {rows.filter((r) => {
+                      const hasNonNapi = r.occurrences.some((o) => o.event.recurrence !== 'napi')
+                      return hasNonNapi || r.foszamlaNegativ || r.hitelkartyaDue
+                    }).map((r) => {
+                      const visibleOccs = r.occurrences.filter((o) => o.event.recurrence !== 'napi')
+                      const napiOccs = r.occurrences.filter((o) => o.event.recurrence === 'napi')
+                      return (
                       <tr key={r.date} className={`border-b border-gray-100 ${r.foszamlaNegativ ? 'bg-red-50' : ''}`}>
                         <td className="px-3 py-2 whitespace-nowrap sticky left-0 bg-inherit">
                           <div className="font-medium text-gray-700">{formatFlowDate(r.date)}</div>
@@ -714,7 +971,7 @@ export default function EgyenlegFlowPage() {
                         </td>
                         <td className="px-3 py-2">
                           <div className="space-y-0.5">
-                            {r.occurrences.map((o, i) => (
+                            {visibleOccs.map((o, i) => (
                               <div key={i} className="text-xs flex items-center gap-1">
                                 <span className={o.event.type === 'bevetel' ? 'text-green-600' : o.event.type === 'kiadas' ? 'text-red-600' : 'text-blue-600'}>
                                   {o.event.type === 'kiadas' ? '−' : o.event.type === 'bevetel' ? '+' : '⇄'}{fmt(o.event.amount)}
@@ -722,6 +979,12 @@ export default function EgyenlegFlowPage() {
                                 <span className="text-gray-500 truncate">{o.event.name}</span>
                               </div>
                             ))}
+                            {napiOccs.length > 0 && (
+                              <div className="text-[10px] text-gray-400 italic flex items-center gap-1">
+                                <ShoppingCart size={9} />
+                                {napiOccs.map((o) => `−${fmt(o.event.amount)} ${o.event.name}`).join(', ')} (napi)
+                              </div>
+                            )}
                           </div>
                         </td>
                         {trackedAccounts.map((a) => {
@@ -735,7 +998,8 @@ export default function EgyenlegFlowPage() {
                           )
                         })}
                       </tr>
-                    ))}
+                    )
+                    })}
                   </tbody>
                 </table>
               </div>

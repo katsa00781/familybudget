@@ -33,10 +33,11 @@ export interface FlowAccount {
 
 export type FlowEventType = 'bevetel' | 'kiadas' | 'atvezetes'
 
-export type FlowRecurrence = 'egyszeri' | 'heti' | 'havi'
+export type FlowRecurrence = 'egyszeri' | 'napi' | 'heti' | 'havi'
 
 export const FLOW_RECURRENCE_LABELS: Record<FlowRecurrence, string> = {
   egyszeri: 'Egyszeri',
+  napi: 'Napi (gördülő)',
   heti: 'Heti',
   havi: 'Havi',
 }

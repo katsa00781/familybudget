@@ -81,7 +81,8 @@ export function expandEvents(
         occurrences.push({ date: cursor, event })
       }
       if (event.recurrence === 'egyszeri') break
-      if (event.recurrence === 'heti') cursor = addDays(cursor, 7)
+      if (event.recurrence === 'napi') cursor = addDays(cursor, 1)
+      else if (event.recurrence === 'heti') cursor = addDays(cursor, 7)
       else if (event.recurrence === 'havi') cursor = addMonths(cursor, 1)
       else break
       steps++

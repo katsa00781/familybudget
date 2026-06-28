@@ -19,7 +19,7 @@ import {
 import { Checkbox } from '@/src/components/ui/checkbox'
 import { toast } from 'sonner'
 import { fetchWalletAccounts, type WalletAccount } from '@/lib/walletApi'
-import { buildForecast, formatFlowDate } from '@/lib/egyenlegFlow'
+import { buildForecast, formatFlowDate, addDays, parseDate } from '@/lib/egyenlegFlow'
 import {
   type FlowAccount, type FlowAccountType, type FlowEvent, type FlowEventType, type FlowRecurrence,
   FLOW_ACCOUNT_TYPE_LABELS, FLOW_RECURRENCE_LABELS,
@@ -163,7 +163,8 @@ export default function EgyenlegFlowPage() {
   const [currentUser, setCurrentUser] = useState<{ id: string } | null>(null)
   const [rowId, setRowId] = useState<string | null>(null)
   const [name, setName] = useState('Egyenleg Flow')
-  const [horizonDays, setHorizonDays] = useState(60)
+  const [startDate, setStartDate] = useState(() => todayIso())
+  const [endDate, setEndDate] = useState(() => addDays(todayIso(), 59))
   const [accounts, setAccounts] = useState<FlowAccount[]>([])
   const [events, setEvents] = useState<FlowEvent[]>([])
 
@@ -213,9 +214,11 @@ export default function EgyenlegFlowPage() {
       .eq('id', id)
       .single()
     if (error) { toast.error('Hiba a betöltéskor!'); return }
+    const today = todayIso()
     setRowId(data.id)
     setName(data.name || 'Egyenleg Flow')
-    setHorizonDays(data.horizon_days || 60)
+    setStartDate(data.start_date || today)
+    setEndDate(data.end_date || addDays(today, (data.horizon_days || 60) - 1))
     setAccounts(Array.isArray(data.accounts) ? data.accounts : [])
     setEvents(Array.isArray(data.events) ? data.events : [])
     setShowPlans(false)
@@ -245,9 +248,11 @@ export default function EgyenlegFlowPage() {
       .maybeSingle()
     if (error) { toast.error('Hiba a flow betöltésekor!'); return }
     if (data) {
+      const today = todayIso()
       setRowId(data.id)
       setName(data.name || 'Egyenleg Flow')
-      setHorizonDays(data.horizon_days || 60)
+      setStartDate(data.start_date || today)
+      setEndDate(data.end_date || addDays(today, (data.horizon_days || 60) - 1))
       setAccounts(Array.isArray(data.accounts) ? data.accounts : [])
       setEvents(Array.isArray(data.events) ? data.events : [])
     }
@@ -266,7 +271,8 @@ export default function EgyenlegFlowPage() {
     setName('Új terv')
     setAccounts([])
     setEvents([])
-    setHorizonDays(60)
+    setStartDate(todayIso())
+    setEndDate(addDays(todayIso(), 59))
     setEventForm(null)
     setShowPlans(false)
     toast.success('Új terv — adj hozzá számlákat és tételeket, majd mentsd el')
@@ -283,7 +289,8 @@ export default function EgyenlegFlowPage() {
       setName('Egyenleg Flow')
       setAccounts([])
       setEvents([])
-      setHorizonDays(60)
+      setStartDate(todayIso())
+      setEndDate(addDays(todayIso(), 59))
     }
     toast.success(`„${planName}" törölve`)
   }
@@ -358,9 +365,12 @@ export default function EgyenlegFlowPage() {
   const save = async () => {
     if (!currentUser) return
     setIsSaving(true)
+    const s = parseDate(startDate)
+    const e = parseDate(endDate)
+    const savedHorizonDays = Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000) + 1)
     const payload = {
       user_id: currentUser.id, name: name.trim() || 'Egyenleg Flow',
-      horizon_days: horizonDays, accounts, events,
+      horizon_days: savedHorizonDays, start_date: startDate, end_date: endDate, accounts, events,
     }
     let error
     if (rowId) {
@@ -377,10 +387,15 @@ export default function EgyenlegFlowPage() {
   }
 
   // ── Előrejelzés ───────────────────────────────────────────────────────────
-  const start = todayIso()
+  const horizonDays = useMemo(() => {
+    const s = parseDate(startDate)
+    const e = parseDate(endDate)
+    return Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000) + 1)
+  }, [startDate, endDate])
+
   const rows = useMemo(
-    () => buildForecast(accounts, events, start, horizonDays),
-    [accounts, events, start, horizonDays],
+    () => buildForecast(accounts, events, startDate, horizonDays),
+    [accounts, events, startDate, horizonDays],
   )
   const trackedAccounts = useMemo(() => accounts.filter((a) => a.track), [accounts])
   const accountName = (id?: string) => accounts.find((a) => a.id === id)?.name ?? '—'
@@ -597,15 +612,23 @@ export default function EgyenlegFlowPage() {
               </p>
             </div>
             <div className="p-3 bg-gradient-to-br from-violet-50 to-purple-50 rounded-xl border border-violet-200/60">
-              <p className="text-xs text-gray-500 font-medium">Előrejelzési időtáv</p>
-              <Select value={horizonDays.toString()} onValueChange={(v) => setHorizonDays(parseInt(v))}>
-                <SelectTrigger className="mt-0.5 h-8 border-violet-200 rounded-lg text-sm font-bold text-violet-700">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[30, 45, 60, 90, 120].map((d) => <SelectItem key={d} value={d.toString()}>{d} nap</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <p className="text-xs text-gray-500 font-medium mb-1.5">
+                Időtáv · <span className="text-violet-700 font-bold">{horizonDays} nap</span>
+              </p>
+              <div className="space-y-1.5">
+                <div>
+                  <Label className="text-[10px] text-gray-400">Kezdő dátum</Label>
+                  <Input type="date" value={startDate}
+                    onChange={(e) => { if (e.target.value) setStartDate(e.target.value) }}
+                    className="h-7 text-xs border-violet-200 rounded-lg w-full mt-0.5" />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-gray-400">Záró dátum</Label>
+                  <Input type="date" value={endDate}
+                    onChange={(e) => { if (e.target.value) setEndDate(e.target.value) }}
+                    className="h-7 text-xs border-violet-200 rounded-lg w-full mt-0.5" />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1107,7 +1130,7 @@ export default function EgyenlegFlowPage() {
               <CardTitle className="text-base font-bold text-gray-800 flex items-center gap-2">
                 <TrendingUp size={18} className="text-cyan-600" /> Egyenleg-előrejelzés
               </CardTitle>
-              <CardDescription className="text-xs">Számlánkénti egyenleg az elkövetkező {horizonDays} napban</CardDescription>
+              <CardDescription className="text-xs">{startDate} – {endDate} · {horizonDays} nap</CardDescription>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>

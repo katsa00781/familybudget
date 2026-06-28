@@ -14,7 +14,7 @@ import {
 import {
   Wallet, Plus, Trash2, Save, RefreshCw, CalendarClock, AlertTriangle,
   CreditCard, Banknote, PiggyBank, ArrowLeftRight, TrendingUp, TrendingDown, X, Link2,
-  FolderOpen, FilePlus, ShoppingCart,
+  FolderOpen, FilePlus, ShoppingCart, Receipt,
 } from 'lucide-react'
 import { Checkbox } from '@/src/components/ui/checkbox'
 import { toast } from 'sonner'
@@ -49,6 +49,13 @@ interface BudgetCatSummary {
   walletCategoryIds: string[]
 }
 
+interface BudgetItemFlat {
+  id: string
+  categoryName: string
+  name: string
+  amount: number
+}
+
 function extractBudgetCategories(budgetData: unknown): BudgetCatSummary[] {
   type Cat = { name: string; items: Array<{ amount?: number }>; walletCategories?: string[] }
   let cats: Cat[] = []
@@ -73,6 +80,30 @@ function extractBudgetCategories(budgetData: unknown): BudgetCatSummary[] {
     amount: (cat.items ?? []).reduce((s, i) => s + (i.amount ?? 0), 0),
     walletCategoryIds: cat.walletCategories ?? [],
   }))
+}
+
+function extractBudgetItemsFlat(budgetData: unknown): BudgetItemFlat[] {
+  type Item = { id: string; subcategory?: string; amount?: number }
+  type Cat = { name: string; items?: Item[] }
+  let cats: Cat[] = []
+  if (Array.isArray(budgetData)) {
+    if (budgetData.length === 0) return []
+    const first = budgetData[0] as Record<string, unknown>
+    if ('items' in first) cats = budgetData as Cat[]
+  } else if (typeof budgetData === 'object' && budgetData !== null) {
+    const v2 = budgetData as { version?: string; categories?: Cat[] }
+    if (v2.version === 'v2' && Array.isArray(v2.categories)) cats = v2.categories
+  }
+  return cats.flatMap((cat) =>
+    (cat.items ?? [])
+      .filter((item) => (item.amount ?? 0) > 0)
+      .map((item) => ({
+        id: item.id,
+        categoryName: cat.name,
+        name: item.subcategory || cat.name,
+        amount: item.amount ?? 0,
+      })),
+  )
 }
 
 const ACCOUNT_TYPES: FlowAccountType[] = ['foszamla', 'hitelkartya', 'megtakaritas', 'keszpenz', 'egyeb']
@@ -152,6 +183,12 @@ export default function EgyenlegFlowPage() {
   const [selectedBudgetId, setSelectedBudgetId] = useState<string>('')
   const [selectedBudgetCategories, setSelectedBudgetCategories] = useState<Set<string>>(new Set())
   const [dailyAccountId, setDailyAccountId] = useState<string>('')
+
+  // ── Egyszeri kiadások a tervből ────────────────────────────────────────────
+  const [showOneTimePanel, setShowOneTimePanel] = useState(false)
+  const [selectedOneTimeItems, setSelectedOneTimeItems] = useState<Set<string>>(new Set())
+  const [oneTimeAccountId, setOneTimeAccountId] = useState<string>('')
+  const [oneTimeDate, setOneTimeDate] = useState<string>(todayIso())
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user))
@@ -405,6 +442,47 @@ export default function EgyenlegFlowPage() {
     setSelectedBudgetCategories(preSelected)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBudgetId])
+
+  // ── Egyszeri kiadások: budget plan tételek ────────────────────────────────
+  const budgetItemsFlat = useMemo(
+    () => (selectedBudget ? extractBudgetItemsFlat(selectedBudget.budget_data) : []),
+    [selectedBudget],
+  )
+
+  const groupedBudgetItems = useMemo(() => {
+    const map = new Map<string, BudgetItemFlat[]>()
+    for (const item of budgetItemsFlat) {
+      if (!map.has(item.categoryName)) map.set(item.categoryName, [])
+      map.get(item.categoryName)!.push(item)
+    }
+    return map
+  }, [budgetItemsFlat])
+
+  const selectedOneTimeTotal = useMemo(
+    () => budgetItemsFlat.filter((i) => selectedOneTimeItems.has(i.id)).reduce((s, i) => s + i.amount, 0),
+    [budgetItemsFlat, selectedOneTimeItems],
+  )
+
+  const applyOneTimeItems = useCallback(() => {
+    if (!oneTimeAccountId || selectedOneTimeItems.size === 0) {
+      toast.error('Válassz számlát és legalább egy tételt!')
+      return
+    }
+    const items = budgetItemsFlat.filter((i) => selectedOneTimeItems.has(i.id))
+    const newEvents: FlowEvent[] = items.map((item) => ({
+      id: crypto.randomUUID(),
+      name: item.name,
+      amount: item.amount,
+      type: 'kiadas' as FlowEventType,
+      accountId: oneTimeAccountId,
+      date: oneTimeDate,
+      recurrence: 'egyszeri' as FlowRecurrence,
+    }))
+    setEvents((prev) => [...prev, ...newEvents])
+    setShowOneTimePanel(false)
+    setSelectedOneTimeItems(new Set())
+    toast.success(`${newEvents.length} egyszeri kiadás hozzáadva`)
+  }, [oneTimeAccountId, selectedOneTimeItems, budgetItemsFlat, oneTimeDate])
 
   const applyDailyAverage = useCallback(() => {
     if (!dailyAvg || !dailyAccountId || !selectedBudget) {
@@ -685,8 +763,10 @@ export default function EgyenlegFlowPage() {
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" disabled={accounts.length === 0}
                   onClick={() => {
-                    setShowDailyPanel((v) => !v)
-                    if (!showDailyPanel) {
+                    const opening = !showDailyPanel
+                    setShowDailyPanel(opening)
+                    if (opening) {
+                      setShowOneTimePanel(false)
                       loadBudgetPlans()
                       const foszamla = accounts.find((a) => a.type === 'foszamla')
                       if (foszamla && !dailyAccountId) setDailyAccountId(foszamla.id)
@@ -694,6 +774,21 @@ export default function EgyenlegFlowPage() {
                   }}
                   className={`h-8 rounded-lg ${showDailyPanel ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : ''}`}>
                   <ShoppingCart size={14} className="mr-1" /> Napi átlag
+                </Button>
+                <Button size="sm" variant="outline" disabled={accounts.length === 0}
+                  onClick={() => {
+                    const opening = !showOneTimePanel
+                    setShowOneTimePanel(opening)
+                    if (opening) {
+                      setShowDailyPanel(false)
+                      loadBudgetPlans()
+                      const foszamla = accounts.find((a) => a.type === 'foszamla')
+                      if (foszamla && !oneTimeAccountId) setOneTimeAccountId(foszamla.id)
+                      setOneTimeDate(todayIso())
+                    }
+                  }}
+                  className={`h-8 rounded-lg ${showOneTimePanel ? 'bg-violet-50 border-violet-300 text-violet-700' : ''}`}>
+                  <Receipt size={14} className="mr-1" /> Tervből másolás
                 </Button>
                 <Button size="sm" variant="outline" disabled={accounts.length === 0}
                   onClick={() => setEventForm(emptyEvent(accounts[0]?.id ?? ''))} className="h-8 rounded-lg">
@@ -787,6 +882,113 @@ export default function EgyenlegFlowPage() {
                       <Plus size={13} className="mr-1" /> Beállítás napi kiadásként
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => setShowDailyPanel(false)} className="rounded-lg h-8">
+                      Mégsem
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Egyszeri kiadások a tervből */}
+              {showOneTimePanel && (
+                <div className="p-3 bg-violet-50 rounded-xl border border-violet-200 space-y-3">
+                  <p className="text-xs font-semibold text-violet-800 flex items-center gap-1.5">
+                    <Receipt size={13} /> Egyszeri kiadások másolása a havi tervből
+                  </p>
+
+                  <div>
+                    <Label className="text-xs text-gray-500">Havi terv</Label>
+                    <Select value={selectedBudgetId} onValueChange={(v) => {
+                      setSelectedBudgetId(v)
+                      setSelectedOneTimeItems(new Set())
+                    }}>
+                      <SelectTrigger className="h-8 text-xs border-gray-200 rounded-lg mt-0.5">
+                        <SelectValue placeholder="Válassz tervet…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {budgetPlans.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name ?? 'Névtelen'}{p.plan_month ? ` (${p.plan_month})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {budgetItemsFlat.length > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <Label className="text-xs text-gray-500">
+                          Tételek — kijelölve: {fmt(selectedOneTimeTotal)}
+                        </Label>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setSelectedOneTimeItems(new Set(budgetItemsFlat.map((i) => i.id)))}
+                            className="text-[10px] text-violet-600 hover:underline">Mind</button>
+                          <button
+                            onClick={() => setSelectedOneTimeItems(new Set())}
+                            className="text-[10px] text-gray-400 hover:underline">Töröl</button>
+                        </div>
+                      </div>
+                      <div className="max-h-52 overflow-y-auto rounded-lg border border-violet-200 bg-white space-y-0.5">
+                        {Array.from(groupedBudgetItems.entries()).map(([catName, items]) => (
+                          <div key={catName}>
+                            <div className="px-2.5 py-1 bg-violet-50 text-[10px] font-semibold text-violet-700 uppercase tracking-wide sticky top-0">
+                              {catName}
+                            </div>
+                            {items.map((item) => (
+                              <label key={item.id}
+                                className="flex items-center gap-2 cursor-pointer px-2.5 py-1.5 hover:bg-violet-50 transition-colors">
+                                <Checkbox
+                                  checked={selectedOneTimeItems.has(item.id)}
+                                  onCheckedChange={(v) => {
+                                    setSelectedOneTimeItems((prev) => {
+                                      const next = new Set(prev)
+                                      if (v) next.add(item.id); else next.delete(item.id)
+                                      return next
+                                    })
+                                  }}
+                                />
+                                <span className="text-xs text-gray-700 flex-1 min-w-0 truncate">{item.name}</span>
+                                <span className="text-xs font-mono text-gray-500 shrink-0">{fmt(item.amount)}</span>
+                              </label>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedBudgetId && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs text-gray-500">Forrás számla</Label>
+                        <Select value={oneTimeAccountId} onValueChange={setOneTimeAccountId}>
+                          <SelectTrigger className="h-8 text-xs border-gray-200 rounded-lg mt-0.5">
+                            <SelectValue placeholder="Számla…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {accounts.map((a) => (
+                              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-500">Dátum</Label>
+                        <Input type="date" value={oneTimeDate}
+                          onChange={(e) => setOneTimeDate(e.target.value)}
+                          className="h-8 text-xs border-gray-200 rounded-lg mt-0.5" />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={applyOneTimeItems}
+                      disabled={selectedOneTimeItems.size === 0 || !oneTimeAccountId}
+                      className="flex-1 bg-violet-600 hover:bg-violet-700 text-white rounded-lg h-8">
+                      <Plus size={13} className="mr-1" /> {selectedOneTimeItems.size > 0 ? `${selectedOneTimeItems.size} tétel hozzáadása` : 'Hozzáadás'}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setShowOneTimePanel(false)} className="rounded-lg h-8">
                       Mégsem
                     </Button>
                   </div>

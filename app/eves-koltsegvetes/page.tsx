@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/utils/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/src/components/ui/card'
 import { Input } from '@/src/components/ui/input'
@@ -136,8 +136,12 @@ export default function EvesKoltsegvetesPage() {
   const [isFetchingWallet, setIsFetchingWallet] = useState(false)
   const [walletError, setWalletError] = useState<string | null>(null)
   const [walletSyncedAt, setWalletSyncedAt] = useState<string | null>(null)
-  // A göngyölített cashflow alapja: tervezett vagy a Wallet tényadatok
-  const [cashflowBasis, setCashflowBasis] = useState<'terv' | 'teny'>('terv')
+  // A göngyölített cashflow alapja hónaponként: tervezett vagy a Wallet tényadatok.
+  // Amint egy hónaphoz először érkezik Wallet-tényadat, az a hónap automatikusan
+  // tény-alapra vált — de csak egyszer, hogy a kézi hónap-szintű választás
+  // ne íródjon felül egy újabb (silent) frissítéskor.
+  const [monthlyBasis, setMonthlyBasis] = useState<('terv' | 'teny')[]>(Array(12).fill('terv'))
+  const autoBasisAppliedRef = useRef<Set<number>>(new Set())
 
   // Havi tény bevétel/kiadás összesítés a kiválasztott évre (12 elem, nullákkal ha nincs adat)
   const actualsByMonth = useMemo<MonthlyActuals[]>(
@@ -261,8 +265,17 @@ export default function EvesKoltsegvetesPage() {
       const res = await fetchWalletAnnualActuals(selectedYear)
       setApiActuals(res.months)
       setWalletSyncedAt(res.syncedAt)
+      setMonthlyBasis(prev => {
+        const next = [...prev]
+        res.months.forEach((m, i) => {
+          if (m.hasData && !autoBasisAppliedRef.current.has(m.month)) {
+            next[i] = 'teny'
+            autoBasisAppliedRef.current.add(m.month)
+          }
+        })
+        return next
+      })
       if (res.months.some(m => m.hasData)) {
-        setCashflowBasis('teny')
         if (!silent) toast.success(`Wallet tényadatok frissítve (${selectedYear}).`)
       } else if (!silent) {
         toast.info(`Nincs Wallet tranzakció a(z) ${selectedYear}. évre.`)
@@ -282,6 +295,12 @@ export default function EvesKoltsegvetesPage() {
     if (currentUser) fetchWalletActuals(true)
   }, [currentUser, fetchWalletActuals])
 
+  // Év váltáskor a hónap-szintű terv/tény választás is nullázódik
+  useEffect(() => {
+    setMonthlyBasis(Array(12).fill('terv'))
+    autoBasisAppliedRef.current = new Set()
+  }, [selectedYear])
+
   // Havi bevétel frissítése
   const updateMonthlyIncome = (month: number, amount: number) => {
     setMonthlyIncomes(prev =>
@@ -294,6 +313,11 @@ export default function EvesKoltsegvetesPage() {
     setMonthlyBudgetedExpenses(prev =>
       prev.map(me => me.month === month ? { ...me, amount } : me)
     )
+  }
+
+  // Egy adott hónap terv/tény alapjának váltása a cashflow-ban
+  const updateMonthlyBasis = (month: number, basis: 'terv' | 'teny') => {
+    setMonthlyBasis(prev => prev.map((b, i) => i === month - 1 ? basis : b))
   }
 
   // Havi kiadások feltöltése: minden hónaphoz a nevében szereplő terv kiadása kerül be
@@ -418,7 +442,7 @@ export default function EvesKoltsegvetesPage() {
     return MONTHS.map((monthName, index) => {
       const month = index + 1
       const actual = actualsByMonth[index]
-      const useActual = cashflowBasis === 'teny' && actual.hasData
+      const useActual = monthlyBasis[index] === 'teny' && actual.hasData
 
       const recurring = recurringExpenses.filter(re => re.month === month)
       const annualDue = annualExpenses.filter(e => e.targetMonth === month)
@@ -573,6 +597,8 @@ export default function EvesKoltsegvetesPage() {
           ? data.monthly_budgeted_expenses
           : Array.from({ length: 12 }, (_, i) => ({ month: i + 1, amount: 0 }))
       )
+      setMonthlyBasis(Array(12).fill('terv'))
+      autoBasisAppliedRef.current = new Set()
 
       toast.success('Terv betöltve!')
     } catch (error) {
@@ -593,6 +619,8 @@ export default function EvesKoltsegvetesPage() {
     setMonthlySavingsPlan([])
     setOpeningBalance(0)
     setTargetEndBalance(0)
+    setMonthlyBasis(Array(12).fill('terv'))
+    autoBasisAppliedRef.current = new Set()
 
     setMonthlyIncomes(Array.from({ length: 12 }, (_, i) => ({
       month: i + 1,
@@ -614,6 +642,7 @@ export default function EvesKoltsegvetesPage() {
   const effectiveTotalExpenses = cashflow.reduce((sum, c) => sum + c.totalExpense, 0)
   const totalExpenses = totalAnnualExpenses + totalRecurringExpenses + totalGeneralExpenses
   const hasNegativeMonth = cashflow.some(c => c.closingBalance < 0)
+  const tenyBasisMonthCount = monthlyBasis.filter((b, i) => b === 'teny' && actualsByMonth[i].hasData).length
   const balanceDiff = yearEndBalance - targetEndBalance
   // Éves tény összesítés (összevetéshez)
   const actualTotalIncome = actualsByMonth.reduce((sum, a) => sum + a.income, 0)
@@ -907,36 +936,32 @@ export default function EvesKoltsegvetesPage() {
 
                 {hasActualData && (
                   <>
-                    {/* Cashflow alap kapcsoló */}
+                    {/* Cashflow alap gyors beállítás */}
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-700">Cashflow alapja:</span>
-                      <div className="inline-flex rounded-xl border-2 border-gray-200 p-1 bg-gray-50 w-fit">
-                        <button
+                      <span className="text-sm font-semibold text-gray-700">Gyors beállítás:</span>
+                      <div className="flex gap-2">
+                        <Button
                           type="button"
-                          onClick={() => setCashflowBasis('terv')}
-                          className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition-all ${
-                            cashflowBasis === 'terv'
-                              ? 'bg-white text-emerald-700 shadow'
-                              : 'text-gray-500 hover:text-gray-700'
-                          }`}
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setMonthlyBasis(Array(12).fill('terv'))}
+                          className="h-7 text-xs border-2 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50 rounded-lg"
                         >
-                          Terv
-                        </button>
-                        <button
+                          Minden hónap terv alapon
+                        </Button>
+                        <Button
                           type="button"
-                          onClick={() => setCashflowBasis('teny')}
-                          className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition-all ${
-                            cashflowBasis === 'teny'
-                              ? 'bg-white text-emerald-700 shadow'
-                              : 'text-gray-500 hover:text-gray-700'
-                          }`}
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setMonthlyBasis(actualsByMonth.map(a => a.hasData ? 'teny' : 'terv'))}
+                          className="h-7 text-xs border-2 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50 rounded-lg"
                         >
-                          Tény (ahol van)
-                        </button>
+                          Minden hónap tény alapon (ahol van)
+                        </Button>
                       </div>
                     </div>
                     <p className="text-xs text-gray-500">
-                      „Tény” módban azokban a hónapokban, ahol van Wallet-adat, a tényleges bevétel és kiadás viszi a göngyölített egyenleget; a többi hónap a tervezett értékekből számol.
+                      A jobb oldali „Éves cashflow” kártyán hónaponként külön is átválthatod, hogy a göngyölített egyenleg az adott hónapban a tervezett vagy a tényleges (Wallet) adatokat vegye figyelembe.
                     </p>
 
                     {/* Terv vs. tény táblázat */}
@@ -1295,8 +1320,8 @@ export default function EvesKoltsegvetesPage() {
                     Éves cashflow
                   </span>
                   {hasActualData && (
-                    <Badge className={`text-xs border-0 ${cashflowBasis === 'teny' ? 'bg-emerald-500 text-white' : 'bg-gray-400 text-white'}`}>
-                      {cashflowBasis === 'teny' ? 'Tény alap' : 'Terv alap'}
+                    <Badge className={`text-xs border-0 ${tenyBasisMonthCount > 0 ? 'bg-emerald-500 text-white' : 'bg-gray-400 text-white'}`}>
+                      {tenyBasisMonthCount > 0 ? `${tenyBasisMonthCount} hónap tény alapon` : 'Terv alap'}
                     </Badge>
                   )}
                 </CardTitle>
@@ -1320,28 +1345,51 @@ export default function EvesKoltsegvetesPage() {
                         : 'bg-gradient-to-br from-gray-50 to-white border-gray-200/50'
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-bold text-gray-900 flex items-center gap-1.5">
-                        {c.monthName}
-                        {cashflowBasis === 'teny' && actualsByMonth[c.month - 1].hasData && (
-                          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">TÉNY</span>
+                    <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                      <h4 className="font-bold text-gray-900">{c.monthName}</h4>
+                      <div className="flex items-center gap-2">
+                        {actualsByMonth[c.month - 1].hasData && (
+                          <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+                            <button
+                              type="button"
+                              onClick={() => updateMonthlyBasis(c.month, 'terv')}
+                              className={`px-2 py-0.5 text-[11px] font-semibold rounded-md transition-all ${
+                                monthlyBasis[c.month - 1] === 'terv'
+                                  ? 'bg-white text-emerald-700 shadow'
+                                  : 'text-gray-500 hover:text-gray-700'
+                              }`}
+                            >
+                              Terv
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateMonthlyBasis(c.month, 'teny')}
+                              className={`px-2 py-0.5 text-[11px] font-semibold rounded-md transition-all ${
+                                monthlyBasis[c.month - 1] === 'teny'
+                                  ? 'bg-white text-emerald-700 shadow'
+                                  : 'text-gray-500 hover:text-gray-700'
+                              }`}
+                            >
+                              Tény
+                            </button>
+                          </div>
                         )}
-                      </h4>
-                      {c.closingBalance < 0 ? (
-                        <Badge variant="destructive" className="text-xs">
-                          <AlertCircle size={12} className="mr-1" />
-                          Likviditási hiány
-                        </Badge>
-                      ) : c.netCashflow >= 0 ? (
-                        <Badge className="text-xs bg-green-500 text-white border-0">
-                          <TrendingUp size={12} className="mr-1" />
-                          Pozitív
-                        </Badge>
-                      ) : (
-                        <Badge className="text-xs bg-amber-500 text-white border-0">
-                          Negatív hó
-                        </Badge>
-                      )}
+                        {c.closingBalance < 0 ? (
+                          <Badge variant="destructive" className="text-xs">
+                            <AlertCircle size={12} className="mr-1" />
+                            Likviditási hiány
+                          </Badge>
+                        ) : c.netCashflow >= 0 ? (
+                          <Badge className="text-xs bg-green-500 text-white border-0">
+                            <TrendingUp size={12} className="mr-1" />
+                            Pozitív
+                          </Badge>
+                        ) : (
+                          <Badge className="text-xs bg-amber-500 text-white border-0">
+                            Negatív hó
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                     <div className="space-y-1.5 text-sm">
                       <div className="flex justify-between">

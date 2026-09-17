@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/utils/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/src/components/ui/card'
 import { Button } from '@/src/components/ui/button'
-import { Badge } from '@/src/components/ui/badge'
+import { KategoriaOsszehasonlitas } from '@/src/components/terv-teny/kategoria-osszehasonlitas'
 import { RefreshCw, Scale, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import type { BudgetCategory, BudgetItem } from '../../types/budget'
@@ -17,14 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/src/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/src/components/ui/table'
 
 interface User {
   id: string
@@ -516,41 +508,15 @@ export default function TervVsTenyPage() {
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-white/30 bg-white/80 shadow-inner">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Kategória</TableHead>
-                          <TableHead className="text-right">Terv</TableHead>
-                          <TableHead className="text-right">Tény</TableHead>
-                          <TableHead className="text-right">Eltérés</TableHead>
-                          <TableHead>Részletek</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {analysisResult.rows.map((row) => {
-                          const varianceClass = row.variance > 0 ? 'text-rose-600' : row.variance < 0 ? 'text-emerald-600' : 'text-slate-600'
-                          return (
-                            <TableRow key={row.category}>
-                              <TableCell className="font-medium">{row.category}</TableCell>
-                              <TableCell className="text-right">{formatHuf(row.planned)} Ft</TableCell>
-                              <TableCell className="text-right font-semibold">{formatHuf(row.actual)} Ft</TableCell>
-                              <TableCell className={`text-right font-semibold ${varianceClass}`}>{formatHuf(row.variance)} Ft</TableCell>
-                              <TableCell className="space-x-2">
-                                {row.breakdown.slice(0, 3).map((item) => (
-                                  <Badge key={`${row.category}-${item.name}`} variant="outline">
-                                    {item.name}: {formatHuf(item.amount)} Ft
-                                  </Badge>
-                                ))}
-                              </TableCell>
-                            </TableRow>
-                          )
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
+                <KategoriaOsszehasonlitas
+                  key={`${selectedMonth}-${selectedBudgetId}`}
+                  sorok={analysisResult.rows.map((sor) => ({
+                    kategoria: sor.category,
+                    terv: sor.planned,
+                    teny: sor.actual,
+                    reszletek: sor.breakdown.map((tetel) => ({ nev: tetel.name, osszeg: tetel.amount })),
+                  }))}
+                />
 
                 <div className="grid gap-4 lg:grid-cols-3">
                   <div className="rounded-3xl border border-white/40 bg-white/90 p-4">

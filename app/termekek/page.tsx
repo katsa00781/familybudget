@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/utils/supabase/client'
 import { savePriceHistory } from '@/lib/priceHistory'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/src/components/ui/card'
@@ -87,7 +87,26 @@ export default function TermekekPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterCategory, setFilterCategory] = useState<string>('all')
   const [filterStore, setFilterStore] = useState<string>('all')
-  
+
+  // A kategória/bolt szűrők a ténylegesen betöltött termékekből származnak, nem a fix
+  // CATEGORIES/STORES listából — az OCR (telefonos app) szabad szöveges kategóriát ment
+  // (pl. "Zöldség", "ALDI"), ami eltér a kézi felviteli listától, így a fix lista szerinti
+  // szűrés eltüntette az OCR-es termékeket.
+  const availableCategories = useMemo(
+    () =>
+      Array.from(new Set(products.map((p) => p.category).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b, 'hu')
+      ),
+    [products]
+  )
+  const availableStores = useMemo(
+    () =>
+      Array.from(
+        new Set(products.map((p) => p.store_name).filter((s): s is string => !!s))
+      ).sort((a, b) => a.localeCompare(b, 'hu')),
+    [products]
+  )
+
   // JSON import
   const [jsonInput, setJsonInput] = useState('')
   const [showJsonDialog, setShowJsonDialog] = useState(false)
@@ -712,7 +731,7 @@ export default function TermekekPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Összes kategória</SelectItem>
-                      {CATEGORIES.map((category) => (
+                      {availableCategories.map((category) => (
                         <SelectItem key={category} value={category}>
                           {category}
                         </SelectItem>
@@ -725,7 +744,7 @@ export default function TermekekPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Összes bolt</SelectItem>
-                      {STORES.map((store) => (
+                      {availableStores.map((store) => (
                         <SelectItem key={store} value={store}>
                           {store}
                         </SelectItem>

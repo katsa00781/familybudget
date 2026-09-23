@@ -18,6 +18,42 @@ npm run lint      # ESLint ellenőrzés
 
 Nincs automatizált teszt. A Supabase migrációkat manuálisan kell futtatni a Supabase SQL Editor-ban.
 
+## ⚠️ KÖTELEZŐ: Mobil app szinkron-jegyzet
+
+A projekt **webes és mobil appon egyszerre fut**, ugyanazzal a Supabase backenddel. Ha egy változtatás a mobil verziót is érinti, **ugyanabban a munkamenetben létre kell hozni egy MD fájlt** a `docs/mobil-sync/` mappában, hogy a mobil app követni tudja a változást.
+
+**Mobil app repó:** <https://github.com/katsa00781/familyshopping> — aktív ág: `feature/familyhub-v2`. (Ebben a repóban a `mobile/` mappa csak üres csonk, nem a valódi mobil app.) A jegyzetek ebben a (webes) repóban maradnak, a mobil oldalon innen kell átvezetni őket.
+
+**Mikor kötelező** (bármelyik teljesül):
+
+- **Adatbázis:** új/módosított tábla, oszlop, JSONB-struktúra, RLS policy, trigger, migráció
+- **Supabase Edge Function:** új függvény, vagy meglévő bemenetének/kimenetének változása
+- **Funkcionális / üzleti logika:** számítási szabály változása (pl. bérkalkulátor kulcsok, `KULCSOK`, túlóra-pótlékok, Egyenleg Flow motor, Wallet kategória-leképezés), új funkció vagy megszűnő funkció
+- **Közös típusok / adatformátum:** a mobil által is olvasott/írt adatok szerkezete (pl. `types/`, `budget_data`, `items`, `events`)
+
+Tisztán webes UI/stílus változáshoz (ami nem érinti az adatot vagy a logikát) nem kell.
+
+**Fájlnév:** `docs/mobil-sync/YYYY-MM-DD_rovid-leiras.md` (pl. `2026-09-23_egyenleg-flow-heti-ismetles.md`)
+
+**Tartalom (sablon):**
+
+```markdown
+# <Rövid cím>
+
+- **Dátum:** YYYY-MM-DD
+- **Érintett terület:** adatbázis / edge function / üzleti logika / típusok
+- **Mobil teendő szükséges:** igen / nem (csak tájékoztató)
+
+## Mi változott
+<A változás leírása a webes oldalon, érintett fájlokkal.>
+
+## Adatbázis / API változás
+<Migráció fájlneve, új/módosított oszlopok, Edge Function bemenet/kimenet — vagy „nincs”.>
+
+## Teendő a mobil appban
+<Konkrét lépések: mit kell módosítani, milyen képernyőt/logikát érint, visszafelé kompatibilitás.>
+```
+
 ## Könyvtárszerkezet és architektúra
 
 ```

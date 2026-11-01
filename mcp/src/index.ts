@@ -21,7 +21,8 @@ server.tool(
     month: z.string().describe('Hónap YYYY-MM formátumban, pl. "2026-05"'),
     wallet_records: z.array(z.object({
       date: z.string().describe('YYYY-MM-DD'),
-      category: z.string().describe('Wallet kategória neve magyarul'),
+      category: z.string().describe('Wallet kategória neve (magyar vagy a Wallet MCP angol neve, pl. "Groceries")'),
+      categoryId: z.string().optional().describe('Wallet kategória UUID (category.id a get_records-ból) — ha megadod, ez az elsődleges egyeztetési kulcs'),
       amount: z.number().describe('Összeg — kiadásoknál is pozitív szám'),
       type: z.string().describe('"Kiadás" vagy "expense" | "Bevétel" vagy "income" | "Átvezetés" vagy "transfer"'),
       note: z.string().optional(),

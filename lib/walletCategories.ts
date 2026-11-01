@@ -143,6 +143,100 @@ export const WALLET_SYSTEM_UUID_TO_INTERNAL: Record<string, string> = {
   '5c5c177c-003c-8000-8000-000000000000': '1b46b9a8-f441-4427-9229-29e6bd2d6f6b', // Lottery, gambling → Lottó, szerencsejáték
 }
 
+// A Wallet MCP / REST az angol rendszer-kategórianevet adja vissza (pl. "Groceries").
+// Ha egy rekordnál nincs categoryId, a név alapján ezzel jutunk el a valódi UUID-ig,
+// amit aztán a WALLET_SYSTEM_UUID_TO_INTERNAL fordít belső UUID-ra.
+// Forrás: Wallet MCP get_categories (2026-11-01). Az átnevezett rendszer-kategóriák
+// (pl. "Mamci revolut" = others__missing, "Autópálya díjak" = vehicle__rentals) az
+// egyedi nevükkel jönnek, ezeket a categoryId alapján kell feloldani.
+export const WALLET_EN_NAME_TO_REAL_ID: Record<string, string> = {
+  'Groceries': '5c5c03e8-000a-8000-8000-000000000000',
+  'Food & Drinks': '5c5c03eb-000a-8000-8000-000000000000',
+  'Restaurants & fast food': '5c5c03e9-000a-8000-8000-000000000000',
+  'Bar cafe': '5c5c03ea-000a-8000-8000-000000000000',
+  'Kids': '5c5c07d3-0014-8000-8000-000000000000',
+  'Home & garden': '5c5c07d4-0014-8000-8000-000000000000',
+  'Electronics & accessories': '5c5c07d6-0014-8000-8000-000000000000',
+  'Drugstore': '5c5c07db-0014-8000-8000-000000000000',
+  'Clothes & shoes': '5c5c07d0-0014-8000-8000-000000000000',
+  'Health & beauty': '5c5c07d2-0014-8000-8000-000000000000',
+  'Gifts & joy': '5c5c07d7-0014-8000-8000-000000000000',
+  'Free time': '5c5c07d9-0014-8000-8000-000000000000',
+  'Jewels & accessories': '5c5c07d1-0014-8000-8000-000000000000',
+  'Pets & animals': '5c5c07d5-0014-8000-8000-000000000000',
+  'Shopping': '5c5c07da-0014-8000-8000-000000000000',
+  'Stationery & tools': '5c5c07d8-0014-8000-8000-000000000000',
+  'Health care & doctor': '5c5c1770-003c-8000-8000-000000000000',
+  'Wellness & beauty': '5c5c1771-003c-8000-8000-000000000000',
+  'Active sport, fitness': '5c5c1772-003c-8000-8000-000000000000',
+  'Culture, sport events': '5c5c1773-003c-8000-8000-000000000000',
+  'Life events': '5c5c1774-003c-8000-8000-000000000000',
+  'Hobbies': '5c5c1775-003c-8000-8000-000000000000',
+  'Education & development': '5c5c1776-003c-8000-8000-000000000000',
+  'Books, audio, subscription': '5c5c1777-003c-8000-8000-000000000000',
+  'Tv, streaming': '5c5c1778-003c-8000-8000-000000000000',
+  'Holidays, trips, hotels': '5c5c1779-003c-8000-8000-000000000000',
+  'Charity, gifts': '5c5c177a-003c-8000-8000-000000000000',
+  'Alcohol, tobacco': '5c5c177b-003c-8000-8000-000000000000',
+  'Lottery, gambling (Life & Entertainment)': '5c5c177c-003c-8000-8000-000000000000',
+  'Life & Entertainment': '5c5c177d-003c-8000-8000-000000000000',
+  'Fuel': '5c5c1388-0032-8000-8000-000000000000',
+  'Parking': '5c5c1389-0032-8000-8000-000000000000',
+  'Vehicle maintenance': '5c5c138a-0032-8000-8000-000000000000',
+  'Vehicle': '5c5c138c-0032-8000-8000-000000000000',
+  'Insurance (Vehicle)': '5c5c1392-0032-8000-8000-000000000000',
+  'Leasing': '5c5c1f46-0032-8000-8000-000000000000',
+  'Public transport': '5c5c0fa0-0028-8000-8000-000000000000',
+  'Taxi': '5c5c0fa1-0028-8000-8000-000000000000',
+  'Long distance': '5c5c0fa2-0028-8000-8000-000000000000',
+  'Business trips': '5c5c0fa3-0028-8000-8000-000000000000',
+  'Transportation': '5c5c0fa4-0028-8000-8000-000000000000',
+  'Rent': '5c5c0bb8-001e-8000-8000-000000000000',
+  'Mortgage': '5c5c0bb9-001e-8000-8000-000000000000',
+  'Energy & utilities': '5c5c0bba-001e-8000-8000-000000000000',
+  'Services': '5c5c0bbb-001e-8000-8000-000000000000',
+  'Maintenance & repairs': '5c5c0bbc-001e-8000-8000-000000000000',
+  'Housing': '5c5c0bbd-001e-8000-8000-000000000000',
+  'Insurance (Housing)': '5c5c0bc2-001e-8000-8000-000000000000',
+  'Phone, cell phones': '5c5c1b59-0046-8000-8000-000000000000',
+  'Internet': '5c5c1b5a-0046-8000-8000-000000000000',
+  'Software, apps, games': '5c5c1b5b-0046-8000-8000-000000000000',
+  'Postal services': '5c5c1b5c-0046-8000-8000-000000000000',
+  'PC, Communication': '5c5c1b5d-0046-8000-8000-000000000000',
+  'Taxes': '5c5c1f40-0050-8000-8000-000000000000',
+  'Insurances': '5c5c1f41-0050-8000-8000-000000000000',
+  'Loan, interests': '5c5c1f42-0050-8000-8000-000000000000',
+  'Fines': '5c5c1f43-0050-8000-8000-000000000000',
+  'Advisory': '5c5c1f44-0050-8000-8000-000000000000',
+  'Charges, fees': '5c5c1f45-0050-8000-8000-000000000000',
+  'Aliments (Financial expenses)': '5c5c1f47-0050-8000-8000-000000000000',
+  'Financial expenses': '5c5c1f48-0050-8000-8000-000000000000',
+  'Savings': '5c5c232b-005a-8000-8000-000000000000',
+  'Fin. investments': '5c5c232a-005a-8000-8000-000000000000',
+  'Collections': '5c5c232c-005a-8000-8000-000000000000',
+  'Investments': '5c5c232d-005a-8000-8000-000000000000',
+  'Realty': '5c5c2328-005a-8000-8000-000000000000',
+  'Vehicles, chattels': '5c5c2329-005a-8000-8000-000000000000',
+  'Others': '5c5c2af8-006e-8000-8000-000000000000',
+  'Missing': '5c5c2af9-006e-8000-8000-000000000000',
+  'Unknown expense': '5c5c32c9-0082-8000-8000-000000000000',
+}
+
+// Valódi (globális) Wallet UUID → belső UUID; ismeretlen UUID-ra önmagát adja vissza.
+export function toInternalWalletId(id: string): string {
+  return WALLET_SYSTEM_UUID_TO_INTERNAL[id] ?? id
+}
+
+// Wallet kategória (név, opcionálisan UUID) → belső UUID.
+// Sorrend: categoryId → magyar név → angol rendszer-név.
+export function resolveWalletCategoryId(name: string, categoryId?: string): string | undefined {
+  if (categoryId) return toInternalWalletId(categoryId)
+  const huId = WALLET_CATEGORY_NAME_TO_ID.get(name)
+  if (huId) return huId
+  const realId = WALLET_EN_NAME_TO_REAL_ID[name]
+  return realId ? toInternalWalletId(realId) : undefined
+}
+
 // Egy Wallet REST kategória (valódi UUID + a REST által adott név) feloldása a belső
 // kategóriára: visszaadja a belső UUID-t (egyeztetéshez) és a magyar nevet (megjelenítéshez).
 export function resolveWalletCategory(realId: string, fallbackName: string): { internalId: string; name: string } {

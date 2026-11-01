@@ -1,6 +1,6 @@
 import { supabase, USER_ID } from '../lib/supabase.js'
 import { CATEGORY_ALIAS_MAP, FALLBACK_CATEGORY_MAP } from '../lib/category-map.js'
-import { WALLET_CATEGORY_NAME_TO_ID } from '../lib/wallet-categories.js'
+import { WALLET_CATEGORY_MAP, resolveWalletCategoryId, toInternalWalletId } from '../lib/wallet-categories.js'
 
 interface BudgetItem {
   id?: string
@@ -118,17 +118,23 @@ function buildWalletMapping(categories: BudgetCategory[]): Map<string, string> {
   const mapping = new Map<string, string>()
   categories.forEach(cat => {
     cat.walletCategories?.forEach(id => {
-      mapping.set(id, cat.name)
+      // A terv tárolhat valódi Wallet UUID-t is → belső UUID-ra normalizálva
+      mapping.set(toInternalWalletId(id), cat.name)
     })
   })
   return mapping
 }
 
-// Wallet rekord kategória nevéből UUID-t keres
+// Wallet rekord → belső kategória UUID (categoryId, magyar név vagy angol rendszer-név alapján)
 function resolveRecordCategoryId(record: WalletRecord): string | undefined {
-  if (record.categoryId) return record.categoryId
   const normalized = CATEGORY_ALIAS_MAP[record.category] || record.category
-  return WALLET_CATEGORY_NAME_TO_ID.get(normalized) || WALLET_CATEGORY_NAME_TO_ID.get(record.category)
+  return resolveWalletCategoryId(normalized, record.categoryId)
+    ?? resolveWalletCategoryId(record.category)
+}
+
+// Megjelenítési név: a belső (magyar) név, ha ismert, különben a beküldött név
+function displayCategoryName(record: WalletRecord, categoryId?: string): string {
+  return (categoryId && WALLET_CATEGORY_MAP.get(categoryId)?.name) || record.category
 }
 
 function isExpense(type: string): boolean {
@@ -210,13 +216,14 @@ export async function budgetComparisonHandler(args: {
         budgetCat = FALLBACK_CATEGORY_MAP[normalized] || FALLBACK_CATEGORY_MAP[record.category]
       }
 
+      const label = displayCategoryName(record, categoryId)
       if (budgetCat) {
         expensesByBudget.set(budgetCat, (expensesByBudget.get(budgetCat) || 0) + record.amount)
         const breakdown = breakdownMap.get(budgetCat) || new Map<string, number>()
-        breakdown.set(record.category, (breakdown.get(record.category) || 0) + record.amount)
+        breakdown.set(label, (breakdown.get(label) || 0) + record.amount)
         breakdownMap.set(budgetCat, breakdown)
       } else {
-        unmappedCategories.set(record.category, (unmappedCategories.get(record.category) || 0) + record.amount)
+        unmappedCategories.set(label, (unmappedCategories.get(label) || 0) + record.amount)
       }
     })
 

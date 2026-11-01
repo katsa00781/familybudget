@@ -4,6 +4,7 @@
 
 import { createClient } from '@/lib/utils/supabase/client'
 import type { MonthlyActuals } from '@/lib/walletCsv'
+import type { EgyenlegPillanatkep } from '@/types/egyenleg-pillanatkep'
 
 export interface WalletAnnualResponse {
   year: number
@@ -140,4 +141,39 @@ export async function fetchWalletAccounts(includeArchived = false): Promise<Wall
   }
 
   return data as WalletAccountsResponse
+}
+
+export interface WalletBalanceSnapshotResponse {
+  month: string // "YYYY-MM"
+  created: boolean // false: a hónapnak már volt mentése
+  snapshot: EgyenlegPillanatkep | null
+}
+
+// Az aktuális hónap számlaegyenlegeinek mentése (a `wallet-balance-snapshot` Edge
+// Function-ön keresztül). A meglévő havi mentést nem írja felül.
+export async function saveWalletBalanceSnapshot(): Promise<WalletBalanceSnapshotResponse> {
+  const supabase = createClient()
+  const { data, error } = await supabase.functions.invoke('wallet-balance-snapshot', {
+    body: {},
+  })
+
+  if (error) {
+    let message = error.message || 'Nem sikerült menteni a számlaegyenlegeket'
+    try {
+      const ctx = (error as { context?: Response }).context
+      if (ctx && typeof ctx.json === 'function') {
+        const body = await ctx.json()
+        if (body?.error?.message) message = body.error.message
+      }
+    } catch {
+      // marad az alap üzenet
+    }
+    throw new Error(message)
+  }
+
+  if (data?.error) {
+    throw new Error(data.error.message || 'Wallet API hiba')
+  }
+
+  return data as WalletBalanceSnapshotResponse
 }

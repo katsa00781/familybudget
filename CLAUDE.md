@@ -123,6 +123,7 @@ if (!user) redirect('/login')
 | `/koltsegvetes` | `app/koltsegvetes/page.tsx` | Havi költségvetés tervezés |
 | `/eves-koltsegvetes` | `app/eves-koltsegvetes/page.tsx` | Éves cashflow — havi nettó + göngyölített egyenleg, év végi egyensúly |
 | `/egyenleg-flow` | `app/egyenleg-flow/page.tsx` | **Egyenleg Flow** — nap alapú bankszámla-egyenleg előrejelző. Élő Wallet számlaegyenlegekből indul (`fetchWalletAccounts`), tervezett bevétel/kiadás/átvezetés tételekből napi göngyölített egyenleget számol számlánként (`lib/egyenlegFlow.ts`); jelzi a főszámla mínuszos napjait és a hitelkártya befizetési határidőt |
+| `/egyenleg-valtozas` | `app/egyenleg-valtozas/page.tsx` | **Egyenleg változás** — a hónap 1-jén mentett számlaegyenlegek (`egyenleg_pillanatkep`) összevetése az élő Wallet-egyenleggel, lezárt hónapnál a következő havi mentéssel; számlánként és pénznemenként |
 | `/bevetelek` | `app/bevetelek/page.tsx` | **Terv vs. Tény** — Wallet CSV import + havi költségvetési terv összehasonlító (a régi bevételi terv UI megszűnt, funkcióját a bérkalkulátor vette át) |
 | `/bevasarlas` | `app/bevasarlas/page.tsx` | Bevásárlólista szerkesztés |
 | `/bevasarlas-quick` | `app/bevasarlas-quick/page.tsx` | Gyors checklist mód |
@@ -145,6 +146,7 @@ A Supabase minden táblán **Row Level Security (RLS)** van engedélyezve. A `au
 | `budget_plans` | Havi költségvetési tervek (budget_data JSONB) |
 | `annual_budget_plans` | Éves költségvetési tervek |
 | `egyenleg_flow` | Napi egyenleg-előrejelző terv (accounts + events JSONB, migráció `20260628_001`) |
+| `egyenleg_pillanatkep` | Havi számlaegyenleg-mentés (accounts JSONB, migráció `20261101_001`); csak az Edge Function írja, a kliens csak olvassa |
 | `shopping_lists` | Bevásárlólisták (items JSONB) |
 | `products` | Termékadatbázis |
 | `product_price_history` | Árkövetési adatok |
@@ -224,6 +226,13 @@ Nap alapú likviditás-tervező: az élő Wallet számlaegyenlegekből indulva, 
 - **Élő egyenleg:** új `wallet-accounts` Supabase Edge Function (`supabase/functions/wallet-accounts/index.ts`) a Wallet REST `/accounts` végpontjából adja vissza a számlák aktuális egyenlegét (hitelkártyánál `creditBalance` = tartozás, `creditLimit` = keret). Kliens helper: `lib/walletApi.ts` → `fetchWalletAccounts()`. A token (`BUDGETBAKERS_API_TOKEN`) a szerveren marad, a hívót Supabase JWT azonosítja — ugyanaz a minta mint a `wallet-monthly-spending`.
 - **Előrejelző motor:** `lib/egyenlegFlow.ts` — tiszta (UI-független) függvények. `expandEvents()` kibontja az ismétlődő tételeket (egyszeri/heti/havi) konkrét napokra, `computeDailyBalances()` göngyölíti a számlánkénti záró egyenleget. **Hitelkártya-szemantika:** az egyenleg a tartozást jelenti, ezért a számlára beáramló pénz CSÖKKENTi (lásd `applyDelta`). `buildForecast()` a kettőt egy lépésben hívja.
 - **Adat:** egy `egyenleg_flow` tábla soronként (JSONB `accounts` + `events`), felhasználónként a legutóbb frissített sor töltődik be. Típusok: `types/egyenleg-flow.ts` (`FlowAccount`, `FlowEvent`, `DayRow`).
+
+## Egyenleg változás oldal (`/egyenleg-valtozas`) — havi számlaegyenleg-mentés
+
+- **Mentés:** a `wallet-balance-snapshot` Edge Function (`supabase/functions/wallet-balance-snapshot/index.ts`) hónaponként egy sort ír az `egyenleg_pillanatkep` táblába, a meglévőt soha nem írja felül. A hónapkulcs a budapesti naptárból jön.
+- **Ütemezés:** `pg_cron` + `pg_net` (migráció `20261101_002`), `0 5 1,2,3 * *` UTC; a 2-i és 3-i futás csak tartalék. A cron az `x-cron-secret` fejléccel azonosít (`WALLET_SNAPSHOT_CRON_SECRET`), kézi mentést csak a `WALLET_SNAPSHOT_USER_ID` felhasználó indíthat.
+- **Előjel:** a mentett `balance` előjeles, a hitelkártya-tartozás negatív (`availableCredit - creditLimit`), így a számlák összeadhatók. Az élő adatra ugyanezt a `nettoEgyenleg()` (`lib/egyenlegValtozas.ts`) alkalmazza; a szabályt mindkét helyen együtt kell módosítani.
+- **Összesítés:** `szamolValtozas()` pénznemenként, átváltás nélkül. Az új számla 0-ról indul, a megszűnt 0-ra zár.
 
 ## Sidebar navigáció
 

@@ -12,7 +12,7 @@ import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
   Menu, BarChart2, CircleDollarSign, User, ChefHat,
   ShoppingCart, TrendingUpIcon, Package, PiggyBank,
-  Users, Home, HelpCircle, TrendingUp, BarChart3, Calendar, Milestone, Scale, CalendarClock
+  Users, Home, HelpCircle, TrendingUp, BarChart3, Calendar, Milestone, Scale, CalendarClock, ArrowLeftRight
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useUserProfile } from '@/src/hooks/useUserProfile';
@@ -35,6 +35,7 @@ export default function Sidebar({ className = "" }: SidebarProps) {
     { icon: <Home size={20} />, label: 'Költségvetés', href: '/koltsegvetes' },
     { icon: <Calendar size={20} />, label: 'Éves Cashflow', href: '/eves-koltsegvetes' },
     { icon: <CalendarClock size={20} />, label: 'Egyenleg Flow', href: '/egyenleg-flow' },
+    { icon: <ArrowLeftRight size={20} />, label: 'Egyenleg változás', href: '/egyenleg-valtozas' },
     { icon: <Scale size={20} />, label: 'Terv vs. Tény', href: '/bevetelek' },
     { icon: <ShoppingCart size={20} />, label: 'Bevásárlás', href: '/bevasarlas' },
     { icon: <Package size={20} />, label: 'Termékek', href: '/termekek' },

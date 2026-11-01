@@ -147,3 +147,11 @@ A migrációk futtatása után az alkalmazás teljes funkcionalitással használ
 - ✅ Termékadatbázis kezelés vonalkóddal
 - ✅ Receptek kezelése és bevásárlólistára vétele
 - ✅ Megtakarítási célok és befektetési portfólió kezelés
+
+## Egyenleg pillanatkép (2026-11-01)
+
+### 20261101_001_create_egyenleg_pillanatkep.sql
+Havi számlaegyenleg-mentés táblája. Csak SELECT policy van, írni a `wallet-balance-snapshot` Edge Function tud.
+
+### 20261101_002_egyenleg_pillanatkep_cron.sql
+Havi ütemezés (`pg_cron`, `pg_net`). Futtatás előtt ki kell tölteni a `<ANON_KEY>` és `<CRON_SECRET>` placeholdereket; a kitöltött változat nem kerülhet a repóba. Először az Edge Functiont és a secreteket kell beállítani.

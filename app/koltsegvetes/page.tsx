@@ -636,44 +636,29 @@ export default function KoltsegvetesPage() {
     }))
   }
 
-  // Bevétel átvétele a főszámlára
-  const handleApplyIncomeToMainAccount = (mode: 'expected' | 'actual') => {
-    const value = mode === 'actual' ? actualIncome : expectedIncome
-
-    if (!value || value <= 0) {
-      toast.info('Nincs olyan bevétel, amit át lehetne venni a főszámlára.')
-      return
-    }
-
-    setTransferPlan(prev => ({
-      ...prev,
-      accounts: prev.accounts.map(account =>
-        account.id === 'main-account'
-          ? { ...account, initialBalance: value }
-          : account
-      )
-    }))
-
-    toast.success(mode === 'actual' ? 'A tényleges bevétel bekerült a főszámla induló egyenlegébe.' : 'A tervezett bevétel bekerült a főszámla induló egyenlegébe.')
-  }
-
+  // Számla előrejelzés: induló + bejövő − kimenő. A főszámla bejövő összegébe a
+  // költségvetés tervezett bevétele (a kiválasztott bevételi terv) is beleszámít.
   const accountSummaries = useMemo(() => {
     return transferPlan.accounts.map(account => {
-      const incoming = transferPlan.transfers.reduce((sum, transfer) => (
+      const incomingTransfers = transferPlan.transfers.reduce((sum, transfer) => (
         transfer.toAccountId === account.id ? sum + transfer.amount : sum
       ), 0)
       const outgoing = transferPlan.transfers.reduce((sum, transfer) => (
         transfer.fromAccountId === account.id ? sum + transfer.amount : sum
       ), 0)
+      const plannedIncome = account.id === 'main-account' ? Math.max(expectedIncome, 0) : 0
+      const incoming = incomingTransfers + plannedIncome
 
       return {
         ...account,
         incoming,
+        incomingTransfers,
+        plannedIncome,
         outgoing,
         projectedBalance: account.initialBalance + incoming - outgoing
       }
     })
-  }, [transferPlan])
+  }, [transferPlan, expectedIncome])
 
   const totalTransferVolume = useMemo(() => {
     return transferPlan.transfers.reduce((sum, transfer) => sum + transfer.amount, 0)
@@ -1586,26 +1571,6 @@ export default function KoltsegvetesPage() {
                       <RefreshCcw size={14} className={`mr-1 ${walletAccountsLoading ? 'animate-spin' : ''}`} />
                       Frissítés a Wallet-ből
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleApplyIncomeToMainAccount('expected')}
-                      disabled={expectedIncome <= 0}
-                      className="text-xs sm:text-sm h-8 border-blue-300 text-blue-700 hover:bg-blue-50"
-                    >
-                      <RefreshCcw size={14} className="mr-1" />
-                      Tervezett bevétel
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleApplyIncomeToMainAccount('actual')}
-                      disabled={actualIncome <= 0}
-                      className="text-xs sm:text-sm h-8 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                    >
-                      <RefreshCcw size={14} className="mr-1" />
-                      Tényleges bevétel
-                    </Button>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
@@ -1802,7 +1767,7 @@ export default function KoltsegvetesPage() {
               <div className="space-y-3">
                 <div className="flex flex-col gap-1">
                   <p className="text-sm font-semibold text-gray-800">Számla előrejelzés</p>
-                  <p className="text-xs text-gray-500">Induló egyenleg + bejövő utalások - kimenő utalások = várható egyenleg.</p>
+                  <p className="text-xs text-gray-500">Induló egyenleg + bejövő (főszámlán a tervezett bevétel is) − kimenő utalások = várható egyenleg.</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
                   {accountSummaries.map(account => (
@@ -1816,6 +1781,12 @@ export default function KoltsegvetesPage() {
                       <div className="text-xs text-gray-600 space-y-1">
                         <p>Induló: <span className="font-semibold">{formatCurrency(account.initialBalance)}</span></p>
                         <p>Bejövő: <span className="font-semibold text-emerald-600">+{formatCurrency(account.incoming)}</span></p>
+                        {account.plannedIncome > 0 && (
+                          <p className="pl-3 text-gray-500">
+                            ebből tervezett bevétel: {formatCurrency(account.plannedIncome)}
+                            {account.incomingTransfers > 0 && <>, utalás: {formatCurrency(account.incomingTransfers)}</>}
+                          </p>
+                        )}
                         <p>Kimenő: <span className="font-semibold text-red-600">-{formatCurrency(account.outgoing)}</span></p>
                       </div>
                       <Separator className="my-1" />

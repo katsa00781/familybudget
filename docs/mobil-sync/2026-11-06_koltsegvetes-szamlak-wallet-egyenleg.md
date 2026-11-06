@@ -49,3 +49,18 @@ A Költségvetés oldal (`app/koltsegvetes/page.tsx`) *Számlák és Tervezett U
    - ugyanazzal az előjel-szabállyal (`nettoEgyenleg`, kerekítve);
    - ugyanazzal a hónap-feltétellel (automatikusan csak aktuális vagy jövőbeli `plan_month` esetén).
 3. Az induló egyenleg beviteli mezője negatív értéket is fogadjon el (eddig `min=0` volt).
+
+## Kiegészítés: tervezett bevétel a főszámla előrejelzésében
+
+A *Számla előrejelzés* a főszámla (`main-account`) bejövő összegébe a költségvetés **tervezett bevételét** is beleszámolja. Ez a kiválasztott bevételi terv összege, a webes kódban `expectedIncome`.
+
+```
+bejövő   = bejövő utalások + (főszámlánál: tervezett bevétel)
+várható  = induló + bejövő − kimenő
+```
+
+A többi számla bejövő összege továbbra is csak az utalásokból áll. A tervezett bevétel nincs mentve a `transferPlan`-be, a megjelenítéskor számolódik.
+
+Megszűnt a „Tervezett bevétel” és a „Tényleges bevétel” gomb. Ezek eddig a bevételt a főszámla induló egyenlegébe írták. Az induló egyenleg most a Wallet-ből jön, a bevétel pedig a bejövő oldalon szerepel, így a gombok duplán számolnák.
+
+**Mobil teendő:** ha a mobil is számolja a számla-előrejelzést, a főszámla bejövő összegéhez adja hozzá a tervezett bevételt. A bevételt ne írja az induló egyenlegbe.

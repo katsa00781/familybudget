@@ -76,10 +76,13 @@ const generateId = () => Math.random().toString(36).substr(2, 9)
 // Kategóriák és egységek
 const CATEGORIES = [
   'Tejtermékek', 'Pékáruk', 'Húsok', 'Zöldségek', 'Gyümölcsök', 'Italok', 
-  'Fagyasztott', 'Konzervek', 'Tisztítószerek', 'Egyéb'
+  'Fagyasztott', 'Konzervek', 'Tisztítószerek', 'Kozmetikumok', 'Gyógyszer', 'Egyéb'
 ]
 
-const UNITS = ['db', 'kg', 'g', 'l', 'ml', 'csomag', 'doboz']
+const UNITS = ['db', 'kg', 'g', 'l', 'ml', 'csomag', 'doboz', 'üveg', 'tasak']
+
+const ALAP_EGYSEG = 'db'
+const ALAP_KATEGORIA = 'Egyéb'
 
 export default function BevasarlasPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null)
@@ -90,8 +93,9 @@ export default function BevasarlasPage() {
   const [savedLists, setSavedLists] = useState<ShoppingList[]>([])
   const [selectedListId, setSelectedListId] = useState<string>('')
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState<string>('')
-  const [selectedUnit, setSelectedUnit] = useState<string>('')
+  const [selectedCategory, setSelectedCategory] = useState<string>(ALAP_KATEGORIA)
+  const [selectedUnit, setSelectedUnit] = useState<string>(ALAP_EGYSEG)
+  const [ujMennyiseg, setUjMennyiseg] = useState<string>('1')
   const [productSuggestions, setProductSuggestions] = useState<Product[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [migrationWarning, setMigrationWarning] = useState(false)
@@ -193,6 +197,17 @@ export default function BevasarlasPage() {
     return () => clearTimeout(debounceTimer)
   }, [searchTerm, searchProducts])
 
+  // A hozzáadó sor mennyisége számként (tizedesvessző is elfogadott); érvénytelen értéknél 1
+  const mennyisegSzam = (): number => {
+    const ertek = parseFloat(ujMennyiseg.replace(',', '.'))
+    return Number.isFinite(ertek) && ertek > 0 ? ertek : 1
+  }
+
+  const leptetMennyiseg = (irany: 1 | -1) => {
+    const kovetkezo = mennyisegSzam() + irany
+    setUjMennyiseg(String(Math.max(1, kovetkezo)))
+  }
+
   // Új tétel hozzáadása
   const addItem = (product?: Product) => {
     let itemData: Partial<ShoppingItem>
@@ -206,7 +221,7 @@ export default function BevasarlasPage() {
       // Termékből hozzáadás
       itemData = {
         name: product.brand ? `${product.brand} ${product.name}` : product.name,
-        quantity: 1,
+        quantity: mennyisegSzam(),
         unit: product.unit,
         category: product.category,
         price: product.price,
@@ -241,9 +256,9 @@ export default function BevasarlasPage() {
 
       itemData = {
         name: searchTerm.trim(),
-        quantity: 1,
-        unit: selectedUnit || 'db',
-        category: selectedCategory || 'Egyéb',
+        quantity: mennyisegSzam(),
+        unit: selectedUnit || ALAP_EGYSEG,
+        category: selectedCategory || ALAP_KATEGORIA,
         previousPrice: existingItem?.price,
         checked: false
       }
@@ -256,10 +271,28 @@ export default function BevasarlasPage() {
 
     setCurrentItems(prev => [...prev, newItem])
     setSearchTerm('')
-    setSelectedUnit('')
-    setSelectedCategory('')
+    setSelectedUnit(ALAP_EGYSEG)
+    setSelectedCategory(ALAP_KATEGORIA)
+    setUjMennyiseg('1')
     setShowSuggestions(false)
   }
+
+  // Tételek boltonként csoportosítva: boltok ábécérendben, a bolt nélküli tételek a végén;
+  // csoporton belül a felvétel sorrendje marad
+  const boltCsoportok = (() => {
+    const csoportok = new Map<string | null, ShoppingItem[]>()
+    for (const tetel of currentItems) {
+      const bolt = tetel.store_name?.trim() || null
+      const lista = csoportok.get(bolt)
+      if (lista) lista.push(tetel)
+      else csoportok.set(bolt, [tetel])
+    }
+    return Array.from(csoportok, ([bolt, tetelek]) => ({ bolt, tetelek })).sort((a, b) => {
+      if (a.bolt === null) return 1
+      if (b.bolt === null) return -1
+      return a.bolt.localeCompare(b.bolt, 'hu')
+    })
+  })()
 
   // Tétel eltávolítása
   const removeItem = (id: string) => {
@@ -809,32 +842,47 @@ export default function BevasarlasPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-0">
-                {/* Termék hozzáadása */}
-                <div className="flex flex-col sm:flex-row gap-2 mb-4 md:mb-6">
-                  <div className="flex-1">
-                    <Input
-                      placeholder="Termék keresése vagy hozzáadása"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && addItem()}
-                      className="h-9 md:h-10 text-sm"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                      <SelectTrigger className="w-28 md:w-32 h-9 md:h-10 text-sm">
-                        <SelectValue placeholder="Kategória" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CATEGORIES.map((category) => (
-                          <SelectItem key={category} value={category}>
-                            {category}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                {/* Termék hozzáadása — név, mennyiség, egység, kategória (az árat a keresőből választott termék hozza) */}
+                <div className="flex flex-col gap-2 mb-4 md:mb-6">
+                  <Input
+                    placeholder="Termék keresése vagy hozzáadása"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addItem()}
+                    className="h-9 md:h-10 text-sm"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => leptetMennyiseg(-1)}
+                        className="h-9 w-9 md:h-10 md:w-10 p-0"
+                        aria-label="Mennyiség csökkentése"
+                      >
+                        <Minus size={14} />
+                      </Button>
+                      <Input
+                        inputMode="decimal"
+                        value={ujMennyiseg}
+                        onChange={(e) => setUjMennyiseg(e.target.value.replace(/[^0-9.,]/g, ''))}
+                        onBlur={() => setUjMennyiseg(String(mennyisegSzam()))}
+                        onKeyDown={(e) => e.key === 'Enter' && addItem()}
+                        className="w-14 h-9 md:h-10 text-sm text-center px-1"
+                        aria-label="Mennyiség"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => leptetMennyiseg(1)}
+                        className="h-9 w-9 md:h-10 md:w-10 p-0"
+                        aria-label="Mennyiség növelése"
+                      >
+                        <Plus size={14} />
+                      </Button>
+                    </div>
                     <Select value={selectedUnit} onValueChange={setSelectedUnit}>
-                      <SelectTrigger className="w-20 h-9 md:h-10 text-sm">
+                      <SelectTrigger className="w-24 h-9 md:h-10 text-sm" aria-label="Egység">
                         <SelectValue placeholder="Egység" />
                       </SelectTrigger>
                       <SelectContent>
@@ -845,15 +893,21 @@ export default function BevasarlasPage() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button onClick={() => addItem()} className="bg-cyan-500 hover:bg-cyan-600 p-2 h-9 md:h-10">
-                      <Plus size={14} />
-                    </Button>
-                    <Button 
-                      onClick={() => addTestPriceChange()} 
-                      className="bg-orange-500 hover:bg-orange-600 text-white p-2 h-9 md:h-10 hidden sm:flex"
-                      title="Teszt termék hozzáadása árváltozással"
-                    >
-                      🧪
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                      <SelectTrigger className="flex-1 min-w-32 h-9 md:h-10 text-sm" aria-label="Kategória">
+                        <SelectValue placeholder="Kategória" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CATEGORIES.map((category) => (
+                          <SelectItem key={category} value={category}>
+                            {category}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button onClick={() => addItem()} className="bg-cyan-500 hover:bg-cyan-600 h-9 md:h-10 px-3">
+                      <Plus size={14} className="mr-1" />
+                      Hozzáadás
                     </Button>
                   </div>
                 </div>
@@ -913,79 +967,85 @@ export default function BevasarlasPage() {
                       <p className="text-xs md:text-sm">Add hozzá az első terméket!</p>
                     </div>
                   ) : (
-                    currentItems.map((item) => (
-                      <div key={item.id} className="flex items-center gap-2 md:gap-3 p-2 md:p-3 border rounded-lg hover:bg-gray-50">
-                        <Checkbox
-                          checked={item.checked}
-                          onCheckedChange={(checked) => updateItem(item.id, 'checked', checked)}
-                          className="flex-shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-1 md:gap-2 mb-1">
-                            <span className={`font-medium text-sm md:text-base ${item.checked ? 'line-through text-gray-500' : 'text-gray-900'} truncate`}>
-                              {item.name}
-                            </span>
-                            <Badge variant="outline" className="text-xs flex-shrink-0">
-                              {item.category}
-                            </Badge>
-                            {(() => {
-                              const priceChange = getPriceChangeInfo(item)
-                              return priceChange ? (
-                                <div className={`flex items-center gap-1 px-1 md:px-2 py-1 rounded-full text-xs ${priceChange.bgColor} ${priceChange.color} flex-shrink-0`}>
-                                  <span>{priceChange.icon}</span>
-                                  <span className="font-medium">{priceChange.percentage}%</span>
-                                  <span className="hidden sm:inline">{priceChange.text}</span>
-                                </div>
-                              ) : null
-                            })()}
-                          </div>
-                          <div className="text-xs md:text-sm text-gray-500">
-                            {item.quantity} {item.unit}
-                            {item.price && ` • ${formatCurrency(item.price * item.quantity)}`}
-                            {(() => {
-                              const priceChange = getPriceChangeInfo(item)
-                              return priceChange ? (
-                                <span className="ml-2 text-xs text-gray-400 hidden sm:inline">
-                                  (előző: {formatCurrency(item.previousPrice!)})
+                    boltCsoportok.map(({ bolt, tetelek }) => (
+                      <div key={bolt ?? '__nincs_bolt__'} className="space-y-2">
+                        <div className="flex items-center gap-2 pt-2 first:pt-0">
+                          <h4 className="text-xs md:text-sm font-semibold text-gray-700">
+                            {bolt ?? 'Bolt nélkül'}
+                          </h4>
+                          <span className="text-xs text-gray-400">
+                            {tetelek.filter(t => t.checked).length}/{tetelek.length}
+                          </span>
+                          <div className="flex-1 border-t" />
+                        </div>
+                        {tetelek.map((item) => (
+                          <div key={item.id} className="flex items-center gap-2 md:gap-3 p-2 md:p-3 border rounded-lg hover:bg-gray-50">
+                            <Checkbox
+                              checked={item.checked}
+                              onCheckedChange={(checked) => updateItem(item.id, 'checked', checked)}
+                              className="flex-shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-1 md:gap-2 mb-1">
+                                <span className={`font-medium text-sm md:text-base ${item.checked ? 'line-through text-gray-500' : 'text-gray-900'} truncate`}>
+                                  {item.name}
                                 </span>
-                              ) : null
-                            })()}
+                                <Badge variant="outline" className="text-xs flex-shrink-0">
+                                  {item.category}
+                                </Badge>
+                                {(() => {
+                                  const priceChange = getPriceChangeInfo(item)
+                                  return priceChange ? (
+                                    <div className={`flex items-center gap-1 px-1 md:px-2 py-1 rounded-full text-xs ${priceChange.bgColor} ${priceChange.color} flex-shrink-0`}>
+                                      <span>{priceChange.icon}</span>
+                                      <span className="font-medium">{priceChange.percentage}%</span>
+                                      <span className="hidden sm:inline">{priceChange.text}</span>
+                                    </div>
+                                  ) : null
+                                })()}
+                              </div>
+                              <div className="text-xs md:text-sm text-gray-500">
+                                {item.quantity} {item.unit}
+                                {item.price && ` • ${formatCurrency(item.price * item.quantity)}`}
+                                {(() => {
+                                  const priceChange = getPriceChangeInfo(item)
+                                  return priceChange ? (
+                                    <span className="ml-2 text-xs text-gray-400 hidden sm:inline">
+                                      (előző: {formatCurrency(item.previousPrice!)})
+                                    </span>
+                                  ) : null
+                                })()}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => updateQuantity(item.id, false)}
+                                className="h-7 w-7 p-0"
+                              >
+                                <Minus size={12} />
+                              </Button>
+                              <span className="w-6 md:w-8 text-center text-xs md:text-sm">{item.quantity}</span>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => updateQuantity(item.id, true)}
+                                className="h-7 w-7 p-0"
+                              >
+                                <Plus size={12} />
+                              </Button>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeItem(item.id)}
+                              className="text-red-600 hover:text-red-700 h-7 w-7 p-0 flex-shrink-0"
+                            >
+                              <Trash2 size={12} />
+                            </Button>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => updateQuantity(item.id, false)}
-                            className="h-7 w-7 p-0"
-                          >
-                            <Minus size={12} />
-                          </Button>
-                          <span className="w-6 md:w-8 text-center text-xs md:text-sm">{item.quantity}</span>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => updateQuantity(item.id, true)}
-                            className="h-7 w-7 p-0"
-                          >
-                            <Plus size={12} />
-                          </Button>
-                        </div>
-                        <Input
-                          type="number"
-                          placeholder="Ár"
-                          value={item.price || ''}
-                          onChange={(e) => updateItem(item.id, 'price', parseInt(e.target.value) || 0)}
-                          className="w-16 md:w-20 h-7 md:h-8 text-xs flex-shrink-0"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeItem(item.id)}
-                          className="text-red-600 hover:text-red-700 h-7 w-7 p-0 flex-shrink-0"
-                        >
-                          <Trash2 size={12} />
-                        </Button>
+                        ))}
                       </div>
                     ))
                   )}

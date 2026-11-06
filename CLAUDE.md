@@ -129,7 +129,7 @@ if (!user) redirect('/login')
 | `/bevasarlas-quick` | `app/bevasarlas-quick/page.tsx` | Gyors checklist mód |
 | `/termekek` | `app/termekek/page.tsx` | Termékadatbázis. A soronkénti **Összevonás** gombbal az eltérő néven bevitt, azonos termékek beolvaszthatók egy megtartott termékbe (`termekek_osszevonasa` RPC, `lib/termekOsszevonas.ts`) |
 | `/statisztika` | `app/statisztika/page.tsx` | Bevásárlási statisztikák (idő/kategória/termék/bolt szerinti elemzés) |
-| `/arfigyeles` | `app/arfigyeles/page.tsx` | Árváltozás riasztások. A termék ártörténete (`src/components/arfigyeles/ar-tortenet-dialog.tsx`) grafikonon jelenik meg; a bejegyzések szerkeszthetők és törölhetők (hibás OCR ár), és akciósnak jelölhetők. Az akciós ár nem számít árváltozásnak. A termék átnevezhető, és az eltérő néven bevitt, valójában azonos termékek összevonhatók (a hasonló neveket felajánlja) |
+| `/arfigyeles` | `app/arfigyeles/page.tsx` | Árváltozás riasztások. Árat csak **azonos boltban és azonos mértékegységben, egységárban** (Ft/kg, Ft/l, Ft/db, Ft/csomag) vet össze (`lib/egysegar.ts`); ugyanaz a termék boltonként külön sorban jelenhet meg. A termék ártörténete (`src/components/arfigyeles/ar-tortenet-dialog.tsx`) grafikonon jelenik meg; a bejegyzések szerkeszthetők és törölhetők (hibás OCR ár), és akciósnak jelölhetők. Az akciós ár nem számít árváltozásnak. A termék átnevezhető, és az eltérő néven bevitt, valójában azonos termékek összevonhatók (a hasonló neveket felajánlja) |
 | `/inflacio` | `app/inflacio/page.tsx` | Inflációs trendek |
 | `/befektetesek`, `/szamlak`, `/receptek` | — | Placeholder oldalak |
 
@@ -163,7 +163,12 @@ Migrációk helye: `supabase/migrations/`. Az összes tábla egybén is létreho
 - `updatePriceHistory()` / `deletePriceHistory()` — ártörténet-bejegyzés javítása vagy törlése. Az ár módosításakor a `total_price` újraszámolódik.
 - `termekekOsszevonasa()` — átnevezés és összevonás. Csak a `product_name` mezőt írja át a `product_price_history` táblában, és opcionálisan a `shopping_statistics` táblában. A `products` táblát nem módosítja. `getTermekNevek()` a neveket adja bejegyzésszámmal, `nevHasonlosag()` a hasonló nevek felajánlásához kell.
 - `isRegularPrice()` — kiszűri az akciós (`akcios = true`) árakat. A változás-, infláció- és statisztika-számítás csak rendes árakkal dolgozik. Az MCP szerver (`mcp/src/tools/`) ugyanezt a szabályt alkalmazza, ezért a kettőt együtt kell módosítani.
-- A bevásárláskor és termék-mentéskor automatikusan hívódik.
+- A bevásárláskor és termék-mentéskor automatikusan hívódik. A bevásárlólista termékből felvett tételei (`items[].store_name`, `items[].product_id`) a boltot is továbbadják.
+
+### `lib/egysegar.ts`
+- `egysegar()` — egy ártörténet-bejegyzés egységára (`kg | l | db | csomag`). Forrása a szabad szöveges `unit` mező („400 g”, „6x1.5 l”, „0.967 kg × 2399 Ft/kg”, „10 db”, mérlegelt „kg”) vagy a terméknévben lévő kiszerelés. Ha a méret ismeretlen, mértékegysége `csomag`.
+- `osszehasonlitasiKulcs()` — `termék | bolt | mértékegység`. Az árváltozás (`getPriceChanges`), az infláció (`getInflationData`) és az ártörténet-dialógus csak az azonos kulcsú árakat veti össze.
+- Az MCP szerverben másolat van (`mcp/src/lib/egysegar.ts`), a kettőt együtt kell módosítani.
 
 ### `lib/userPreferences.ts`
 - `getUserPreferences()`, `setActiveIncomePlan()`, `setActiveBudgetPlan()`

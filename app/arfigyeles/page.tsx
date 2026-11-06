@@ -9,6 +9,7 @@ import { Button } from '@/src/components/ui/button'
 import { Badge } from '@/src/components/ui/badge'
 import { Input } from '@/src/components/ui/input'
 import { ArTortenetDialog } from '@/src/components/arfigyeles/ar-tortenet-dialog'
+import { boltNev, egysegCimke, type Mertekegyseg } from '@/lib/egysegar'
 import { 
   TrendingUp, TrendingDown, Package, Store, AlertCircle, Search
 } from 'lucide-react'
@@ -26,6 +27,29 @@ interface User {
   email?: string
 }
 
+const ftSzam = (ertek: number) => Math.round(ertek).toLocaleString('hu-HU')
+
+/** Egységár (fő sor) + a rögzített kiszerelés-ár (alsó sor, ha eltér az egységártól) */
+function ArCella({ ar, egysegar, mertekegyseg, kiszereles, jobbra }: {
+  ar: number
+  egysegar: number
+  mertekegyseg: Mertekegyseg
+  kiszereles?: string
+  jobbra?: boolean
+}) {
+  const kiszerelesAr = Math.round(ar) !== Math.round(egysegar)
+  return (
+    <div className={jobbra ? 'text-right' : ''}>
+      <p className="font-medium tabular-nums">{ftSzam(egysegar)} {egysegCimke(mertekegyseg)}</p>
+      {kiszerelesAr && (
+        <p className="text-xs text-gray-500 tabular-nums">
+          {ftSzam(ar)} Ft{kiszereles ? ` / ${kiszereles}` : ''}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function ArfigyelesPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [priceChanges, setPriceChanges] = useState<PriceChange[]>([])
@@ -36,6 +60,8 @@ export default function ArfigyelesPage() {
   
   const [showHistoryDialog, setShowHistoryDialog] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<string>('')
+  // A dialógus ezzel a bolttal / mértékegységgel nyílik (az árváltozás sorából)
+  const [kezdoSzuro, setKezdoSzuro] = useState<{ bolt?: string | null; mertekegyseg?: Mertekegyseg }>({})
   const [termekNevek, setTermekNevek] = useState<TermekNevDb[]>([])
   const [termekKereso, setTermekKereso] = useState('')
   
@@ -115,11 +141,15 @@ export default function ArfigyelesPage() {
     : 0
 
   // Terméktörténet megnyitása (a dialógus maga tölti be és szerkeszti az adatokat)
-  const openHistory = (productName: string) => {
+  const openHistory = (productName: string, szuro: { bolt?: string | null; mertekegyseg?: Mertekegyseg } = {}) => {
     if (!currentUser) return
     setSelectedProduct(productName)
+    setKezdoSzuro(szuro)
     setShowHistoryDialog(true)
   }
+
+  const valtozasTortenete = (change: PriceChange) =>
+    openHistory(change.product_name, { bolt: change.store_name ?? null, mertekegyseg: change.mertekegyseg })
 
   const keresettTermekMegnyitasa = () => {
     const nev = termekKereso.trim()
@@ -224,7 +254,7 @@ export default function ArfigyelesPage() {
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <p className="text-sm sm:text-base lg:text-lg text-gray-600 leading-relaxed px-1 font-medium">
-              Kövesd nyomon a termékek árváltozásait
+              Kövesd nyomon a termékek árváltozásait — boltonként, egységárban (Ft/kg, Ft/l, Ft/db) összevetve
             </p>
             <div className="flex gap-2">
               <Button 
@@ -407,16 +437,16 @@ export default function ArfigyelesPage() {
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div>
                           <p className="text-gray-500">Régi ár:</p>
-                          <p className="font-medium">{change.old_price.toLocaleString('hu-HU')} Ft</p>
+                          <ArCella ar={change.old_price} egysegar={change.old_egysegar} mertekegyseg={change.mertekegyseg} kiszereles={change.old_unit} />
                         </div>
                         <div>
                           <p className="text-gray-500">Új ár:</p>
-                          <p className="font-medium">{change.new_price.toLocaleString('hu-HU')} Ft</p>
+                          <ArCella ar={change.new_price} egysegar={change.new_egysegar} mertekegyseg={change.mertekegyseg} kiszereles={change.new_unit} />
                         </div>
                         <div>
                           <p className="text-gray-500">Változás:</p>
                           <p className={`font-medium ${change.price_difference > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            {change.price_difference > 0 ? '+' : ''}{change.price_difference.toLocaleString('hu-HU')} Ft
+                            {change.price_difference > 0 ? '+' : ''}{ftSzam(change.price_difference)} {egysegCimke(change.mertekegyseg)}
                           </p>
                         </div>
                         <div>
@@ -433,18 +463,16 @@ export default function ArfigyelesPage() {
                         </div>
                       )}
                       
-                      {change.store_name && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Store className="h-4 w-4" />
-                          {change.store_name}
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Store className="h-4 w-4" />
+                        {boltNev(change.store_name)}
+                      </div>
                       
                       <Button 
                         variant="outline" 
                         size="sm" 
                         className="w-full h-11"
-                        onClick={() => openHistory(change.product_name)}
+                        onClick={() => valtozasTortenete(change)}
                       >
                         Teljes történet
                       </Button>
@@ -458,9 +486,10 @@ export default function ArfigyelesPage() {
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="p-3 text-left font-semibold">Termék</th>
+                        <th className="p-3 text-left font-semibold">Bolt</th>
                         <th className="p-3 text-left font-semibold">Kategória</th>
-                        <th className="p-3 text-right font-semibold">Régi ár</th>
-                        <th className="p-3 text-right font-semibold">Új ár</th>
+                        <th className="p-3 text-right font-semibold">Régi egységár</th>
+                        <th className="p-3 text-right font-semibold">Új egységár</th>
                         <th className="p-3 text-right font-semibold">Különbség</th>
                         <th className="p-3 text-right font-semibold">Változás %</th>
                         <th className="p-3 text-left font-semibold">Dátum</th>
@@ -477,13 +506,23 @@ export default function ArfigyelesPage() {
                             </div>
                           </td>
                           <td className="p-3">
+                            <span className="flex items-center gap-1.5 text-sm text-gray-700">
+                              <Store className="h-3.5 w-3.5 text-gray-400" />
+                              {boltNev(change.store_name)}
+                            </span>
+                          </td>
+                          <td className="p-3">
                             {change.product_category ? <Badge variant="outline">{change.product_category}</Badge> : '-'}
                           </td>
-                          <td className="p-3 text-right">{change.old_price.toLocaleString('hu-HU')} Ft</td>
-                          <td className="p-3 text-right">{change.new_price.toLocaleString('hu-HU')} Ft</td>
+                          <td className="p-3">
+                            <ArCella ar={change.old_price} egysegar={change.old_egysegar} mertekegyseg={change.mertekegyseg} kiszereles={change.old_unit} jobbra />
+                          </td>
+                          <td className="p-3">
+                            <ArCella ar={change.new_price} egysegar={change.new_egysegar} mertekegyseg={change.mertekegyseg} kiszereles={change.new_unit} jobbra />
+                          </td>
                           <td className="p-3 text-right">
                             <span className={change.price_difference > 0 ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}>
-                              {change.price_difference > 0 ? '+' : ''}{change.price_difference.toLocaleString('hu-HU')} Ft
+                              {change.price_difference > 0 ? '+' : ''}{ftSzam(change.price_difference)} {egysegCimke(change.mertekegyseg)}
                             </span>
                           </td>
                           <td className="p-3 text-right">
@@ -499,7 +538,7 @@ export default function ArfigyelesPage() {
                             <Button 
                               variant="ghost" 
                               size="sm"
-                              onClick={() => openHistory(change.product_name)}
+                              onClick={() => valtozasTortenete(change)}
                             >
                               Történet
                             </Button>
@@ -520,6 +559,8 @@ export default function ArfigyelesPage() {
           onOpenChange={setShowHistoryDialog}
           userId={currentUser.id}
           termekNev={selectedProduct}
+          kezdoBolt={kezdoSzuro.bolt}
+          kezdoMertekegyseg={kezdoSzuro.mertekegyseg}
           termekNevek={termekNevek}
           onModositas={modositasUtan}
           onAtnevezes={(ujNev) => { setSelectedProduct(ujNev); setTermekKereso(ujNev) }}

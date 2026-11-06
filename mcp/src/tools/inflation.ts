@@ -1,4 +1,5 @@
 import { supabase, USER_ID } from '../lib/supabase.js'
+import { egysegar, osszehasonlitasiKulcs } from '../lib/egysegar.js'
 
 // Reimplementálva lib/priceHistory.ts getInflationData alapján
 export async function getInflationReportHandler(args: { months_back?: number }) {
@@ -20,16 +21,21 @@ export async function getInflationReportHandler(args: { months_back?: number }) 
 
   type PriceRecord = typeof data[0]
 
-  // Csoportosítás: hónap → termék → rekordok
-  const monthlyData: { [period: string]: { [productName: string]: PriceRecord[] } } = {}
+  // Csoportosítás: hónap → összehasonlítási csoport (termék + bolt + mértékegység) → rekordok
+  const monthlyData: { [period: string]: { [kulcs: string]: PriceRecord[] } } = {}
 
   // Akciós árak nélkül — azok nem valódi árváltozások (migráció 20261106_002)
   data.filter(record => !record.akcios).forEach(record => {
     const period = record.price_date.substring(0, 7) // YYYY-MM
+    const kulcs = osszehasonlitasiKulcs(record)
     if (!monthlyData[period]) monthlyData[period] = {}
-    if (!monthlyData[period][record.product_name]) monthlyData[period][record.product_name] = []
-    monthlyData[period][record.product_name].push(record)
+    if (!monthlyData[period][kulcs]) monthlyData[period][kulcs] = []
+    monthlyData[period][kulcs].push(record)
   })
+
+  // Átlagos egységár (Ft/kg, Ft/l, Ft/db, Ft/csomag)
+  const atlagEgysegar = (recs: PriceRecord[]) =>
+    recs.reduce((s, p) => s + egysegar(p).ertek, 0) / recs.length
 
   const inflationData: object[] = []
   const periods = Object.keys(monthlyData).sort()
@@ -44,21 +50,19 @@ export async function getInflationReportHandler(args: { months_back?: number }) 
     let productCount = 0
     const categoryData: { [cat: string]: { sum: number; count: number } } = {}
 
-    Object.keys(currentProducts).forEach(productName => {
-      if (!previousProducts[productName]) return
+    Object.keys(currentProducts).forEach(kulcs => {
+      if (!previousProducts[kulcs]) return
 
-      const currentAvg = currentProducts[productName].reduce((s, p) => s + p.unit_price, 0)
-        / currentProducts[productName].length
-      const previousAvg = previousProducts[productName].reduce((s, p) => s + p.unit_price, 0)
-        / previousProducts[productName].length
+      const currentAvg = atlagEgysegar(currentProducts[kulcs])
+      const previousAvg = atlagEgysegar(previousProducts[kulcs])
 
-      if (previousAvg === 0) return
+      if (previousAvg <= 0) return
 
       const priceChange = ((currentAvg - previousAvg) / previousAvg) * 100
       totalPriceChange += priceChange
       productCount++
 
-      const category = currentProducts[productName][0].product_category || 'Egyéb'
+      const category = currentProducts[kulcs][0].product_category || 'Egyéb'
       if (!categoryData[category]) categoryData[category] = { sum: 0, count: 0 }
       categoryData[category].sum += priceChange
       categoryData[category].count++

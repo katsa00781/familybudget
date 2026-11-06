@@ -40,17 +40,33 @@ export interface ShoppingStatistic {
   updated_at: string;
 }
 
+/**
+ * Árváltozás egy összehasonlítási csoporton belül (azonos termék + azonos bolt + azonos
+ * mértékegység, lásd `lib/egysegar.ts`). A változás az EGYSÉGÁR (Ft/kg, Ft/l, Ft/db,
+ * Ft/csomag) alapján számol, nem a kiszerelés árán.
+ */
 export interface PriceChange {
   product_name: string;
   product_category?: string;
+  /** A rögzített (kiszerelésenkénti) régi / új ár */
   old_price: number;
   new_price: number;
+  /** Egységárak különbsége (new_egysegar − old_egysegar) */
   price_difference: number;
+  /** Egységár-változás %-ban */
   price_change_percent: number;
   old_date: string;
   new_date: string;
+  /** A bolt — a régi és az új ár is ebből a boltból való (null/üres = ismeretlen bolt) */
   store_name?: string;
   days_between: number;
+  /** Régi / új egységár a `mertekegyseg`-re vetítve */
+  old_egysegar: number;
+  new_egysegar: number;
+  mertekegyseg: 'kg' | 'l' | 'db' | 'csomag';
+  /** A rögzített kiszerelés (unit mező) régen / most, pl. „700 g” → „kg” */
+  old_unit?: string;
+  new_unit?: string;
 }
 
 export interface PriceStatistics {

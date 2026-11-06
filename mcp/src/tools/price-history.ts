@@ -1,4 +1,5 @@
 import { supabase, USER_ID } from '../lib/supabase.js'
+import { egysegar, osszehasonlitasiKulcs } from '../lib/egysegar.js'
 
 export async function savePriceHistoryHandler(args: {
   product_name: string
@@ -78,17 +79,19 @@ export async function getPriceChangesHandler(args: { days_back?: number }) {
 
   type PriceRecord = typeof data[0]
 
-  // Csoportosítás termékenként — akciós árak nélkül (nem valódi árváltozások)
-  const productGroups: { [key: string]: PriceRecord[] } = {}
+  // Csoportosítás termék + bolt + mértékegység szerint — akciós árak nélkül (nem valódi
+  // árváltozások). Más bolt ára vagy más kiszerelés nem árváltozás (lásd lib/egysegar.ts).
+  const groups: { [key: string]: PriceRecord[] } = {}
   data.filter(record => !record.akcios).forEach(record => {
-    if (!productGroups[record.product_name]) productGroups[record.product_name] = []
-    productGroups[record.product_name].push(record)
+    const kulcs = osszehasonlitasiKulcs(record)
+    if (!groups[kulcs]) groups[kulcs] = []
+    groups[kulcs].push(record)
   })
 
-  // Ablak előtti ár lekérése egyszeres-rekordos termékekhez
-  const singleRecordProducts = Object.entries(productGroups)
-    .filter(([, recs]) => recs.length === 1)
-    .map(([name]) => name)
+  // Ablak előtti ár lekérése az egyszeres-rekordos csoportokhoz
+  const singleRecordProducts = [...new Set(
+    Object.values(groups).filter(recs => recs.length === 1).map(recs => recs[0].product_name as string)
+  )]
 
   if (singleRecordProducts.length > 0) {
     const { data: prevData } = await supabase
@@ -101,26 +104,28 @@ export async function getPriceChangesHandler(args: { days_back?: number }) {
       .order('price_date', { ascending: false })
       .order('created_at', { ascending: false })
 
-    const prevByProduct: { [name: string]: PriceRecord } = {}
+    const prevByGroup: { [key: string]: PriceRecord } = {}
     prevData?.filter(record => !record.akcios).forEach(record => {
-      if (!prevByProduct[record.product_name]) prevByProduct[record.product_name] = record
+      const kulcs = osszehasonlitasiKulcs(record)
+      if (!prevByGroup[kulcs]) prevByGroup[kulcs] = record
     })
 
-    Object.entries(prevByProduct).forEach(([name, rec]) => {
-      productGroups[name].unshift(rec)
+    Object.entries(groups).forEach(([kulcs, recs]) => {
+      if (recs.length === 1 && prevByGroup[kulcs]) recs.unshift(prevByGroup[kulcs])
     })
   }
 
   const priceChanges: object[] = []
 
-  Object.entries(productGroups).forEach(([productName, records]) => {
+  Object.values(groups).forEach(records => {
     if (records.length < 2) return
     const oldRecord = records[records.length - 2]
     const newRecord = records[records.length - 1]
-    const priceDiff = newRecord.unit_price - oldRecord.unit_price
-    const priceChangePercent = oldRecord.unit_price > 0
-      ? (priceDiff / oldRecord.unit_price) * 100
-      : 0
+    // Egységár (Ft/kg, Ft/l, Ft/db, Ft/csomag) alapján, nem a kiszerelés ára alapján
+    const regi = egysegar(oldRecord)
+    const uj = egysegar(newRecord)
+    const priceDiff = uj.ertek - regi.ertek
+    const priceChangePercent = regi.ertek > 0 ? (priceDiff / regi.ertek) * 100 : 0
 
     if (Math.abs(priceChangePercent) > 1) {
       const daysBetween = Math.floor(
@@ -128,16 +133,21 @@ export async function getPriceChangesHandler(args: { days_back?: number }) {
         / (1000 * 60 * 60 * 24)
       )
       priceChanges.push({
-        product_name: productName,
+        product_name: newRecord.product_name,
         product_category: newRecord.product_category || undefined,
-        old_price: oldRecord.unit_price,
-        new_price: newRecord.unit_price,
-        price_difference: priceDiff,
+        old_price: Number(oldRecord.unit_price),
+        new_price: Number(newRecord.unit_price),
+        price_difference: Math.round(priceDiff * 10) / 10,
         price_change_percent: Math.round(priceChangePercent * 10) / 10,
         old_date: oldRecord.price_date,
         new_date: newRecord.price_date,
         store_name: newRecord.store_name || undefined,
-        days_between: daysBetween
+        days_between: daysBetween,
+        old_egysegar: Math.round(regi.ertek * 10) / 10,
+        new_egysegar: Math.round(uj.ertek * 10) / 10,
+        mertekegyseg: uj.mertekegyseg,
+        old_unit: oldRecord.unit || undefined,
+        new_unit: newRecord.unit || undefined
       })
     }
   })

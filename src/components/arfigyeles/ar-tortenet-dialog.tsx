@@ -14,6 +14,9 @@ import {
   termekekOsszevonasa, nevHasonlosag, type TermekNevDb,
 } from '@/lib/priceHistory'
 import type { ProductPriceHistory } from '@/types/enhanced'
+import {
+  egysegar, boltKulcs, boltNev, egysegCimke, osszehasonlitasiKulcs, type Mertekegyseg,
+} from '@/lib/egysegar'
 import { Button } from '@/src/components/ui/button'
 import { Badge } from '@/src/components/ui/badge'
 import { Input } from '@/src/components/ui/input'
@@ -27,6 +30,10 @@ interface ArTortenetDialogProps {
   onOpenChange: (open: boolean) => void
   userId: string
   termekNev: string
+  /** Ezzel a bolttal nyíljon (pl. az árváltozás sorából); null = ismeretlen bolt */
+  kezdoBolt?: string | null
+  /** Ezzel a mértékegységgel nyíljon (pl. az árváltozás sorából) */
+  kezdoMertekegyseg?: Mertekegyseg
   /** Az ártörténetben szereplő összes terméknév (átnevezés-ütközéshez és összevonáshoz) */
   termekNevek: TermekNevDb[]
   /** Bármilyen módosítás után hívódik (pl. az árváltozás-lista újratöltéséhez) */
@@ -50,12 +57,25 @@ interface GrafikonPont {
   rendes: number | null
   akcios: number | null
   bolt: string | null
+  /** Összes bolt nézetben boltonkénti vonal: `b:<boltKulcs>` → rendes egységár */
+  [boltVonal: string]: string | number | null
 }
 
 const RENDES_SZIN = '#0d9488' // teal-600
 const AKCIOS_SZIN = '#f97316' // orange-500
+/** Összes bolt nézetben a boltonkénti vonalak színei */
+const BOLT_SZINEK = ['#0d9488', '#2563eb', '#7c3aed', '#db2777', '#ca8a04', '#4b5563']
+
+/** Bolt-szűrő értéke: egy bolt kulcsa, vagy az összes bolt */
+const OSSZES_BOLT = '*'
+
+const MERTEKEGYSEG_NEV: Record<Mertekegyseg, string> = {
+  kg: 'Ft/kg', l: 'Ft/l', db: 'Ft/db', csomag: 'Ft/csomag',
+}
 
 const ft = (ertek: number) => `${Math.round(ertek).toLocaleString('hu-HU')} Ft`
+const ftEgyseg = (ertek: number, m: Mertekegyseg) =>
+  `${Math.round(ertek).toLocaleString('hu-HU')} ${egysegCimke(m)}`
 const datumFormat = (datum: string) => new Date(datum).toLocaleDateString('hu-HU')
 const rovidDatum = (datum: string) =>
   new Date(datum).toLocaleDateString('hu-HU', { month: '2-digit', day: '2-digit' })
@@ -64,7 +84,7 @@ const rovidDatum = (datum: string) =>
 const hianyzoMigracio = (hiba?: string) => !!hiba && hiba.includes('akcios')
 
 export function ArTortenetDialog({
-  open, onOpenChange, userId, termekNev, termekNevek, onModositas, onAtnevezes,
+  open, onOpenChange, userId, termekNev, kezdoBolt, kezdoMertekegyseg, termekNevek, onModositas, onAtnevezes,
 }: ArTortenetDialogProps) {
   const [tortenet, setTortenet] = useState<ProductPriceHistory[]>([])
   const [betoltes, setBetoltes] = useState(false)
@@ -72,6 +92,10 @@ export function ArTortenetDialog({
   const [szerkesztett, setSzerkesztett] = useState<SzerkesztettErtekek | null>(null)
   const [torlendoId, setTorlendoId] = useState<string | null>(null)
   const [mentes, setMentes] = useState(false)
+
+  // Összehasonlítás csak azonos boltban és azonos mértékegységben értelmes
+  const [boltSzuro, setBoltSzuro] = useState<string>(OSSZES_BOLT)
+  const [egysegSzuro, setEgysegSzuro] = useState<Mertekegyseg | null>(null)
 
   // Terméknév-műveletek: átnevezés / összevonás
   const [nevMuvelet, setNevMuvelet] = useState<NevMuvelet>('nincs')
@@ -86,6 +110,7 @@ export function ArTortenetDialog({
     try {
       const adat = await getProductPriceHistory(userId, termekNev, 500)
       setTortenet(adat)
+      return adat
     } finally {
       setBetoltes(false)
     }
@@ -98,39 +123,116 @@ export function ArTortenetDialog({
       setNevMuvelet('nincs')
       setOsszevonandok([])
       setKereso('')
-      betolt()
+      betolt().then((adat) => {
+        if (!adat || adat.length === 0) return
+        // Kezdő szűrő: a megadott bolt/egység, különben a legfrissebb bejegyzésé
+        const kezdoKulcs = kezdoBolt !== undefined ? boltKulcs(kezdoBolt) : boltKulcs(adat[0].store_name)
+        const boltban = adat.filter((t) => boltKulcs(t.store_name) === kezdoKulcs)
+        const bolt = boltban.length > 0 ? kezdoKulcs : OSSZES_BOLT
+        const forras = boltban.length > 0 ? boltban : adat
+        const egysegek = new Set(forras.map((t) => egysegar(t).mertekegyseg))
+        setBoltSzuro(bolt)
+        setEgysegSzuro(kezdoMertekegyseg && egysegek.has(kezdoMertekegyseg)
+          ? kezdoMertekegyseg
+          : egysegar(forras[0]).mertekegyseg)
+      })
     }
+    // A kezdő szűrő csak megnyitáskor számít
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, betolt])
 
-  // Időrendben növekvő lista a grafikonhoz és a változás-számításhoz
-  const novekvo = useMemo(() => [...tortenet].reverse(), [tortenet])
+  // Bejegyzésenként az egységár (Ft/kg, Ft/l, Ft/db, Ft/csomag)
+  const egysegarak = useMemo(() => {
+    const terkep: Record<string, ReturnType<typeof egysegar>> = {}
+    tortenet.forEach((t) => { terkep[t.id] = egysegar(t) })
+    return terkep
+  }, [tortenet])
+
+  // Boltok (bejegyzésszámmal) és a kiválasztott bolt(ok) mértékegységei
+  const boltok = useMemo(() => {
+    const m = new Map<string, { nev: string; db: number }>()
+    tortenet.forEach((t) => {
+      const k = boltKulcs(t.store_name)
+      const elozo = m.get(k)
+      m.set(k, { nev: elozo?.nev ?? boltNev(t.store_name), db: (elozo?.db ?? 0) + 1 })
+    })
+    return [...m.entries()].map(([kulcs, v]) => ({ kulcs, ...v })).sort((a, b) => b.db - a.db)
+  }, [tortenet])
+
+  // Ha a választott bolt (pl. szerkesztés után) már nem szerepel, az összes boltot mutatjuk
+  const aktivBolt = boltok.some((b) => b.kulcs === boltSzuro) ? boltSzuro : OSSZES_BOLT
+
+  const boltbanLevo = useMemo(
+    () => tortenet.filter((t) => aktivBolt === OSSZES_BOLT || boltKulcs(t.store_name) === aktivBolt),
+    [tortenet, aktivBolt]
+  )
+
+  const mertekegysegek = useMemo(() => {
+    const m = new Map<Mertekegyseg, number>()
+    boltbanLevo.forEach((t) => {
+      const e = egysegarak[t.id]?.mertekegyseg
+      if (e) m.set(e, (m.get(e) ?? 0) + 1)
+    })
+    return [...m.entries()].map(([egyseg, db]) => ({ egyseg, db })).sort((a, b) => b.db - a.db)
+  }, [boltbanLevo, egysegarak])
+
+  // Ha a választott egység ebben a boltban nincs, a leggyakoribbra váltunk
+  const aktivEgyseg: Mertekegyseg | null = mertekegysegek.some((m) => m.egyseg === egysegSzuro)
+    ? egysegSzuro
+    : (mertekegysegek[0]?.egyseg ?? null)
+
+  // A szűrt (azonos mértékegységű) bejegyzések, csökkenő dátum szerint
+  const szurt = useMemo(
+    () => boltbanLevo.filter((t) => egysegarak[t.id]?.mertekegyseg === aktivEgyseg),
+    [boltbanLevo, egysegarak, aktivEgyseg]
+  )
+
+  // Időrendben növekvő lista a grafikonhoz
+  const novekvo = useMemo(() => [...szurt].reverse(), [szurt])
+
+  // Összes bolt nézetben a grafikonon boltonként külön vonal
+  const grafikonBoltok = useMemo(() => {
+    if (aktivBolt !== OSSZES_BOLT || boltok.length < 2) return []
+    const kulcsok = [...new Set(szurt.map((t) => boltKulcs(t.store_name)))]
+    return kulcsok.map((kulcs, i) => ({
+      kulcs,
+      nev: boltok.find((b) => b.kulcs === kulcs)?.nev ?? boltNev(kulcs),
+      szin: BOLT_SZINEK[i % BOLT_SZINEK.length],
+    }))
+  }, [aktivBolt, szurt, boltok])
 
   const grafikonAdat: GrafikonPont[] = useMemo(() => novekvo.map((t) => {
-    const ar = Number(t.unit_price)
+    const ar = egysegarak[t.id]?.ertek ?? Number(t.unit_price)
     const akcios = !isRegularPrice(t)
-    return {
+    const pont: GrafikonPont = {
       id: t.id,
       cimke: rovidDatum(t.price_date),
       rendes: akcios ? null : ar,
       akcios: akcios ? ar : null,
       bolt: t.store_name ?? null,
     }
-  }), [novekvo])
+    grafikonBoltok.forEach((b) => {
+      pont[`b:${b.kulcs}`] = !akcios && boltKulcs(t.store_name) === b.kulcs ? ar : null
+    })
+    return pont
+  }), [novekvo, egysegarak, grafikonBoltok])
 
-  // Minden bejegyzéshez az előző (régebbi) RENDES ár — ehhez mérjük a változást / akciós kedvezményt
+  // Minden bejegyzéshez az előző (régebbi) RENDES egységár UGYANABBAN a boltban és
+  // mértékegységben — ehhez mérjük a változást / akciós kedvezményt
   const elozoRendesAr = useMemo(() => {
     const terkep: Record<string, number | undefined> = {}
-    let utolsoRendes: number | undefined
-    novekvo.forEach((t) => {
-      terkep[t.id] = utolsoRendes
-      if (isRegularPrice(t)) utolsoRendes = Number(t.unit_price)
+    const utolsoRendes: Record<string, number> = {}
+    ;[...tortenet].reverse().forEach((t) => {
+      const kulcs = osszehasonlitasiKulcs(t)
+      terkep[t.id] = utolsoRendes[kulcs]
+      if (isRegularPrice(t)) utolsoRendes[kulcs] = egysegarak[t.id].ertek
     })
     return terkep
-  }, [novekvo])
+  }, [tortenet, egysegarak])
 
   const osszesito = useMemo(() => {
-    const rendesArak = tortenet.filter(isRegularPrice).map((t) => Number(t.unit_price))
-    const akciosDb = tortenet.length - rendesArak.length
+    const rendesArak = szurt.filter(isRegularPrice).map((t) => egysegarak[t.id].ertek)
+    const akciosDb = szurt.length - rendesArak.length
     if (rendesArak.length === 0) return { akciosDb, jelenlegi: null, min: null, max: null, atlag: null }
     return {
       akciosDb,
@@ -139,7 +241,9 @@ export function ArTortenetDialog({
       max: Math.max(...rendesArak),
       atlag: rendesArak.reduce((s, a) => s + a, 0) / rendesArak.length,
     }
-  }, [tortenet])
+  }, [szurt, egysegarak])
+
+  const egysegFt = (ertek: number) => (aktivEgyseg ? ftEgyseg(ertek, aktivEgyseg) : ft(ertek))
 
   // --- Átnevezés ---
   const ujNevTiszta = ujNev.trim()
@@ -301,7 +405,7 @@ export function ArTortenetDialog({
             {termekNev} – Ártörténet
           </DialogTitle>
           <DialogDescription>
-            Hibás (pl. OCR) árat javíthatsz vagy törölhetsz, az akciós árakat megjelölheted — ezek nem számítanak árváltozásnak.
+            Az árak boltonként, egységárban (Ft/kg, Ft/l, Ft/db) vethetők össze. Hibás (pl. OCR) árat javíthatsz vagy törölhetsz, az akciós árakat megjelölheted — ezek nem számítanak árváltozásnak.
           </DialogDescription>
         </DialogHeader>
 
@@ -453,16 +557,65 @@ export function ArTortenetDialog({
           </div>
         ) : (
           <div className="space-y-4">
+            {/* Bolt- és mértékegység-szűrő: ár csak azonos boltban, azonos egységre vetítve vethető össze */}
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-gray-500 mr-1 flex items-center gap-1"><Store className="h-3.5 w-3.5" /> Bolt:</span>
+                {boltok.length > 1 && (
+                  <Button
+                    size="sm"
+                    variant={aktivBolt === OSSZES_BOLT ? 'default' : 'outline'}
+                    className="h-7 px-2.5 text-xs"
+                    onClick={() => setBoltSzuro(OSSZES_BOLT)}
+                  >
+                    Összes bolt
+                  </Button>
+                )}
+                {boltok.map((b) => (
+                  <Button
+                    key={b.kulcs}
+                    size="sm"
+                    variant={aktivBolt === b.kulcs || boltok.length === 1 ? 'default' : 'outline'}
+                    className="h-7 px-2.5 text-xs"
+                    onClick={() => setBoltSzuro(b.kulcs)}
+                  >
+                    {b.nev} <span className="ml-1 opacity-70">({b.db})</span>
+                  </Button>
+                ))}
+              </div>
+              {mertekegysegek.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-gray-500 mr-1">Egységár:</span>
+                  {mertekegysegek.map((m) => (
+                    <Button
+                      key={m.egyseg}
+                      size="sm"
+                      variant={aktivEgyseg === m.egyseg ? 'default' : 'outline'}
+                      className="h-7 px-2.5 text-xs"
+                      onClick={() => setEgysegSzuro(m.egyseg)}
+                    >
+                      {MERTEKEGYSEG_NEV[m.egyseg]} <span className="ml-1 opacity-70">({m.db})</span>
+                    </Button>
+                  ))}
+                </div>
+              )}
+              {aktivEgyseg === 'csomag' && (
+                <p className="text-xs text-gray-500">
+                  Ezeknél a bejegyzéseknél a kiszerelés mérete ismeretlen (pl. „db”), ezért csomagáron hasonlítjuk össze őket.
+                </p>
+              )}
+            </div>
+
             {/* Összesítő */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[
-                { cim: 'Jelenlegi rendes ár', ertek: osszesito.jelenlegi },
+                { cim: 'Jelenlegi rendes egységár', ertek: osszesito.jelenlegi },
                 { cim: 'Legalacsonyabb', ertek: osszesito.min },
                 { cim: 'Legmagasabb', ertek: osszesito.max },
               ].map((m) => (
                 <div key={m.cim} className="rounded-lg bg-gray-50 p-2.5">
                   <p className="text-xs text-gray-500">{m.cim}</p>
-                  <p className="font-semibold tabular-nums">{m.ertek !== null ? ft(m.ertek) : '–'}</p>
+                  <p className="font-semibold tabular-nums">{m.ertek !== null ? egysegFt(m.ertek) : '–'}</p>
                 </div>
               ))}
               <div className="rounded-lg bg-orange-50 p-2.5">
@@ -483,7 +636,7 @@ export function ArTortenetDialog({
                     domain={['auto', 'auto']}
                     tickFormatter={(v: number) => Math.round(v).toLocaleString('hu-HU')}
                   />
-                  <Tooltip content={<GrafikonTooltip />} />
+                  <Tooltip content={<GrafikonTooltip mertekegyseg={aktivEgyseg} />} />
                   {osszesito.atlag !== null && (
                     <ReferenceLine
                       y={osszesito.atlag}
@@ -492,17 +645,32 @@ export function ArTortenetDialog({
                       label={{ value: 'átlag', position: 'insideTopRight', fontSize: 10, fill: '#6b7280' }}
                     />
                   )}
-                  <Line
-                    type="monotone"
-                    dataKey="rendes"
-                    name="Rendes ár"
-                    stroke={RENDES_SZIN}
-                    strokeWidth={2}
-                    dot={{ r: 3, fill: RENDES_SZIN }}
-                    activeDot={{ r: 5 }}
-                    connectNulls
-                    isAnimationActive={false}
-                  />
+                  {grafikonBoltok.length > 0 ? grafikonBoltok.map((b) => (
+                    <Line
+                      key={b.kulcs}
+                      type="monotone"
+                      dataKey={`b:${b.kulcs}`}
+                      name={b.nev}
+                      stroke={b.szin}
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: b.szin }}
+                      activeDot={{ r: 5 }}
+                      connectNulls
+                      isAnimationActive={false}
+                    />
+                  )) : (
+                    <Line
+                      type="monotone"
+                      dataKey="rendes"
+                      name="Rendes ár"
+                      stroke={RENDES_SZIN}
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: RENDES_SZIN }}
+                      activeDot={{ r: 5 }}
+                      connectNulls
+                      isAnimationActive={false}
+                    />
+                  )}
                   <Line
                     dataKey="akcios"
                     name="Akciós ár"
@@ -514,15 +682,21 @@ export function ArTortenetDialog({
                 </ComposedChart>
               </ResponsiveContainer>
               <div className="flex flex-wrap gap-4 mt-1 px-1 text-xs text-gray-600">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-4 h-0.5 rounded" style={{ backgroundColor: RENDES_SZIN }} /> Rendes ár
-                </span>
+                {grafikonBoltok.length > 0 ? grafikonBoltok.map((b) => (
+                  <span key={b.kulcs} className="flex items-center gap-1.5">
+                    <span className="w-4 h-0.5 rounded" style={{ backgroundColor: b.szin }} /> {b.nev}
+                  </span>
+                )) : (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-4 h-0.5 rounded" style={{ backgroundColor: RENDES_SZIN }} /> Rendes egységár
+                  </span>
+                )}
                 <span className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: AKCIOS_SZIN }} /> Akciós ár
                 </span>
                 {osszesito.atlag !== null && (
                   <span className="flex items-center gap-1.5">
-                    <span className="w-4 border-t border-dashed border-gray-400" /> Rendes átlag ({ft(osszesito.atlag)})
+                    <span className="w-4 border-t border-dashed border-gray-400" /> Rendes átlag ({egysegFt(osszesito.atlag)})
                   </span>
                 )}
               </div>
@@ -530,10 +704,11 @@ export function ArTortenetDialog({
 
             {/* Szerkeszthető lista */}
             <div className="space-y-2">
-              {tortenet.map((t) => {
+              {szurt.map((t) => {
                 const ar = Number(t.unit_price)
+                const egyseg = egysegarak[t.id]
                 const elozo = elozoRendesAr[t.id]
-                const valtozas = elozo ? ((ar - elozo) / elozo) * 100 : null
+                const valtozas = elozo ? ((egyseg.ertek - elozo) / elozo) * 100 : null
                 const akcios = !isRegularPrice(t)
 
                 if (szerkesztettId === t.id && szerkesztett) {
@@ -541,7 +716,7 @@ export function ArTortenetDialog({
                     <div key={t.id} className="rounded-lg border-2 border-teal-300 bg-teal-50/40 p-3 space-y-3">
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <label className="text-xs text-gray-600 space-y-1">
-                          <span>Egységár (Ft)</span>
+                          <span>Ár (Ft, a rögzített kiszerelésre)</span>
                           <Input
                             type="number"
                             inputMode="decimal"
@@ -605,7 +780,14 @@ export function ArTortenetDialog({
                   >
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className={`font-semibold tabular-nums ${akcios ? 'text-orange-700' : ''}`}>{ft(ar)}</p>
+                        <p className={`font-semibold tabular-nums ${akcios ? 'text-orange-700' : ''}`}>
+                          {ftEgyseg(egyseg.ertek, egyseg.mertekegyseg)}
+                        </p>
+                        {Math.round(ar) !== Math.round(egyseg.ertek) && (
+                          <span className="text-xs text-gray-500 tabular-nums">
+                            ({ft(ar)}{t.unit ? ` / ${t.unit}` : ''})
+                          </span>
+                        )}
                         {akcios && (
                           <Badge className="bg-orange-500 hover:bg-orange-500">
                             <Tag className="h-3 w-3 mr-1" /> Akciós
@@ -631,11 +813,9 @@ export function ArTortenetDialog({
                       </div>
                       <p className="text-sm text-gray-600 mt-0.5 flex flex-wrap items-center gap-x-3">
                         <span>{datumFormat(t.price_date)}</span>
-                        {t.store_name && (
-                          <span className="flex items-center gap-1 text-xs text-gray-500">
-                            <Store className="h-3 w-3" /> {t.store_name}
-                          </span>
-                        )}
+                        <span className="flex items-center gap-1 text-xs text-gray-500">
+                          <Store className="h-3 w-3" /> {boltNev(t.store_name)}
+                        </span>
                       </p>
                     </div>
 
@@ -686,9 +866,10 @@ interface GrafikonTooltipProps {
   active?: boolean
   payload?: Array<{ payload: GrafikonPont }>
   label?: string
+  mertekegyseg?: Mertekegyseg | null
 }
 
-function GrafikonTooltip({ active, payload, label }: GrafikonTooltipProps) {
+function GrafikonTooltip({ active, payload, label, mertekegyseg }: GrafikonTooltipProps) {
   if (!active || !payload || payload.length === 0) return null
   const pont = payload[0].payload
   const akcios = pont.akcios !== null
@@ -698,9 +879,9 @@ function GrafikonTooltip({ active, payload, label }: GrafikonTooltipProps) {
     <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs shadow-md">
       <p className="text-gray-500">{label}</p>
       <p className={`font-semibold ${akcios ? 'text-orange-600' : 'text-gray-900'}`}>
-        {ft(ar)}{akcios && ' · akciós'}
+        {mertekegyseg ? ftEgyseg(ar, mertekegyseg) : ft(ar)}{akcios && ' · akciós'}
       </p>
-      {pont.bolt && <p className="text-gray-500">{pont.bolt}</p>}
+      <p className="text-gray-500">{boltNev(pont.bolt)}</p>
     </div>
   )
 }

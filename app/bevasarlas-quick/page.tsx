@@ -18,6 +18,10 @@ interface ShoppingItem {
   price?: number
   category: string
   checked: boolean
+  /** A bolt, ahonnan a termék származik (termékből felvett tételnél) — az árfigyelés boltonként hasonlít */
+  store_name?: string | null
+  /** A termékadatbázis sora (termékből felvett tételnél) */
+  product_id?: string | null
 }
 
 interface ShoppingList {
@@ -141,7 +145,7 @@ export default function QuickShoppingPage() {
           product_name: item.name,
           product_category: item.category,
           brand: null,
-          store_name: null,
+          store_name: item.store_name || null,
           quantity: item.quantity,
           unit: item.unit,
           unit_price: item.price,
@@ -164,7 +168,9 @@ export default function QuickShoppingPage() {
             item.name,
             item.price!,
             {
+              productId: item.product_id || undefined,
               productCategory: item.category,
+              storeName: item.store_name || undefined,
               unit: item.unit,
               quantity: item.quantity,
               totalPrice: (item.price || 0) * item.quantity,

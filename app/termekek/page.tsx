@@ -9,8 +9,9 @@ import { Button } from '@/src/components/ui/button'
 import { Badge } from '@/src/components/ui/badge'
 import { Textarea } from '@/src/components/ui/textarea'
 import {
-  Package, Upload, Search, Edit, Trash2, QrCode, Store, Coins
+  Package, Upload, Search, Edit, Trash2, QrCode, Store, Coins, Merge
 } from 'lucide-react'
+import { TermekOsszevonasDialog } from '@/src/components/termekek/termek-osszevonas-dialog'
 import { toast } from 'sonner'
 import {
   Select,
@@ -111,6 +112,8 @@ export default function TermekekPage() {
   const [jsonInput, setJsonInput] = useState('')
   const [showJsonDialog, setShowJsonDialog] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  // Összevonás: a megtartandó (cél) termék
+  const [osszevonasCel, setOsszevonasCel] = useState<Product | null>(null)
   
   const supabase = createClient()
 
@@ -710,7 +713,8 @@ export default function TermekekPage() {
                   Termékek ({filteredProducts.length})
                 </CardTitle>
                 <CardDescription>
-                  Kezeld a termékeidet, árait és vonalkódjait
+                  Kezeld a termékeidet, árait és vonalkódjait. Az eltérő néven bevitt, azonos termékeket
+                  a <Merge size={12} className="inline -mt-0.5" /> gombbal vonhatod össze.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -824,8 +828,18 @@ export default function TermekekPage() {
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => setEditingProduct(product)}
+                                  title="Szerkesztés"
                                 >
                                   <Edit size={14} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setOsszevonasCel(product)}
+                                  title="Összevonás: más (pl. eltérő néven bevitt) termékek beolvasztása ebbe"
+                                  className="text-teal-700 hover:text-teal-800"
+                                >
+                                  <Merge size={14} />
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -847,6 +861,14 @@ export default function TermekekPage() {
             </Card>
           </div>
         </div>
+
+        {/* Összevonás dialog */}
+        <TermekOsszevonasDialog
+          cel={osszevonasCel}
+          osszesTermek={products}
+          onClose={() => setOsszevonasCel(null)}
+          onKesz={loadProducts}
+        />
 
         {/* Szerkesztési dialog */}
         {editingProduct && (

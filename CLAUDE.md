@@ -127,7 +127,7 @@ if (!user) redirect('/login')
 | `/bevetelek` | `app/bevetelek/page.tsx` | **Terv vs. Tény** — Wallet CSV import + havi költségvetési terv összehasonlító (a régi bevételi terv UI megszűnt, funkcióját a bérkalkulátor vette át) |
 | `/bevasarlas` | `app/bevasarlas/page.tsx` | Bevásárlólista szerkesztés |
 | `/bevasarlas-quick` | `app/bevasarlas-quick/page.tsx` | Gyors checklist mód |
-| `/termekek` | `app/termekek/page.tsx` | Termékadatbázis |
+| `/termekek` | `app/termekek/page.tsx` | Termékadatbázis. A soronkénti **Összevonás** gombbal az eltérő néven bevitt, azonos termékek beolvaszthatók egy megtartott termékbe (`termekek_osszevonasa` RPC, `lib/termekOsszevonas.ts`) |
 | `/statisztika` | `app/statisztika/page.tsx` | Bevásárlási statisztikák (idő/kategória/termék/bolt szerinti elemzés) |
 | `/arfigyeles` | `app/arfigyeles/page.tsx` | Árváltozás riasztások. A termék ártörténete (`src/components/arfigyeles/ar-tortenet-dialog.tsx`) grafikonon jelenik meg; a bejegyzések szerkeszthetők és törölhetők (hibás OCR ár), és akciósnak jelölhetők. Az akciós ár nem számít árváltozásnak. A termék átnevezhető, és az eltérő néven bevitt, valójában azonos termékek összevonhatók (a hasonló neveket felajánlja) |
 | `/inflacio` | `app/inflacio/page.tsx` | Inflációs trendek |
@@ -148,7 +148,7 @@ A Supabase minden táblán **Row Level Security (RLS)** van engedélyezve. A `au
 | `egyenleg_flow` | Napi egyenleg-előrejelző terv (accounts + events JSONB, migráció `20260628_001`) |
 | `egyenleg_pillanatkep` | Havi számlaegyenleg-mentés (accounts JSONB, migráció `20261101_001`); csak az Edge Function írja, a kliens csak olvassa |
 | `shopping_lists` | Bevásárlólisták (items JSONB) |
-| `products` | Termékadatbázis |
+| `products` | Termékadatbázis. **Boltonként** külön sor (egyedi index: `user_id + bolt + lower(name) + unit`). Hivatkozzák: `product_price_history`, `recipe_ingredients`, `meal_plan_entries` (`product_id`), valamint a `shopping_lists.items[].product_id` (JSONB). Összevonás: a `termekek_osszevonasa()` RPC (migráció `20261106_003`) egy tranzakcióban átirányítja a hivatkozásokat |
 | `product_price_history` | Árkövetési adatok. Az `akcios` jelölésű sorok (migráció `20261106_002`) kimaradnak a változás-, infláció- és statisztika-számításból |
 | `user_preferences` | Aktív income/budget plan ID-k |
 

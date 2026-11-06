@@ -120,7 +120,7 @@ if (!user) redirect('/login')
 |-----|------|---------|
 | `/attekintes` | `app/attekintes/page.tsx` | `<Dashboard>` komponenst renderel — a fő mutatók (havi bevétel/kiadás/egyenleg) az **aktuális hónap tényleges Wallet adatát** mutatják (`fetchWalletMonthlySpending`), nem a terveket |
 | `/berkalkulator` | `app/berkalkulator/page.tsx` | 2025-ös magyar adókulcsok alapján számít |
-| `/koltsegvetes` | `app/koltsegvetes/page.tsx` | Havi költségvetés tervezés |
+| `/koltsegvetes` | `app/koltsegvetes/page.tsx` | Havi költségvetés tervezés. A *Számlák és Tervezett Utalások* induló egyenlegei az élő Wallet számlaegyenlegekből frissülnek (`fetchWalletAccounts` + `nettoEgyenleg()`, a hitelkártya-tartozás negatív). A számlát a `budget_data.transferPlan.accounts[].walletAccountId` köti a Wallet számlához: ha hiányzik, az alap számla automatikusan kötődik, `null` esetén kézi. Automatikusan csak aktuális vagy jövőbeli `plan_month` esetén frissül, gombbal bármikor |
 | `/eves-koltsegvetes` | `app/eves-koltsegvetes/page.tsx` | Éves cashflow — havi nettó + göngyölített egyenleg, év végi egyensúly |
 | `/egyenleg-flow` | `app/egyenleg-flow/page.tsx` | **Egyenleg Flow** — nap alapú bankszámla-egyenleg előrejelző. Élő Wallet számlaegyenlegekből indul (`fetchWalletAccounts`), tervezett bevétel/kiadás/átvezetés tételekből napi göngyölített egyenleget számol számlánként (`lib/egyenlegFlow.ts`); jelzi a főszámla mínuszos napjait és a hitelkártya befizetési határidőt |
 | `/egyenleg-valtozas` | `app/egyenleg-valtozas/page.tsx` | **Egyenleg változás** — a hónap 1-jén mentett számlaegyenlegek (`egyenleg_pillanatkep`) összevetése az élő Wallet-egyenleggel, lezárt hónapnál a következő havi mentéssel; számlánként és pénznemenként |

@@ -19,7 +19,8 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { getUserPreferences, setActiveIncomePlan, setActiveBudgetPlan } from '@/lib/userPreferences'
 import { prepareBudgetFromAnnualPlan } from '@/lib/annualBudgetIntegration'
 import { WALLET_CATEGORIES, WALLET_CATEGORY_MAP, OLD_SUBCATEGORY_TO_IDS, resolveWalletCategory } from '@/lib/walletCategories'
-import { fetchWalletMonthlySpending, type WalletMonthlyResponse } from '@/lib/walletApi'
+import { fetchWalletMonthlySpending, fetchWalletAccounts, type WalletMonthlyResponse, type WalletAccount } from '@/lib/walletApi'
+import { nettoEgyenleg } from '@/lib/egyenlegValtozas'
 
 interface BudgetItem {
   id: string
@@ -67,7 +68,11 @@ interface User {
 interface TransferAccount {
   id: string
   name: string
-  initialBalance: number
+  initialBalance: number // előjeles: a hitelkártya-tartozás negatív (mint a nettoEgyenleg())
+  // A Wallet számla azonosítója, ahonnan az induló egyenleg frissül.
+  // undefined: még nincs kötve (az alap számlák első szinkronkor automatikusan kötődnek),
+  // null: a felhasználó kézi egyenleget választott — automatikusan sem kötjük.
+  walletAccountId?: string | null
 }
 
 interface PlannedTransfer {
@@ -201,10 +206,13 @@ const normalizeTransferPlan = (plan?: TransferPlanState): TransferPlanState => {
     return createDefaultTransferPlan()
   }
 
-  const providedAccounts = (plan.accounts || []).map(account => ({
+  const providedAccounts: TransferAccount[] = (plan.accounts || []).map(account => ({
     id: account.id || generateId(),
     name: account.name || 'Számla',
-    initialBalance: Number(account.initialBalance) || 0
+    initialBalance: Number(account.initialBalance) || 0,
+    ...(typeof account.walletAccountId === 'string' || account.walletAccountId === null
+      ? { walletAccountId: account.walletAccountId }
+      : {})
   }))
 
   const ensuredAccounts = [...providedAccounts]
@@ -231,6 +239,51 @@ const normalizeTransferPlan = (plan?: TransferPlanState): TransferPlanState => {
 }
 
 const displayNumericInputValue = (value: number) => (value === 0 ? '' : value.toString())
+
+// Alap számlák → melyik Wallet számlatípushoz kötődnek automatikusan (első szinkronkor)
+const ALAP_SZAMLA_WALLET_TIPUS: Record<string, string> = {
+  'main-account': 'CurrentAccount',
+  'credit-card-1': 'CreditCard',
+  'credit-card-2': 'CreditCard'
+}
+
+// A tervbe vehető Wallet számlák: nem archivált, forintos
+const tervezhetoWalletSzamlak = (walletAccounts: WalletAccount[]) =>
+  walletAccounts.filter(wa => !wa.archived && wa.currencyCode === 'HUF')
+
+const walletInduloEgyenleg = (wa: WalletAccount) => Math.round(nettoEgyenleg(wa))
+
+// A számlák induló egyenlegének frissítése az élő Wallet egyenlegekből.
+// - A Wallet számlához kötött számla egyenlege felülíródik (a nevét nem bántjuk).
+// - A még nem kötött (walletAccountId === undefined) alap számlák a típusuk szerinti első
+//   szabad Wallet számlához kötődnek. A kézire állított (null) számlákhoz nem nyúlunk.
+const walletEgyenlegekAtvetele = (
+  plan: TransferPlanState,
+  walletAccounts: WalletAccount[]
+): { plan: TransferPlanState; frissitett: number } => {
+  const elerheto = tervezhetoWalletSzamlak(walletAccounts)
+  const byId = new Map(elerheto.map(wa => [wa.id, wa]))
+  const hasznalt = new Set(plan.accounts.map(a => a.walletAccountId).filter((id): id is string => !!id))
+  let frissitett = 0
+
+  const accounts = plan.accounts.map(account => {
+    if (account.walletAccountId) {
+      const wa = byId.get(account.walletAccountId)
+      if (!wa) return account
+      frissitett++
+      return { ...account, initialBalance: walletInduloEgyenleg(wa) }
+    }
+    const tipus = ALAP_SZAMLA_WALLET_TIPUS[account.id]
+    if (account.walletAccountId === null || !tipus) return account
+    const wa = elerheto.find(w => w.accountType === tipus && !hasznalt.has(w.id))
+    if (!wa) return account
+    hasznalt.add(wa.id)
+    frissitett++
+    return { ...account, walletAccountId: wa.id, initialBalance: walletInduloEgyenleg(wa) }
+  })
+
+  return { plan: { ...plan, accounts }, frissitett }
+}
 
 type OldWalletCat = { mainCategory: string; subCategories: string[] }
 
@@ -365,6 +418,10 @@ export default function KoltsegvetesPage() {
   const [walletData, setWalletData] = useState<WalletMonthlyResponse | null>(null)
   const [walletLoading, setWalletLoading] = useState(false)
   const [walletError, setWalletError] = useState<string | null>(null)
+  // Wallet számlaegyenlegek (a Számlák és Tervezett Utalások induló értékeihez)
+  const [walletAccounts, setWalletAccounts] = useState<WalletAccount[] | null>(null)
+  const [walletAccountsLoading, setWalletAccountsLoading] = useState(false)
+  const [walletAccountsSyncedAt, setWalletAccountsSyncedAt] = useState<string | null>(null)
   const supabase = createClient()
 
   // Felhasználó betöltése
@@ -511,6 +568,67 @@ export default function KoltsegvetesPage() {
   }
 
   // Utalási sor törlése
+  // Számla Wallet-kötésének módosítása (null: kézi egyenleg)
+  const linkTransferAccountToWallet = (accountId: string, walletAccountId: string | null) => {
+    const wa = walletAccountId ? walletAccounts?.find(w => w.id === walletAccountId) : undefined
+    setTransferPlan(prev => ({
+      ...prev,
+      accounts: prev.accounts.map(account => {
+        if (account.id !== accountId) return account
+        if (!walletAccountId) return { ...account, walletAccountId: null }
+        return {
+          ...account,
+          walletAccountId,
+          initialBalance: wa ? walletInduloEgyenleg(wa) : account.initialBalance
+        }
+      })
+    }))
+  }
+
+  // Új számla felvétele egy Wallet számlából
+  const addTransferAccountFromWallet = (wa: WalletAccount) => {
+    setTransferPlan(prev => ({
+      ...prev,
+      accounts: [...prev.accounts, {
+        id: generateId(),
+        name: wa.name,
+        initialBalance: walletInduloEgyenleg(wa),
+        walletAccountId: wa.id
+      }]
+    }))
+  }
+
+  // Nem alap számla törlése (a rá hivatkozó utalásokkal együtt)
+  const removeTransferAccount = (accountId: string) => {
+    if (ALAP_SZAMLA_WALLET_TIPUS[accountId]) return
+    setTransferPlan(prev => ({
+      accounts: prev.accounts.filter(account => account.id !== accountId),
+      transfers: prev.transfers.filter(t => t.fromAccountId !== accountId && t.toAccountId !== accountId)
+    }))
+  }
+
+  // Wallet számlaegyenlegek lekérése; a tervben lévő (kötött) számlák induló egyenlegét frissíti
+  const syncTransferAccountsFromWallet = useCallback(async (showToast: boolean) => {
+    setWalletAccountsLoading(true)
+    try {
+      const res = await fetchWalletAccounts()
+      setWalletAccounts(res.accounts)
+      setWalletAccountsSyncedAt(res.syncedAt)
+      // A kötött számlák egyenlegét az automatikus effect (lent) is frissíti, de csak
+      // aktuális/jövőbeli hónapnál — a gombnyomás bármelyik hónapra azonnal átveszi.
+      if (showToast) {
+        setTransferPlan(prev => walletEgyenlegekAtvetele(prev, res.accounts).plan)
+        toast.success('Az induló egyenlegek frissítve a Wallet számlaegyenlegekből.')
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Nem sikerült lekérni a Wallet számlákat'
+      if (showToast) toast.error(message)
+      else console.error('Wallet számlák lekérése sikertelen:', message)
+    } finally {
+      setWalletAccountsLoading(false)
+    }
+  }, [])
+
   const removeTransferRow = (transferId: string) => {
     setTransferPlan(prev => ({
       ...prev,
@@ -602,6 +720,22 @@ export default function KoltsegvetesPage() {
     if (!currentUser || !planMonth) return
     loadWalletMonth(planMonth)
   }, [currentUser, planMonth, loadWalletMonth])
+
+  // Wallet számlaegyenlegek lekérése a felhasználó betöltésekor
+  useEffect(() => {
+    if (!currentUser) return
+    syncTransferAccountsFromWallet(false)
+  }, [currentUser, syncTransferAccountsFromWallet])
+
+  // Terv betöltésekor / hónapváltáskor a kötött számlák induló egyenlege az élő Wallet
+  // egyenleg lesz — de csak aktuális vagy jövőbeli hónapnál; a lezárt hónapok tervének
+  // mentett induló értékeit nem írjuk felül (azokat a gombbal lehet frissíteni).
+  useEffect(() => {
+    if (!walletAccounts) return
+    const aktualisHonap = new Date().toISOString().slice(0, 7)
+    if (planMonth && planMonth < aktualisHonap) return
+    setTransferPlan(prev => walletEgyenlegekAtvetele(prev, walletAccounts).plan)
+  }, [walletAccounts, planMonth, selectedBudgetId, isCreatingNew])
 
   // Wallet kategória név (belső UUID szerint) — a badge-ek szebb megjelenítéséhez,
   // ha a kategória nincs a statikus WALLET_CATEGORIES listában
@@ -889,7 +1023,9 @@ export default function KoltsegvetesPage() {
       }
 
       setBudgetData(result.categories)
-      setTransferPlan(createDefaultTransferPlan())
+      setTransferPlan(walletAccounts
+        ? walletEgyenlegekAtvetele(createDefaultTransferPlan(), walletAccounts).plan
+        : createDefaultTransferPlan())
       
       // Ha van tervezett bevétel, állítsuk be
       if (result.plannedIncome > 0) {
@@ -1432,9 +1568,24 @@ export default function KoltsegvetesPage() {
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4">
                   <div>
                     <p className="text-sm font-semibold text-gray-800">Induló egyenlegek</p>
-                    <p className="text-xs text-gray-500">Állítsd be a főszámla és a hitelkártyák kezdő értékeit.</p>
+                    <p className="text-xs text-gray-500">
+                      A Wallet számlához kötött számlák induló értéke az élő Wallet egyenleg (a hitelkártya-tartozás negatív).
+                      {walletAccountsSyncedAt && (
+                        <> Wallet szinkron: {new Date(walletAccountsSyncedAt).toLocaleString('hu-HU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</>
+                      )}
+                    </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => syncTransferAccountsFromWallet(true)}
+                      disabled={walletAccountsLoading}
+                      className="text-xs sm:text-sm h-8 border-cyan-300 text-cyan-700 hover:bg-cyan-50"
+                    >
+                      <RefreshCcw size={14} className={`mr-1 ${walletAccountsLoading ? 'animate-spin' : ''}`} />
+                      Frissítés a Wallet-ből
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -1458,17 +1609,59 @@ export default function KoltsegvetesPage() {
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
-                  {transferPlan.accounts.map(account => (
+                  {transferPlan.accounts.map(account => {
+                    const kotottWallet = account.walletAccountId
+                      ? walletAccounts?.find(wa => wa.id === account.walletAccountId)
+                      : undefined
+                    return (
                     <div key={account.id} className="p-4 rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white shadow-sm">
-                      <Input
-                        value={account.name}
-                        onChange={(e) => updateTransferAccount(account.id, { name: e.target.value })}
-                        className="mb-2 h-9 text-sm border-2 border-gray-200 focus:border-cyan-400"
-                      />
+                      <div className="flex items-center gap-1 mb-2">
+                        <Input
+                          value={account.name}
+                          onChange={(e) => updateTransferAccount(account.id, { name: e.target.value })}
+                          className="h-9 text-sm border-2 border-gray-200 focus:border-cyan-400"
+                        />
+                        {!ALAP_SZAMLA_WALLET_TIPUS[account.id] && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeTransferAccount(account.id)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 h-9 w-9 shrink-0 rounded-xl"
+                            title="Számla eltávolítása"
+                          >
+                            <X size={16} />
+                          </Button>
+                        )}
+                      </div>
+                      <Select
+                        value={account.walletAccountId || 'kezi'}
+                        onValueChange={(value) => linkTransferAccountToWallet(account.id, value === 'kezi' ? null : value)}
+                      >
+                        <SelectTrigger className="mb-2 h-8 text-xs border-2 border-gray-200 focus:border-cyan-400">
+                          <span className="flex items-center gap-1 truncate">
+                            {account.walletAccountId && <Link2 size={12} className="text-cyan-600 shrink-0" />}
+                            <SelectValue placeholder="Wallet számla" />
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="kezi">Kézi egyenleg (nincs Wallet kötés)</SelectItem>
+                          {account.walletAccountId && !kotottWallet && (
+                            <SelectItem value={account.walletAccountId}>Wallet számla (nem elérhető)</SelectItem>
+                          )}
+                          {tervezhetoWalletSzamlak(walletAccounts || []).map(wa => (
+                            <SelectItem
+                              key={wa.id}
+                              value={wa.id}
+                              disabled={wa.id !== account.walletAccountId && transferPlan.accounts.some(a => a.walletAccountId === wa.id)}
+                            >
+                              {wa.name} ({formatCurrency(walletInduloEgyenleg(wa))})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <div className="flex items-center gap-2">
                         <Input
                           type="number"
-                          min="0"
                           value={displayNumericInputValue(account.initialBalance)}
                           onChange={(e) => updateTransferAccount(account.id, { initialBalance: Number(e.target.value) || 0 })}
                           className="flex-1 h-9 text-sm text-right border-2 border-gray-200 focus:border-emerald-400"
@@ -1479,8 +1672,32 @@ export default function KoltsegvetesPage() {
                         Formázva: <span className="font-semibold text-gray-800">{formatCurrency(account.initialBalance)}</span>
                       </p>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
+                {(() => {
+                  const kotottIds = new Set(transferPlan.accounts.map(a => a.walletAccountId).filter(Boolean))
+                  const szabad = tervezhetoWalletSzamlak(walletAccounts || []).filter(wa => !kotottIds.has(wa.id))
+                  if (szabad.length === 0) return null
+                  return (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-gray-500">További Wallet számla felvétele:</span>
+                      {szabad.map(wa => (
+                        <Button
+                          key={wa.id}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => addTransferAccountFromWallet(wa)}
+                          className="h-7 text-xs border-gray-300 text-gray-700 hover:bg-cyan-50 max-w-full"
+                        >
+                          <Plus size={12} className="mr-1 shrink-0" />
+                          <span className="truncate max-w-[14rem]">{wa.name}</span>
+                          <span className="ml-1 text-gray-500 shrink-0">{formatCurrency(walletInduloEgyenleg(wa))}</span>
+                        </Button>
+                      ))}
+                    </div>
+                  )
+                })()}
               </div>
 
               <Separator />

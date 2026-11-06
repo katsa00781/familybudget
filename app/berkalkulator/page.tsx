@@ -28,6 +28,7 @@ interface SavedCalculation {
   munkaszuneti_tulora_orak?: number;
   unnepnapi_orak?: number;
   betegszabadsag_napok?: number;
+  iftt_napok?: number;
   kikuldes_napok?: number;
   gyed_mellett?: number;
   formaruha_kompenzacio?: number;
@@ -95,7 +96,8 @@ const KULCSOK = {
 
   // Egyéb konstansok
   GYEREKEK_UTAN_KEDVEZMENY: 333330, // 2 gyermek utáni adókedvezmény
-  BETEGSZABADSAG_SZAZALEK: 0.70, // 70% betegszabadság
+  BETEGSZABADSAG_SZAZALEK: 0.70, // 70% betegszabadság (a 14. nap feletti napokra)
+  BETEGSZABADSAG_TELJES_NAPOK: 14, // az első 14 nap betegszabadság a fizetett szabadsággal azonosan (távolléti díj × 8,17 óra)
   GYED_NAPI: 13570, // GYED napi összeg
   KIKULDETESI_POTLEK: 6710, // kiküldetési pótlék napi
   NYUGDIJJARULÉK: 0.10 // nyugdíjjárulék nagyobb bérekeknél
@@ -119,14 +121,18 @@ export default function BerkalkulatorPage() {
   const [fizTavollétOrak, setFizTavollétOrak] = useState(0); // Fizetett távollét (állami kötelezettség)
   const [additionalIncomes, setAdditionalIncomes] = useState<AdditionalIncome[]>([]);
   const [betegszabadsagNapok, setBetegszabadsagNapok] = useState(0);
+  const [ifttNapok, setIfttNapok] = useState(0); // IFTT távollét (nap) — csak az alapbér napi része jár, műszakpótlék nélkül
   // A betöltött (szerkesztett) kalkuláció azonosítója — ha be van állítva, a Mentés felülírja
   const [szerkesztettId, setSzerkesztettId] = useState<string | null>(null);
 
   // Számított értékek a munkarend alapján (8.17 óra/nap a műszakos munkarendben)
-  // A fizetett szabadság, a fizetett (állami) távollét ÉS a betegszabadság is csökkenti a ledolgozott időt
-  // (a bérjegyzéken: munkarend = ledolgozott + szabadság + egésznapos távollét + betegszabadság)
+  // A fizetett szabadság, a fizetett (állami) távollét, a betegszabadság ÉS az IFTT távollét is csökkenti a ledolgozott időt
+  // (a bérjegyzéken: munkarend = ledolgozott + szabadság + egésznapos távollét + betegszabadság + IFTT)
   const fizTavollétNapok = fizTavollétOrak / KULCSOK.NAPI_ÓRASZÁM;
-  const ledolgozottNapok = munkarendNapok - szabadsagNapok - fizTavollétNapok - betegszabadsagNapok;
+  const ledolgozottNapok = munkarendNapok - szabadsagNapok - fizTavollétNapok - betegszabadsagNapok - ifttNapok;
+  // Betegszabadság felbontása: az első 14 nap teljes távolléti díjon, a többi 70%-on
+  const betegTeljesNapok = Math.min(betegszabadsagNapok, KULCSOK.BETEGSZABADSAG_TELJES_NAPOK);
+  const betegCsokkentettNapok = Math.max(0, betegszabadsagNapok - KULCSOK.BETEGSZABADSAG_TELJES_NAPOK);
   const munkarendSzerintiOrak = munkarendNapok * KULCSOK.NAPI_ÓRASZÁM;
   const ledolgozottOrak = ledolgozottNapok * KULCSOK.NAPI_ÓRASZÁM;
   const szabadsagOrak = szabadsagNapok * KULCSOK.NAPI_ÓRASZÁM;
@@ -155,6 +161,7 @@ export default function BerkalkulatorPage() {
     unnepnapiMunka: number;
     unnepnapiMuszakpotlek: number;
     betegszabadsag: number;
+    ifttDij: number;
     kikuldetesTobblet: number;
     gyedMunkavMellett: number;
     formaruhakompenzacio: number;
@@ -267,7 +274,14 @@ export default function BerkalkulatorPage() {
     const unnepnapiMuszakpotlek = Math.round(unnepnapiOrak * oraber * KULCSOK.MUSZAKPOTLEK);
 
     // Betegszabadság, kiküldetés, GYED
-    const betegszabadsag = Math.round(betegszabadsagNapok * (oraber * 8) * KULCSOK.BETEGSZABADSAG_SZAZALEK);
+    // Betegszabadság: az első 14 nap a fizetett szabadsággal azonosan (távolléti díj × 8,17 óra/nap),
+    // a 14. nap felettiek 70%-on
+    const betegszabadsag = Math.round(
+      betegTeljesNapok * KULCSOK.NAPI_ÓRASZÁM * tavolleti +
+      betegCsokkentettNapok * KULCSOK.NAPI_ÓRASZÁM * tavolleti * KULCSOK.BETEGSZABADSAG_SZAZALEK
+    );
+    // IFTT távollét: csak az alapbér arra a napra eső része (rendes órabér × 8,17 óra), műszakpótlék NEM jár
+    const ifttDij = Math.round(ifttNapok * KULCSOK.NAPI_ÓRASZÁM * oraber);
     const kikuldetesTobblet = Math.round(kikuldetesNapok * KULCSOK.KIKULDETESI_POTLEK);
     const gyedMunkavMellett = Math.round(gyedMellett * KULCSOK.GYED_NAPI);
 
@@ -275,7 +289,7 @@ export default function BerkalkulatorPage() {
     const bruttoBer = haviberesIdober + fizetettSzabadsag + fizTavollét +
                      tuloraAlapossszeg + savPotlek + szabadnapiPotlek + pihenonapiPotlek + munkaszunetiTuloraPotlek +
                      muszakpotlek + tuloraMuszakpotlek + unnepnapiMunka + unnepnapiMuszakpotlek +
-                     betegszabadsag + kikuldetesTobblet + jutalom;
+                     betegszabadsag + ifttDij + kikuldetesTobblet + jutalom;
     
     // Összes járandóság (bruttó + GYED + formaruha)
     const osszesJarandsag = bruttoBer + gyedMunkavMellett + formaruhakompenzacio;
@@ -340,6 +354,7 @@ export default function BerkalkulatorPage() {
       unnepnapiMunka,
       unnepnapiMuszakpotlek,
       betegszabadsag,
+      ifttDij,
       kikuldetesTobblet,
       gyedMunkavMellett,
       formaruhakompenzacio,
@@ -362,7 +377,8 @@ export default function BerkalkulatorPage() {
       munkaltaroiTerhek: ((szocHozzjarulas / osszesJarandsag) * 100).toFixed(1)
     });
   }, [alapber, jutalom, munkarendNapok, szabadsagNapok, tizenketOrasMuszak, szabadnapiTuloraOrak, pihenonapiTuloraOrak,
-      munkaszunetiTuloraOrak, muszakTuloraOrak, fizTavollétOrak, unnepnapiOrak, betegszabadsagNapok,
+      munkaszunetiTuloraOrak, muszakTuloraOrak, fizTavollétOrak, unnepnapiOrak,
+      betegTeljesNapok, betegCsokkentettNapok, ifttNapok,
       kikuldetesNapok, gyedMellett, formaruhakompenzacio, formaruhaAK, családiAdókedvezmény,
       munkarendSzerintiOrak, ledolgozottOrak, szabadsagOrak,
       atlagOrabErAuto, atlagOrabErManual, setEredmény]);
@@ -441,7 +457,7 @@ export default function BerkalkulatorPage() {
 
     return () => clearTimeout(timer);
   }, [alapber, munkarendNapok, szabadsagNapok, tizenketOrasMuszak, szabadnapiTuloraOrak, pihenonapiTuloraOrak,
-      munkaszunetiTuloraOrak, fizTavollétOrak, unnepnapiOrak, betegszabadsagNapok, kikuldetesNapok,
+      munkaszunetiTuloraOrak, fizTavollétOrak, unnepnapiOrak, betegszabadsagNapok, ifttNapok, kikuldetesNapok,
       gyedMellett, formaruhakompenzacio, formaruhaAK, családiAdókedvezmény, additionalIncomes, calculateSalary]);
 
   // Kezdeti számítás az oldal betöltésekor
@@ -521,6 +537,7 @@ export default function BerkalkulatorPage() {
     setMunkaszunetiTuloraOrak(calc.munkaszuneti_tulora_orak || 0);
     setUnnepnapiOrak(calc.unnepnapi_orak || 0);
     setBetegszabadsagNapok(calc.betegszabadsag_napok || 0);
+    setIfttNapok(calc.iftt_napok || 0);
     setKikuldetesNapok(calc.kikuldes_napok || 0);
     setGyedMellett(calc.gyed_mellett || 0);
     setFormaruhakompenzacio(calc.formaruha_kompenzacio || 0);
@@ -617,6 +634,7 @@ export default function BerkalkulatorPage() {
         munkaszuneti_tulora_orak: munkaszunetiTuloraOrak,
         unnepnapi_orak: unnepnapiOrak,
         betegszabadsag_napok: betegszabadsagNapok,
+        iftt_napok: ifttNapok,
         kikuldes_napok: kikuldetesNapok,
         gyed_mellett: gyedMellett,
         formaruha_kompenzacio: formaruhakompenzacio,
@@ -947,7 +965,7 @@ export default function BerkalkulatorPage() {
                         className="mt-1 h-9 md:h-10 text-sm bg-gray-50 cursor-not-allowed border-2 border-gray-200 rounded-xl font-mono"
                       />
                       <p className="text-xs text-gray-500 mt-1 font-medium">
-                        Automatikusan számított: munkanapok ({munkarendNapok}) - szabadság ({szabadsagNapok}) - távollét ({fizTavollétNapok.toFixed(2)}) - betegszabadság ({betegszabadsagNapok}) = {ledolgozottNapok.toFixed(2)} nap
+                        Automatikusan számított: munkanapok ({munkarendNapok}) - szabadság ({szabadsagNapok}) - távollét ({fizTavollétNapok.toFixed(2)}) - betegszabadság ({betegszabadsagNapok}) - IFTT ({ifttNapok}) = {ledolgozottNapok.toFixed(2)} nap
                       </p>
                       <p className="text-xs text-gray-500 font-medium">
                         Ledolgozott órák: {ledolgozottOrak.toFixed(2)} óra
@@ -1117,7 +1135,28 @@ export default function BerkalkulatorPage() {
                         placeholder="0"
                         className="mt-1 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
                       />
-                      <p className="text-xs text-gray-500 mt-1 font-medium">70% térítés — a ledolgozott napokat is csökkenti</p>
+                      <p className="text-xs text-gray-500 mt-1 font-medium">
+                        Első 14 nap: távolléti díj × 8,17 óra (mint a fizetett szabadság), felette 70% — a ledolgozott napokat is csökkenti
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label className="text-xs md:text-sm font-semibold text-gray-700">
+                        IFTT távollét (nap)
+                      </Label>
+                      <Input
+                        type="number"
+                        step="1"
+                        min="0"
+                        value={ifttNapok || ''}
+                        onChange={handleInputChange(setIfttNapok)}
+                        onFocus={handleInputFocus}
+                        placeholder="0"
+                        className="mt-1 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
+                      />
+                      <p className="text-xs text-gray-500 mt-1 font-medium">
+                        Csak az alapbér napi része jár (rendes órabér × 8,17 óra), műszakpótlék nélkül — a ledolgozott napokat csökkenti
+                      </p>
                     </div>
                     
                     <div>
@@ -1288,6 +1327,20 @@ export default function BerkalkulatorPage() {
                         <div className="flex justify-between">
                           <span className="truncate pr-2">Fizetett táv. állam. ({fizTavollétOrak} óra):</span>
                           <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.fizTavollét)}</span>
+                        </div>
+                      )}
+                      {eredmény.betegszabadsag > 0 && (
+                        <div className="flex justify-between">
+                          <span className="truncate pr-2">
+                            Betegszabadság ({betegTeljesNapok} nap távolléti díj{betegCsokkentettNapok > 0 ? ` + ${betegCsokkentettNapok} nap 70%` : ''}):
+                          </span>
+                          <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.betegszabadsag)}</span>
+                        </div>
+                      )}
+                      {eredmény.ifttDij > 0 && (
+                        <div className="flex justify-between">
+                          <span className="truncate pr-2">IFTT távollét ({ifttNapok} nap, alapbér):</span>
+                          <span className="font-semibold whitespace-nowrap">{formatCurrency(eredmény.ifttDij)}</span>
                         </div>
                       )}
                       {(muszakTuloraOrak + szabadnapiTuloraOrak + pihenonapiTuloraOrak + munkaszunetiTuloraOrak) > 0 && (

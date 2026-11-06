@@ -183,7 +183,9 @@ A `KULCSOK` konstans az aktuális 2026-os bérpapír (MVM bérjegyzék) adatain 
   - A *Formaruha AK* külön beviteli mező (`formaruha_ak`, migráció `014`) — általában évente egyszer
 - SZJA: 15%
 - Műszakpótlék: 45% (minden ledolgozott + túlóra órára)
-- Betegszabadság: 70% — a betegszabadság napjai a ledolgozott napokat is csökkentik (`ledolgozott = munkarend − szabadság − fiz. távollét − betegszabadság`)
+- Betegszabadság: az **első 14 nap** a fizetett szabadsággal azonosan (távolléti díj × 8,17 óra/nap, `BETEGSZABADSAG_TELJES_NAPOK`), a 14. nap feletti napok 70%-on (`BETEGSZABADSAG_SZAZALEK`)
+- **IFTT távollét** (nap, `iftt_napok`, migráció `20261106_001`): csak az alapbér napi része jár (rendes órabér × 8,17 óra), **műszakpótlék nélkül**
+- A ledolgozott napok: `munkarend − szabadság − fiz. távollét − betegszabadság − IFTT`
 
 ### Túlóra-pótlékok (KSZ szerint)
 

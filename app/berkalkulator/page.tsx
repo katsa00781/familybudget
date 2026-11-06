@@ -118,18 +118,20 @@ export default function BerkalkulatorPage() {
   const [unnepnapiOrak, setUnnepnapiOrak] = useState(0); // Munkaszüneti munkavégzés (rostán): 0 óra (default)
   const [fizTavollétOrak, setFizTavollétOrak] = useState(0); // Fizetett távollét (állami kötelezettség)
   const [additionalIncomes, setAdditionalIncomes] = useState<AdditionalIncome[]>([]);
+  const [betegszabadsagNapok, setBetegszabadsagNapok] = useState(0);
+  // A betöltött (szerkesztett) kalkuláció azonosítója — ha be van állítva, a Mentés felülírja
+  const [szerkesztettId, setSzerkesztettId] = useState<string | null>(null);
 
   // Számított értékek a munkarend alapján (8.17 óra/nap a műszakos munkarendben)
-  // A fizetett szabadság ÉS a fizetett (állami) távollét is csökkenti a ledolgozott időt
-  // (a bérjegyzéken: munkarend = ledolgozott + szabadság + egésznapos távollét)
+  // A fizetett szabadság, a fizetett (állami) távollét ÉS a betegszabadság is csökkenti a ledolgozott időt
+  // (a bérjegyzéken: munkarend = ledolgozott + szabadság + egésznapos távollét + betegszabadság)
   const fizTavollétNapok = fizTavollétOrak / KULCSOK.NAPI_ÓRASZÁM;
-  const ledolgozottNapok = munkarendNapok - szabadsagNapok - fizTavollétNapok;
+  const ledolgozottNapok = munkarendNapok - szabadsagNapok - fizTavollétNapok - betegszabadsagNapok;
   const munkarendSzerintiOrak = munkarendNapok * KULCSOK.NAPI_ÓRASZÁM;
   const ledolgozottOrak = ledolgozottNapok * KULCSOK.NAPI_ÓRASZÁM;
   const szabadsagOrak = szabadsagNapok * KULCSOK.NAPI_ÓRASZÁM;
   // 12 órás műszakból eredő túlóra-órák (sávos elszámoláshoz)
   const muszakTuloraOrak = tizenketOrasMuszak * KULCSOK.ORAK_PER_MUSZAK;
-  const [betegszabadsagNapok, setBetegszabadsagNapok] = useState(0);
   const [kikuldetesNapok, setKikuldetesNapok] = useState(0);
   const [gyedMellett, setGyedMellett] = useState(0); // GYED munkavégzés mellett: 0 nap (default)
   const [formaruhakompenzacio, setFormaruhakompenzacio] = useState(0);
@@ -503,6 +505,9 @@ export default function BerkalkulatorPage() {
 
   // Kalkuláció betöltése módosításhoz
   const handleLoadCalculation = (calc: SavedCalculation) => {
+    // Szerkesztési mód: a Mentés ezt a sort írja felül
+    setSzerkesztettId(calc.id);
+
     // Beállítjuk a kalkuláció nevét
     setCalculationName(calc.name || '');
     
@@ -523,10 +528,11 @@ export default function BerkalkulatorPage() {
     setCsaládiAdókedvezmény(calc.csaladi_adokedvezmeny || 0);
     
     // Egyéb jövedelmek betöltése
+    setAdditionalIncomes([]);
     if (calc.additional_incomes) {
       try {
         const parsedIncomes = JSON.parse(calc.additional_incomes);
-        setAdditionalIncomes(parsedIncomes);
+        setAdditionalIncomes(Array.isArray(parsedIncomes) ? parsedIncomes : []);
       } catch (error) {
         console.error('Error parsing additional incomes:', error);
       }
@@ -538,7 +544,12 @@ export default function BerkalkulatorPage() {
     }, 100);
     
     // Visszajelzés a felhasználónak
-    alert('Kalkuláció betöltve! Módosíthatod az értékeket és újra mentheted.');
+    alert('Kalkuláció betöltve szerkesztésre! A Mentés felülírja a meglévő kalkulációt, a „Mentés újként” külön sorba ment.');
+  };
+
+  // Kilépés a szerkesztési módból (a következő Mentés új kalkulációt hoz létre)
+  const handleSzerkesztesVege = () => {
+    setSzerkesztettId(null);
   };
 
   // Kalkuláció törlése
@@ -559,6 +570,7 @@ export default function BerkalkulatorPage() {
         alert('Hiba történt a törlés során: ' + error.message);
       } else {
         console.log('Calculation deleted successfully');
+        if (szerkesztettId === calculationId) setSzerkesztettId(null);
         alert('Kalkuláció sikeresen törölve!');
         // Frissítjük a korábbi számításokat
         fetchSavedCalculations();
@@ -575,7 +587,8 @@ export default function BerkalkulatorPage() {
   }, [fetchSavedCalculations]);
 
   // Form küldés és mentés Supabase-be
-  const handleSaveCalculation = async () => {
+  // ujkent = true → mindig új sort hoz létre (szerkesztési módban is)
+  const handleSaveCalculation = async (ujkent = false) => {
     console.log('Save calculation button clicked');
     console.log('Current state:', { familyMember, eredmény, calculationName });
     
@@ -618,14 +631,20 @@ export default function BerkalkulatorPage() {
         teljes_munkaltaroi_koltseg: eredmény.teljesMunkaltaroiKoltseg,
         // Egyéb jövedelmek mentése
         additional_incomes: JSON.stringify(additionalIncomes),
-        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
 
-      const { data, error } = await supabase
-        .from('salary_calculations')
-        .insert([calculationData])
-        .select();
+      const felulir = !!szerkesztettId && !ujkent;
+      const { data, error } = felulir
+        ? await supabase
+            .from('salary_calculations')
+            .update(calculationData)
+            .eq('id', szerkesztettId)
+            .select()
+        : await supabase
+            .from('salary_calculations')
+            .insert([{ ...calculationData, created_at: new Date().toISOString() }])
+            .select();
 
       if (error) {
         console.error('Error saving calculation:', error);
@@ -635,7 +654,16 @@ export default function BerkalkulatorPage() {
         alert('Hiba történt a mentés során: ' + error.message);
       } else {
         console.log('Calculation saved:', data);
-        alert('Számítás sikeresen elmentve!');
+        if (felulir && (!data || data.length === 0)) {
+          // RLS vagy törölt sor miatt nem frissült semmi
+          alert('A kalkuláció nem frissült (nem található vagy nincs jogosultság).');
+          return;
+        }
+        if (!felulir && data && data[0]) {
+          // Az újonnan mentett sor lesz a szerkesztett
+          setSzerkesztettId(data[0].id);
+        }
+        alert(felulir ? 'Kalkuláció sikeresen módosítva!' : 'Számítás sikeresen elmentve!');
         // Frissítjük a korábbi számításokat
         fetchSavedCalculations();
       }
@@ -795,7 +823,7 @@ export default function BerkalkulatorPage() {
                       <Label htmlFor="family-member" className="text-xs md:text-sm font-semibold text-gray-700">
                         Családtag
                       </Label>
-                      <Select value={familyMember} onValueChange={setFamilyMember}>
+                      <Select value={familyMember} onValueChange={(v) => { setFamilyMember(v); setSzerkesztettId(null); }}>
                         <SelectTrigger className="mt-1 h-9 md:h-10 text-sm border-2 border-gray-200 hover:border-emerald-400 focus:border-emerald-500 transition-colors duration-200 rounded-xl">
                           <SelectValue placeholder={loading ? "Betöltés..." : "Válassz családtagot"} />
                         </SelectTrigger>
@@ -893,7 +921,7 @@ export default function BerkalkulatorPage() {
                       </Label>
                       <Input
                         type="number"
-                        step="0.1"
+                        step="1"
                         value={munkarendNapok || ''}
                         onChange={handleInputChange(setMunkarendNapok)}
                         onFocus={handleInputFocus}
@@ -919,7 +947,7 @@ export default function BerkalkulatorPage() {
                         className="mt-1 h-9 md:h-10 text-sm bg-gray-50 cursor-not-allowed border-2 border-gray-200 rounded-xl font-mono"
                       />
                       <p className="text-xs text-gray-500 mt-1 font-medium">
-                        Automatikusan számított: munkanapok ({munkarendNapok}) - szabadság ({szabadsagNapok}) - távollét ({fizTavollétNapok.toFixed(2)}) = {ledolgozottNapok.toFixed(2)} nap
+                        Automatikusan számított: munkanapok ({munkarendNapok}) - szabadság ({szabadsagNapok}) - távollét ({fizTavollétNapok.toFixed(2)}) - betegszabadság ({betegszabadsagNapok}) = {ledolgozottNapok.toFixed(2)} nap
                       </p>
                       <p className="text-xs text-gray-500 font-medium">
                         Ledolgozott órák: {ledolgozottOrak.toFixed(2)} óra
@@ -932,7 +960,7 @@ export default function BerkalkulatorPage() {
                       </Label>
                       <Input
                         type="number"
-                        step="0.01"
+                        step="1"
                         value={szabadsagNapok || ''}
                         onChange={handleInputChange(setSzabadsagNapok)}
                         onFocus={handleInputFocus}
@@ -1081,13 +1109,15 @@ export default function BerkalkulatorPage() {
                       </Label>
                       <Input
                         type="number"
+                        step="1"
+                        min="0"
                         value={betegszabadsagNapok || ''}
                         onChange={handleInputChange(setBetegszabadsagNapok)}
                         onFocus={handleInputFocus}
                         placeholder="0"
                         className="mt-1 h-9 md:h-10 text-sm border-2 border-gray-200 focus:border-emerald-400 transition-colors duration-200 rounded-xl font-mono"
                       />
-                      <p className="text-xs text-gray-500 mt-1 font-medium">70% térítés</p>
+                      <p className="text-xs text-gray-500 mt-1 font-medium">70% térítés — a ledolgozott napokat is csökkenti</p>
                     </div>
                     
                     <div>
@@ -1096,7 +1126,7 @@ export default function BerkalkulatorPage() {
                       </Label>
                       <Input
                         type="number"
-                        step="0.1"
+                        step="1"
                         value={kikuldetesNapok || ''}
                         onChange={handleInputChange(setKikuldetesNapok)}
                         onFocus={handleInputFocus}
@@ -1111,6 +1141,7 @@ export default function BerkalkulatorPage() {
                       </Label>
                       <Input
                         type="number"
+                        step="1"
                         value={gyedMellett || ''}
                         onChange={handleInputChange(setGyedMellett)}
                         onFocus={handleInputFocus}
@@ -1165,18 +1196,47 @@ export default function BerkalkulatorPage() {
                   </div>
                 </div>
 
+                {/* Szerkesztési mód jelző */}
+                {szerkesztettId && (
+                  <div className="mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-blue-50 border-2 border-blue-200 rounded-xl text-sm text-blue-800">
+                    <span>
+                      <strong>Szerkesztés:</strong> {savedCalculations.find(c => c.id === szerkesztettId)?.name || calculationName || 'betöltött kalkuláció'} — a Mentés felülírja.
+                    </span>
+                    <Button
+                      onClick={handleSzerkesztesVege}
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-3 text-xs border-2 border-blue-300 hover:bg-blue-100 rounded-lg"
+                    >
+                      Kilépés a szerkesztésből
+                    </Button>
+                  </div>
+                )}
+
                 {/* Számítás és mentés gombok */}
                 <div className="flex flex-col sm:flex-row gap-2 md:gap-3">
                   <Button onClick={calculateSalary} className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white py-2 md:py-3 text-sm md:text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 rounded-xl">
                     Számítás
                   </Button>
                   <Button 
-                    onClick={handleSaveCalculation} 
+                    onClick={() => handleSaveCalculation(false)} 
                     className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-2 md:py-3 text-sm md:text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                     disabled={!eredmény}
+                    title={szerkesztettId ? 'A betöltött kalkuláció felülírása' : 'Új kalkuláció mentése'}
                   >
-                    Mentés
+                    {szerkesztettId ? 'Módosítás mentése' : 'Mentés'}
                   </Button>
+                  {szerkesztettId && (
+                    <Button 
+                      onClick={() => handleSaveCalculation(true)} 
+                      variant="outline"
+                      className="flex-1 py-2 md:py-3 text-sm md:text-base font-semibold border-2 border-green-300 text-green-700 hover:bg-green-50 rounded-xl disabled:opacity-50"
+                      disabled={!eredmény}
+                      title="Mentés új kalkulációként (a betöltött érintetlen marad)"
+                    >
+                      Mentés újként
+                    </Button>
+                  )}
                   <Button 
                     onClick={handleSaveAsIncomePlan} 
                     className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white py-2 md:py-3 text-sm md:text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
@@ -1442,7 +1502,7 @@ export default function BerkalkulatorPage() {
               <CardContent className="space-y-3 md:space-y-4 pt-0">
                 {savedCalculations.length > 0 ? (
                   savedCalculations.map((calc) => (
-                    <div key={calc.id} className="p-3 md:p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-gray-200/50 shadow-sm hover:shadow-md transition-shadow duration-200">
+                    <div key={calc.id} className={`p-3 md:p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 shadow-sm hover:shadow-md transition-shadow duration-200 ${calc.id === szerkesztettId ? 'border-blue-400' : 'border-gray-200/50'}`}>
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-gray-900 text-xs md:text-sm truncate">
@@ -1460,7 +1520,7 @@ export default function BerkalkulatorPage() {
                             className="h-8 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-2 border-blue-200 hover:border-blue-400 transition-all rounded-lg text-xs font-semibold"
                             title="Kalkuláció betöltése módosításhoz"
                           >
-                            Betöltés
+                            {calc.id === szerkesztettId ? 'Szerkesztve' : 'Szerkesztés'}
                           </Button>
                           <Button
                             onClick={() => handleDeleteCalculation(calc.id)}

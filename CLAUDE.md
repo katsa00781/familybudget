@@ -183,7 +183,7 @@ A `KULCSOK` konstans az aktuális 2026-os bérpapír (MVM bérjegyzék) adatain 
   - A *Formaruha AK* külön beviteli mező (`formaruha_ak`, migráció `014`) — általában évente egyszer
 - SZJA: 15%
 - Műszakpótlék: 45% (minden ledolgozott + túlóra órára)
-- Betegszabadság: 70%
+- Betegszabadság: 70% — a betegszabadság napjai a ledolgozott napokat is csökkentik (`ledolgozott = munkarend − szabadság − fiz. távollét − betegszabadság`)
 
 ### Túlóra-pótlékok (KSZ szerint)
 
@@ -205,7 +205,7 @@ A sávos kulcsokat a januári bérjegyzék *Üzemz.TÓ munkanapi 0-2óra / 3-4ó
 
 A kalkuláció a `salary_calculations` táblába mentődik (a túlóra-kategóriák a `tizenket_oras_muszak`,
 `szabadnapi_tulora_orak` (migráció `013`), `pihenonapi_tulora_orak`, `munkaszuneti_tulora_orak` oszlopokba — lásd migráció `012`), a `name`
-mezővel azonosítható, és visszatölthető módosításhoz. A régi `tulora_orak` / `muszakpotlek_orak`
+mezővel azonosítható, és visszatölthető módosításhoz (a *Szerkesztés* után a Mentés a meglévő sort UPDATE-eli, a *Mentés újként* új sort hoz létre). A régi `tulora_orak` / `muszakpotlek_orak`
 oszlopok legacy státuszúak (0-ra mentve).
 
 ## Terv vs. Tény oldal (`/bevetelek`) — élő Wallet összehasonlító

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/utils/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/src/components/ui/card'
 import { Button } from '@/src/components/ui/button'
 import { KategoriaOsszehasonlitas } from '@/src/components/terv-teny/kategoria-osszehasonlitas'
+import { TervTenyGrafikon } from '@/src/components/terv-teny/terv-teny-grafikon'
 import { RefreshCw, Scale, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import type { BudgetCategory, BudgetItem } from '../../types/budget'
@@ -507,6 +508,11 @@ export default function TervVsTenyPage() {
                     <p className="text-xs">{analysisResult.incomes.length} kategória</p>
                   </div>
                 </div>
+
+                <TervTenyGrafikon
+                  sorok={analysisResult.rows.map((sor) => ({ kategoria: sor.category, terv: sor.planned, teny: sor.actual }))}
+                  nemParositott={analysisResult.unmapped.reduce((sum, item) => sum + item.expense, 0)}
+                />
 
                 <KategoriaOsszehasonlitas
                   key={`${selectedMonth}-${selectedBudgetId}`}

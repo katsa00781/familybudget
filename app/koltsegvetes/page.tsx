@@ -21,6 +21,7 @@ import { prepareBudgetFromAnnualPlan } from '@/lib/annualBudgetIntegration'
 import { WALLET_CATEGORIES, WALLET_CATEGORY_MAP, OLD_SUBCATEGORY_TO_IDS, resolveWalletCategory } from '@/lib/walletCategories'
 import { fetchWalletMonthlySpending, fetchWalletAccounts, type WalletMonthlyResponse, type WalletAccount } from '@/lib/walletApi'
 import { nettoEgyenleg } from '@/lib/egyenlegValtozas'
+import { KoltsegvetesTorta } from '@/src/components/koltsegvetes/koltsegvetes-torta'
 
 interface BudgetItem {
   id: string
@@ -1256,6 +1257,9 @@ export default function KoltsegvetesPage() {
             Tervezd meg havi költségvetésedet kategóriák szerint és tartsd kézben a pénzügyeidet.
           </p>
         </div>
+
+        {/* Költségvetési tételek megoszlása (tortadiagram) */}
+        <KoltsegvetesTorta kategoriak={budgetData} />
 
         {/* Mentett költségvetések betöltése és bevétel kezelése */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">

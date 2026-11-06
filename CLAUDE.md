@@ -129,7 +129,7 @@ if (!user) redirect('/login')
 | `/bevasarlas-quick` | `app/bevasarlas-quick/page.tsx` | Gyors checklist mód |
 | `/termekek` | `app/termekek/page.tsx` | Termékadatbázis |
 | `/statisztika` | `app/statisztika/page.tsx` | Bevásárlási statisztikák (idő/kategória/termék/bolt szerinti elemzés) |
-| `/arfigyeles` | `app/arfigyeles/page.tsx` | Árváltozás riasztások. A termék ártörténete (`src/components/arfigyeles/ar-tortenet-dialog.tsx`) grafikonon jelenik meg; a bejegyzések szerkeszthetők és törölhetők (hibás OCR ár), és akciósnak jelölhetők. Az akciós ár nem számít árváltozásnak |
+| `/arfigyeles` | `app/arfigyeles/page.tsx` | Árváltozás riasztások. A termék ártörténete (`src/components/arfigyeles/ar-tortenet-dialog.tsx`) grafikonon jelenik meg; a bejegyzések szerkeszthetők és törölhetők (hibás OCR ár), és akciósnak jelölhetők. Az akciós ár nem számít árváltozásnak. A termék átnevezhető, és az eltérő néven bevitt, valójában azonos termékek összevonhatók (a hasonló neveket felajánlja) |
 | `/inflacio` | `app/inflacio/page.tsx` | Inflációs trendek |
 | `/befektetesek`, `/szamlak`, `/receptek` | — | Placeholder oldalak |
 
@@ -161,6 +161,7 @@ Migrációk helye: `supabase/migrations/`. Az összes tábla egybén is létreho
 - `getPriceChanges()` — árváltozások lekérése időtartomány szerint
 - `getInflationData()` — havi inflációs adatok aggregálva
 - `updatePriceHistory()` / `deletePriceHistory()` — ártörténet-bejegyzés javítása vagy törlése. Az ár módosításakor a `total_price` újraszámolódik.
+- `termekekOsszevonasa()` — átnevezés és összevonás. Csak a `product_name` mezőt írja át a `product_price_history` táblában, és opcionálisan a `shopping_statistics` táblában. A `products` táblát nem módosítja. `getTermekNevek()` a neveket adja bejegyzésszámmal, `nevHasonlosag()` a hasonló nevek felajánlásához kell.
 - `isRegularPrice()` — kiszűri az akciós (`akcios = true`) árakat. A változás-, infláció- és statisztika-számítás csak rendes árakkal dolgozik. Az MCP szerver (`mcp/src/tools/`) ugyanezt a szabályt alkalmazza, ezért a kettőt együtt kell módosítani.
 - A bevásárláskor és termék-mentéskor automatikusan hívódik.
 

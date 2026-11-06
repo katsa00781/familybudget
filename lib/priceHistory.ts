@@ -485,3 +485,150 @@ export const deletePriceHistory = async (
     return { success: false, error: (error as Error).message };
   }
 };
+
+/** Egy termék neve az ártörténetben és a hozzá tartozó bejegyzések száma */
+export interface TermekNevDb {
+  nev: string;
+  db: number;
+}
+
+/**
+ * Az ártörténetben szereplő összes terméknév (bejegyzésszámmal), ábécérendben
+ */
+export const getTermekNevek = async (userId: string): Promise<TermekNevDb[]> => {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('product_price_history')
+      .select('product_name')
+      .eq('user_id', userId)
+      .limit(20000);
+
+    if (error) {
+      console.error('Error fetching product names:', error);
+      return [];
+    }
+
+    const szamlalo = new Map<string, number>();
+    (data ?? []).forEach((r: { product_name: string }) => {
+      szamlalo.set(r.product_name, (szamlalo.get(r.product_name) ?? 0) + 1);
+    });
+    return [...szamlalo.entries()]
+      .map(([nev, db]) => ({ nev, db }))
+      .sort((a, b) => a.nev.localeCompare(b.nev, 'hu'));
+  } catch (error) {
+    console.error('Exception in getTermekNevek:', error);
+    return [];
+  }
+};
+
+/**
+ * Termék(ek) átnevezése / összevonása: a `forrasNevek` minden ártörténet-bejegyzése
+ * a `celNev` nevet kapja. Egy forrásnévvel ez sima átnevezés; ha a `celNev` már
+ * létezik, a történetek összeolvadnak. A bejegyzések (ár, dátum, bolt, akciós jelölés,
+ * product_id) változatlanok maradnak, csak a név módosul.
+ *
+ * `statisztikaIs` esetén a `shopping_statistics` tábla azonos nevű sorai is átnevezésre
+ * kerülnek, hogy a Statisztika oldal is egyben lássa a terméket.
+ */
+export const termekekOsszevonasa = async (
+  userId: string,
+  forrasNevek: string[],
+  celNev: string,
+  opciok: { statisztikaIs?: boolean } = {}
+): Promise<{ success: boolean; error?: string; arTortenetDb?: number; statisztikaDb?: number }> => {
+  const ujNev = celNev.trim();
+  const forrasok = [...new Set(forrasNevek)].filter((n) => n !== ujNev);
+  if (!ujNev) return { success: false, error: 'Az új név nem lehet üres' };
+  if (forrasok.length === 0) return { success: true, arTortenetDb: 0, statisztikaDb: 0 };
+
+  try {
+    const supabase = createClient();
+    const { data: arSorok, error } = await supabase
+      .from('product_price_history')
+      .update({ product_name: ujNev, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .in('product_name', forrasok)
+      .select('id');
+
+    if (error) {
+      console.error('Error merging products (price history):', error);
+      return { success: false, error: error.message };
+    }
+
+    let statisztikaDb = 0;
+    if (opciok.statisztikaIs) {
+      const { data: statSorok, error: statHiba } = await supabase
+        .from('shopping_statistics')
+        .update({ product_name: ujNev })
+        .eq('user_id', userId)
+        .in('product_name', forrasok)
+        .select('id');
+      if (statHiba) {
+        // Az ártörténet már átnevezve — a hibát jelezzük, de nem görgetjük vissza
+        console.error('Error merging products (shopping statistics):', statHiba);
+        return {
+          success: false,
+          error: `Az ártörténet átnevezve, de a statisztika nem: ${statHiba.message}`,
+          arTortenetDb: arSorok?.length ?? 0,
+        };
+      }
+      statisztikaDb = statSorok?.length ?? 0;
+    }
+
+    return { success: true, arTortenetDb: arSorok?.length ?? 0, statisztikaDb };
+  } catch (error) {
+    console.error('Exception in termekekOsszevonasa:', error);
+    return { success: false, error: (error as Error).message };
+  }
+};
+
+/**
+ * Terméknév normalizálása hasonlóság-kereséshez (kisbetű, ékezet és írásjelek nélkül)
+ */
+const normalizalNev = (nev: string): string =>
+  nev
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+/**
+ * Két terméknév hasonlósága 0..1 között (szó-átfedés, közös előtag, karakter-bigram). Az OCR-ből
+ * eltérő néven bekerült, valójában azonos termékek felajánlásához az összevonásnál.
+ */
+export const nevHasonlosag = (a: string, b: string): number => {
+  const na = normalizalNev(a);
+  const nb = normalizalNev(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+
+  const szavakA = new Set(na.split(' '));
+  const szavakB = new Set(nb.split(' '));
+  const kozos = [...szavakA].filter((s) => szavakB.has(s)).length;
+  const jaccard = kozos / new Set([...szavakA, ...szavakB]).size;
+
+  let elotag = 0;
+  while (elotag < na.length && elotag < nb.length && na[elotag] === nb[elotag]) elotag++;
+  const elotagArany = elotag / Math.min(na.length, nb.length);
+
+  const tartalmaz = na.includes(nb) || nb.includes(na) ? 0.8 : 0;
+
+  // Karakter-bigram (Dice) hasonlóság — az OCR betűhibáit fogja meg (pl. „Trappista” / „Trapista”)
+  const bigramok = (sz: string) => {
+    const m = new Map<string, number>();
+    for (let i = 0; i < sz.length - 1; i++) {
+      const bg = sz.slice(i, i + 2);
+      m.set(bg, (m.get(bg) ?? 0) + 1);
+    }
+    return m;
+  };
+  const bgA = bigramok(na);
+  const bgB = bigramok(nb);
+  let kozosBg = 0;
+  bgA.forEach((db, bg) => { kozosBg += Math.min(db, bgB.get(bg) ?? 0); });
+  const dice = (2 * kozosBg) / Math.max(1, na.length - 1 + nb.length - 1);
+
+  return Math.max(jaccard, elotagArany * 0.9, tartalmaz, dice);
+};

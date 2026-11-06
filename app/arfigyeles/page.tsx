@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/utils/supabase/client'
-import { getPriceChanges, savePriceHistory } from '@/lib/priceHistory'
+import { getPriceChanges, savePriceHistory, getTermekNevek, type TermekNevDb } from '@/lib/priceHistory'
 import type { PriceChange } from '@/types/enhanced'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/src/components/ui/card'
 import { Button } from '@/src/components/ui/button'
@@ -36,7 +36,7 @@ export default function ArfigyelesPage() {
   
   const [showHistoryDialog, setShowHistoryDialog] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<string>('')
-  const [termekNevek, setTermekNevek] = useState<string[]>([])
+  const [termekNevek, setTermekNevek] = useState<TermekNevDb[]>([])
   const [termekKereso, setTermekKereso] = useState('')
   
   const supabase = createClient()
@@ -73,20 +73,21 @@ export default function ArfigyelesPage() {
     }
   }, [currentUser, loadPriceChanges])
 
-  // Termék-nevek a kereséshez (bármely termék ártörténete megnyitható, nem csak a változásoké)
-  useEffect(() => {
+  // Termék-nevek a kereséshez és az összevonáshoz (bármely termék ártörténete megnyitható)
+  const termekNevekBetoltese = useCallback(async () => {
     if (!currentUser) return
-    const betolt = async () => {
-      const { data } = await createClient()
-        .from('product_price_history')
-        .select('product_name')
-        .eq('user_id', currentUser.id)
-        .limit(10000)
-      const egyedi = [...new Set((data ?? []).map((r: { product_name: string }) => r.product_name))]
-      setTermekNevek(egyedi.sort((a, b) => a.localeCompare(b, 'hu')))
-    }
-    betolt()
+    setTermekNevek(await getTermekNevek(currentUser.id))
   }, [currentUser])
+
+  useEffect(() => {
+    termekNevekBetoltese()
+  }, [termekNevekBetoltese])
+
+  // Ártörténet módosítása / átnevezés / összevonás után minden listát frissítünk
+  const modositasUtan = useCallback(() => {
+    loadPriceChanges()
+    termekNevekBetoltese()
+  }, [loadPriceChanges, termekNevekBetoltese])
 
   // Szűrt és rendezett változások
   const filteredAndSortedChanges = priceChanges
@@ -123,7 +124,7 @@ export default function ArfigyelesPage() {
   const keresettTermekMegnyitasa = () => {
     const nev = termekKereso.trim()
     if (!nev) return
-    const talalat = termekNevek.find(n => n.toLowerCase() === nev.toLowerCase())
+    const talalat = termekNevek.find(t => t.nev.toLowerCase() === nev.toLowerCase())?.nev
     if (!talalat) {
       toast.error('Nincs ilyen nevű termék az ártörténetben')
       return
@@ -350,7 +351,7 @@ export default function ArfigyelesPage() {
             </div>
 
             <div className="mt-3">
-              <label className="text-sm font-medium mb-1 block">Termék ártörténete (szerkesztés, akciós jelölés)</label>
+              <label className="text-sm font-medium mb-1 block">Termék ártörténete (szerkesztés, átnevezés, összevonás, akciós jelölés)</label>
               <form
                 className="flex gap-2"
                 onSubmit={(e) => { e.preventDefault(); keresettTermekMegnyitasa() }}
@@ -363,7 +364,7 @@ export default function ArfigyelesPage() {
                   className="h-11 sm:h-10"
                 />
                 <datalist id="arfigyeles-termekek">
-                  {termekNevek.map(n => <option key={n} value={n} />)}
+                  {termekNevek.map(t => <option key={t.nev} value={t.nev} />)}
                 </datalist>
                 <Button type="submit" variant="outline" className="h-11 sm:h-10 shrink-0">
                   <Search className="h-4 w-4 sm:mr-1" />
@@ -519,7 +520,9 @@ export default function ArfigyelesPage() {
           onOpenChange={setShowHistoryDialog}
           userId={currentUser.id}
           termekNev={selectedProduct}
-          onModositas={loadPriceChanges}
+          termekNevek={termekNevek}
+          onModositas={modositasUtan}
+          onAtnevezes={(ujNev) => { setSelectedProduct(ujNev); setTermekKereso(ujNev) }}
         />
 
       </div>

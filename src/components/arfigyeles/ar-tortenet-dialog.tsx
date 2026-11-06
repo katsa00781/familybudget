@@ -6,10 +6,12 @@ import {
 } from 'recharts'
 import {
   Package, Store, AlertCircle, TrendingUp, TrendingDown, Pencil, Trash2, Tag, Check, X, ScanLine,
+  Merge, Search, TextCursorInput,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   getProductPriceHistory, updatePriceHistory, deletePriceHistory, isRegularPrice,
+  termekekOsszevonasa, nevHasonlosag, type TermekNevDb,
 } from '@/lib/priceHistory'
 import type { ProductPriceHistory } from '@/types/enhanced'
 import { Button } from '@/src/components/ui/button'
@@ -25,9 +27,15 @@ interface ArTortenetDialogProps {
   onOpenChange: (open: boolean) => void
   userId: string
   termekNev: string
+  /** Az ártörténetben szereplő összes terméknév (átnevezés-ütközéshez és összevonáshoz) */
+  termekNevek: TermekNevDb[]
   /** Bármilyen módosítás után hívódik (pl. az árváltozás-lista újratöltéséhez) */
   onModositas?: () => void
+  /** Átnevezés után hívódik az új névvel — a szülő erre állítja át a megnyitott terméket */
+  onAtnevezes?: (ujNev: string) => void
 }
+
+type NevMuvelet = 'nincs' | 'atnevezes' | 'osszevonas'
 
 interface SzerkesztettErtekek {
   ar: string
@@ -55,13 +63,22 @@ const rovidDatum = (datum: string) =>
 /** Migráció hiányára utaló hiba felismerése (az `akcios` oszlop még nem létezik) */
 const hianyzoMigracio = (hiba?: string) => !!hiba && hiba.includes('akcios')
 
-export function ArTortenetDialog({ open, onOpenChange, userId, termekNev, onModositas }: ArTortenetDialogProps) {
+export function ArTortenetDialog({
+  open, onOpenChange, userId, termekNev, termekNevek, onModositas, onAtnevezes,
+}: ArTortenetDialogProps) {
   const [tortenet, setTortenet] = useState<ProductPriceHistory[]>([])
   const [betoltes, setBetoltes] = useState(false)
   const [szerkesztettId, setSzerkesztettId] = useState<string | null>(null)
   const [szerkesztett, setSzerkesztett] = useState<SzerkesztettErtekek | null>(null)
   const [torlendoId, setTorlendoId] = useState<string | null>(null)
   const [mentes, setMentes] = useState(false)
+
+  // Terméknév-műveletek: átnevezés / összevonás
+  const [nevMuvelet, setNevMuvelet] = useState<NevMuvelet>('nincs')
+  const [ujNev, setUjNev] = useState('')
+  const [kereso, setKereso] = useState('')
+  const [osszevonandok, setOsszevonandok] = useState<string[]>([])
+  const [statisztikaIs, setStatisztikaIs] = useState(true)
 
   const betolt = useCallback(async () => {
     if (!termekNev) return
@@ -78,6 +95,9 @@ export function ArTortenetDialog({ open, onOpenChange, userId, termekNev, onModo
     if (open) {
       setSzerkesztettId(null)
       setTorlendoId(null)
+      setNevMuvelet('nincs')
+      setOsszevonandok([])
+      setKereso('')
       betolt()
     }
   }, [open, betolt])
@@ -120,6 +140,87 @@ export function ArTortenetDialog({ open, onOpenChange, userId, termekNev, onModo
       atlag: rendesArak.reduce((s, a) => s + a, 0) / rendesArak.length,
     }
   }, [tortenet])
+
+  // --- Átnevezés ---
+  const ujNevTiszta = ujNev.trim()
+  // Ha az új név (kis/nagybetűtől függetlenül) egy MÁSIK meglévő termék neve → összevonás lesz belőle
+  const utkozoTermek = termekNevek.find(
+    (t) => t.nev !== termekNev && t.nev.toLowerCase() === ujNevTiszta.toLowerCase()
+  )
+
+  const atnevezes = async () => {
+    if (!ujNevTiszta) {
+      toast.error('Az új név nem lehet üres!')
+      return
+    }
+    const celNev = utkozoTermek ? utkozoTermek.nev : ujNevTiszta
+    if (celNev === termekNev) {
+      setNevMuvelet('nincs')
+      return
+    }
+    setMentes(true)
+    const eredmeny = await termekekOsszevonasa(userId, [termekNev], celNev, { statisztikaIs })
+    setMentes(false)
+    if (!eredmeny.success) {
+      toast.error(`Átnevezési hiba: ${eredmeny.error}`)
+      return
+    }
+    toast.success(utkozoTermek
+      ? `Összevonva ezzel: „${celNev}” (${eredmeny.arTortenetDb} bejegyzés)`
+      : `Átnevezve: „${celNev}” (${eredmeny.arTortenetDb} bejegyzés)`)
+    setNevMuvelet('nincs')
+    onModositas?.()
+    onAtnevezes?.(celNev)
+  }
+
+  // --- Összevonás ---
+  const jeloltek = useMemo(() => {
+    const masok = termekNevek.filter((t) => t.nev !== termekNev)
+    const keresett = kereso.trim().toLowerCase()
+    const pontozott = masok.map((t) => ({ ...t, hasonlosag: nevHasonlosag(termekNev, t.nev) }))
+    if (keresett) {
+      return pontozott
+        .filter((t) => t.nev.toLowerCase().includes(keresett))
+        .sort((a, b) => b.hasonlosag - a.hasonlosag || a.nev.localeCompare(b.nev, 'hu'))
+        .slice(0, 50)
+    }
+    // Keresés nélkül a hasonló nevűeket ajánljuk fel
+    return pontozott
+      .filter((t) => t.hasonlosag >= 0.5)
+      .sort((a, b) => b.hasonlosag - a.hasonlosag)
+      .slice(0, 15)
+  }, [termekNevek, termekNev, kereso])
+
+  const osszevonandoDb = osszevonandok.reduce(
+    (s, nev) => s + (termekNevek.find((t) => t.nev === nev)?.db ?? 0), 0
+  )
+
+  const osszevonandoValtas = (nev: string) => {
+    setOsszevonandok((elozo) => elozo.includes(nev) ? elozo.filter((n) => n !== nev) : [...elozo, nev])
+  }
+
+  const osszevonas = async () => {
+    if (osszevonandok.length === 0) return
+    setMentes(true)
+    const eredmeny = await termekekOsszevonasa(userId, osszevonandok, termekNev, { statisztikaIs })
+    setMentes(false)
+    if (!eredmeny.success) {
+      toast.error(`Összevonási hiba: ${eredmeny.error}`)
+      return
+    }
+    toast.success(`${osszevonandok.length} termék összevonva ide: „${termekNev}” (${eredmeny.arTortenetDb} bejegyzés)`)
+    setOsszevonandok([])
+    setKereso('')
+    setNevMuvelet('nincs')
+    await utanModositas()
+  }
+
+  const nevMuveletValtas = (muvelet: NevMuvelet) => {
+    setSzerkesztettId(null)
+    setTorlendoId(null)
+    if (muvelet === 'atnevezes') setUjNev(termekNev)
+    setNevMuvelet((elozo) => elozo === muvelet ? 'nincs' : muvelet)
+  }
 
   const utanModositas = async () => {
     await betolt()
@@ -203,6 +304,145 @@ export function ArTortenetDialog({ open, onOpenChange, userId, termekNev, onModo
             Hibás (pl. OCR) árat javíthatsz vagy törölhetsz, az akciós árakat megjelölheted — ezek nem számítanak árváltozásnak.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Terméknév-műveletek */}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant={nevMuvelet === 'atnevezes' ? 'default' : 'outline'}
+            onClick={() => nevMuveletValtas('atnevezes')}
+          >
+            <TextCursorInput className="h-4 w-4 mr-1" /> Átnevezés
+          </Button>
+          <Button
+            size="sm"
+            variant={nevMuvelet === 'osszevonas' ? 'default' : 'outline'}
+            onClick={() => nevMuveletValtas('osszevonas')}
+          >
+            <Merge className="h-4 w-4 mr-1" /> Összevonás más termékkel
+          </Button>
+        </div>
+
+        {nevMuvelet === 'atnevezes' && (
+          <div className="rounded-lg border-2 border-teal-300 bg-teal-50/40 p-3 space-y-3">
+            <label className="text-xs text-gray-600 space-y-1 block">
+              <span>Új terméknév</span>
+              <Input
+                value={ujNev}
+                onChange={(e) => setUjNev(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') atnevezes() }}
+                className="bg-white"
+                autoFocus
+              />
+            </label>
+            {utkozoTermek && (
+              <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-2">
+                Már létezik „{utkozoTermek.nev}” nevű termék ({utkozoTermek.db} bejegyzés) — a két termék
+                története <strong>összevonódik</strong>.
+              </p>
+            )}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox checked={statisztikaIs} onCheckedChange={(v) => setStatisztikaIs(v === true)} />
+                A bevásárlási statisztikában is
+              </label>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setNevMuvelet('nincs')} disabled={mentes}>
+                  <X className="h-4 w-4 mr-1" /> Mégse
+                </Button>
+                <Button size="sm" onClick={atnevezes} disabled={mentes || !ujNevTiszta} className="bg-teal-600 hover:bg-teal-700">
+                  <Check className="h-4 w-4 mr-1" />
+                  {mentes ? 'Mentés…' : utkozoTermek ? 'Összevonás' : 'Átnevezés'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {nevMuvelet === 'osszevonas' && (
+          <div className="rounded-lg border-2 border-teal-300 bg-teal-50/40 p-3 space-y-3">
+            <p className="text-sm text-gray-700">
+              Jelöld be azokat a termékeket, amelyek valójában ugyanezek. A történetük a(z){' '}
+              <strong>„{termekNev}”</strong> termékhez kerül, a régi nevek megszűnnek.
+            </p>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                value={kereso}
+                onChange={(e) => setKereso(e.target.value)}
+                placeholder="Keresés a termékek között…"
+                className="bg-white pl-8"
+              />
+            </div>
+
+            {osszevonandok.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {osszevonandok.map((nev) => (
+                  <Badge key={nev} variant="secondary" className="gap-1 pr-1">
+                    {nev}
+                    <button
+                      type="button"
+                      onClick={() => osszevonandoValtas(nev)}
+                      className="rounded-full p-0.5 hover:bg-gray-300"
+                      aria-label={`${nev} eltávolítása`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-1">
+                {kereso.trim() ? 'Találatok' : 'Hasonló nevű termékek'}
+              </p>
+              {jeloltek.length === 0 ? (
+                <p className="text-sm text-gray-500 py-2">
+                  {kereso.trim() ? 'Nincs találat.' : 'Nincs hasonló nevű termék — keress rá a fenti mezőben.'}
+                </p>
+              ) : (
+                <div className="max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white divide-y">
+                  {jeloltek.map((t) => (
+                    <label key={t.nev} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50">
+                      <Checkbox
+                        checked={osszevonandok.includes(t.nev)}
+                        onCheckedChange={() => osszevonandoValtas(t.nev)}
+                      />
+                      <span className="flex-1 min-w-0 truncate">{t.nev}</span>
+                      <span className="text-xs text-gray-500 shrink-0">{t.db} bejegyzés</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox checked={statisztikaIs} onCheckedChange={(v) => setStatisztikaIs(v === true)} />
+                A bevásárlási statisztikában is
+              </label>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setNevMuvelet('nincs')} disabled={mentes}>
+                  <X className="h-4 w-4 mr-1" /> Mégse
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={osszevonas}
+                  disabled={mentes || osszevonandok.length === 0}
+                  className="bg-teal-600 hover:bg-teal-700"
+                >
+                  <Merge className="h-4 w-4 mr-1" />
+                  {mentes
+                    ? 'Összevonás…'
+                    : osszevonandok.length === 0
+                      ? 'Összevonás'
+                      : `${osszevonandok.length} termék összevonása (${osszevonandoDb} bejegyzés)`}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {betoltes && tortenet.length === 0 ? (
           <p className="text-center py-8 text-gray-500">Betöltés…</p>

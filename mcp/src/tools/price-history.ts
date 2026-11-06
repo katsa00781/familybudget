@@ -78,9 +78,9 @@ export async function getPriceChangesHandler(args: { days_back?: number }) {
 
   type PriceRecord = typeof data[0]
 
-  // Csoportosítás termékenként
+  // Csoportosítás termékenként — akciós árak nélkül (nem valódi árváltozások)
   const productGroups: { [key: string]: PriceRecord[] } = {}
-  data.forEach(record => {
+  data.filter(record => !record.akcios).forEach(record => {
     if (!productGroups[record.product_name]) productGroups[record.product_name] = []
     productGroups[record.product_name].push(record)
   })
@@ -102,7 +102,7 @@ export async function getPriceChangesHandler(args: { days_back?: number }) {
       .order('created_at', { ascending: false })
 
     const prevByProduct: { [name: string]: PriceRecord } = {}
-    prevData?.forEach(record => {
+    prevData?.filter(record => !record.akcios).forEach(record => {
       if (!prevByProduct[record.product_name]) prevByProduct[record.product_name] = record
     })
 

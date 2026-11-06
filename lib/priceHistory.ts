@@ -5,6 +5,13 @@ import { createClient } from '@/lib/utils/supabase/client';
 import { ProductPriceHistory, PriceChange, PriceStatistics, InflationData } from '../types/enhanced';
 
 /**
+ * Rendes (nem akciós) ár-e a rekord. A migráció (20261106_002) előtti sorokban
+ * az `akcios` mező hiányzik → rendes árnak számít.
+ */
+export const isRegularPrice = (record: Pick<ProductPriceHistory, 'akcios'>): boolean =>
+  !record.akcios;
+
+/**
  * Új ár mentése a price history táblába
  */
 export const savePriceHistory = async (
@@ -124,9 +131,12 @@ export const getPriceChanges = async (
 
     console.log('✅ Found', data.length, 'price history records for changes');
 
+    // Az akciós árak nem valódi árváltozások → kimaradnak az összehasonlításból
+    const regularData = data.filter(isRegularPrice);
+
     // Csoportosítás termékenként (dátum-növekvő sorrendben)
     const productGroups: { [key: string]: ProductPriceHistory[] } = {};
-    data.forEach(record => {
+    regularData.forEach(record => {
       if (!productGroups[record.product_name]) {
         productGroups[record.product_name] = [];
       }
@@ -150,9 +160,9 @@ export const getPriceChanges = async (
         .order('price_date', { ascending: false })
         .order('created_at', { ascending: false });
 
-      // Termékenként csak a legfrissebb ablak-előtti rekordot vesszük
+      // Termékenként csak a legfrissebb ablak-előtti (nem akciós) rekordot vesszük
       const prevByProduct: { [name: string]: ProductPriceHistory } = {};
-      prevData?.forEach(record => {
+      prevData?.filter(isRegularPrice).forEach(record => {
         if (!prevByProduct[record.product_name]) {
           prevByProduct[record.product_name] = record;
         }
@@ -214,9 +224,13 @@ export const getPriceStatistics = async (
   productName: string
 ): Promise<PriceStatistics | null> => {
   try {
-    const history = await getProductPriceHistory(userId, productName, 1000);
-    
-    if (history.length === 0) return null;
+    const allHistory = await getProductPriceHistory(userId, productName, 1000);
+
+    if (allHistory.length === 0) return null;
+
+    // Statisztika a rendes (nem akciós) árakból; ha csak akciós ár van, azokból
+    const regular = allHistory.filter(isRegularPrice);
+    const history = regular.length > 0 ? regular : allHistory;
 
     const prices = history.map(h => h.unit_price);
     const minPrice = Math.min(...prices);
@@ -294,10 +308,10 @@ export const getInflationData = async (
 
     console.log('✅ Found', data.length, 'price history records');
 
-    // Csoportosítás hónaponként
+    // Csoportosítás hónaponként (akciós árak nélkül — azok nem valódi árváltozások)
     const monthlyData: { [period: string]: { [productName: string]: ProductPriceHistory[] } } = {};
-    
-    data.forEach(record => {
+
+    data.filter(isRegularPrice).forEach(record => {
       const period = record.price_date.substring(0, 7); // YYYY-MM
       if (!monthlyData[period]) {
         monthlyData[period] = {};
@@ -396,5 +410,78 @@ export const getLatestPrice = async (
   } catch (error) {
     console.error('Exception in getLatestPrice:', error);
     return null;
+  }
+};
+
+/**
+ * Ártörténet-bejegyzés szerkesztése (pl. hibás OCR ár javítása, akciós jelölés)
+ */
+export const updatePriceHistory = async (
+  id: string,
+  mezok: {
+    unitPrice?: number;
+    priceDate?: string;
+    storeName?: string | null;
+    akcios?: boolean;
+  }
+): Promise<{ success: boolean; error?: string; data?: ProductPriceHistory }> => {
+  try {
+    const supabase = createClient();
+    const modositas: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+    if (mezok.unitPrice !== undefined) {
+      // Az összárat az egységár × mennyiség alapján újraszámoljuk
+      const { data: regi, error: lekeresHiba } = await supabase
+        .from('product_price_history')
+        .select('quantity')
+        .eq('id', id)
+        .single();
+      if (lekeresHiba) return { success: false, error: lekeresHiba.message };
+      modositas.unit_price = mezok.unitPrice;
+      modositas.total_price = mezok.unitPrice * (Number(regi?.quantity) || 1);
+    }
+    if (mezok.priceDate !== undefined) modositas.price_date = mezok.priceDate;
+    if (mezok.storeName !== undefined) modositas.store_name = mezok.storeName || null;
+    if (mezok.akcios !== undefined) modositas.akcios = mezok.akcios;
+
+    const { data, error } = await supabase
+      .from('product_price_history')
+      .update(modositas)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating price history:', error);
+      return { success: false, error: error.message };
+    }
+    return { success: true, data };
+  } catch (error) {
+    console.error('Exception in updatePriceHistory:', error);
+    return { success: false, error: (error as Error).message };
+  }
+};
+
+/**
+ * Ártörténet-bejegyzés törlése (pl. teljesen hibás OCR sor)
+ */
+export const deletePriceHistory = async (
+  id: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('product_price_history')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting price history:', error);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Exception in deletePriceHistory:', error);
+    return { success: false, error: (error as Error).message };
   }
 };

@@ -2,13 +2,15 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/utils/supabase/client'
-import { getPriceChanges, getProductPriceHistory, savePriceHistory } from '@/lib/priceHistory'
-import type { PriceChange, ProductPriceHistory } from '@/types/enhanced'
+import { getPriceChanges, savePriceHistory } from '@/lib/priceHistory'
+import type { PriceChange } from '@/types/enhanced'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/src/components/ui/card'
 import { Button } from '@/src/components/ui/button'
 import { Badge } from '@/src/components/ui/badge'
+import { Input } from '@/src/components/ui/input'
+import { ArTortenetDialog } from '@/src/components/arfigyeles/ar-tortenet-dialog'
 import { 
-  TrendingUp, TrendingDown, Package, Store, AlertCircle
+  TrendingUp, TrendingDown, Package, Store, AlertCircle, Search
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -18,13 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/src/components/ui/select'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/src/components/ui/dialog'
 
 interface User {
   id: string
@@ -41,7 +36,8 @@ export default function ArfigyelesPage() {
   
   const [showHistoryDialog, setShowHistoryDialog] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<string>('')
-  const [priceHistory, setPriceHistory] = useState<ProductPriceHistory[]>([])
+  const [termekNevek, setTermekNevek] = useState<string[]>([])
+  const [termekKereso, setTermekKereso] = useState('')
   
   const supabase = createClient()
 
@@ -77,6 +73,21 @@ export default function ArfigyelesPage() {
     }
   }, [currentUser, loadPriceChanges])
 
+  // Termék-nevek a kereséshez (bármely termék ártörténete megnyitható, nem csak a változásoké)
+  useEffect(() => {
+    if (!currentUser) return
+    const betolt = async () => {
+      const { data } = await createClient()
+        .from('product_price_history')
+        .select('product_name')
+        .eq('user_id', currentUser.id)
+        .limit(10000)
+      const egyedi = [...new Set((data ?? []).map((r: { product_name: string }) => r.product_name))]
+      setTermekNevek(egyedi.sort((a, b) => a.localeCompare(b, 'hu')))
+    }
+    betolt()
+  }, [currentUser])
+
   // Szűrt és rendezett változások
   const filteredAndSortedChanges = priceChanges
     .filter(change => {
@@ -102,19 +113,22 @@ export default function ArfigyelesPage() {
     ? priceChanges.reduce((sum, c) => sum + c.price_change_percent, 0) / priceChanges.length
     : 0
 
-  // Terméktörténet megnyitása
-  const openHistory = async (productName: string) => {
+  // Terméktörténet megnyitása (a dialógus maga tölti be és szerkeszti az adatokat)
+  const openHistory = (productName: string) => {
     if (!currentUser) return
-    
-    try {
-      setSelectedProduct(productName)
-      const history = await getProductPriceHistory(currentUser.id, productName)
-      setPriceHistory(history)
-      setShowHistoryDialog(true)
-    } catch (error) {
-      console.error('Hiba a terméktörténet betöltésekor:', error)
-      toast.error('Hiba történt a terméktörténet betöltésekor!')
+    setSelectedProduct(productName)
+    setShowHistoryDialog(true)
+  }
+
+  const keresettTermekMegnyitasa = () => {
+    const nev = termekKereso.trim()
+    if (!nev) return
+    const talalat = termekNevek.find(n => n.toLowerCase() === nev.toLowerCase())
+    if (!talalat) {
+      toast.error('Nincs ilyen nevű termék az ártörténetben')
+      return
     }
+    openHistory(talalat)
   }
 
   // Teszt adatok generálása
@@ -334,6 +348,29 @@ export default function ArfigyelesPage() {
                 </Select>
               </div>
             </div>
+
+            <div className="mt-3">
+              <label className="text-sm font-medium mb-1 block">Termék ártörténete (szerkesztés, akciós jelölés)</label>
+              <form
+                className="flex gap-2"
+                onSubmit={(e) => { e.preventDefault(); keresettTermekMegnyitasa() }}
+              >
+                <Input
+                  list="arfigyeles-termekek"
+                  value={termekKereso}
+                  onChange={(e) => setTermekKereso(e.target.value)}
+                  placeholder="Kezdd el gépelni a termék nevét…"
+                  className="h-11 sm:h-10"
+                />
+                <datalist id="arfigyeles-termekek">
+                  {termekNevek.map(n => <option key={n} value={n} />)}
+                </datalist>
+                <Button type="submit" variant="outline" className="h-11 sm:h-10 shrink-0">
+                  <Search className="h-4 w-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Megnyitás</span>
+                </Button>
+              </form>
+            </div>
           </CardContent>
         </Card>
 
@@ -476,53 +513,14 @@ export default function ArfigyelesPage() {
           </CardContent>
         </Card>
 
-        {/* Price History Dialog */}
-        <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                {selectedProduct} - Ártörténet
-              </DialogTitle>
-              <DialogDescription>
-                Teljes árelőzmények a termékhez
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              {priceHistory.length === 0 ? (
-                <div className="text-center py-8">
-                  <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">Nincs ártörténet</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {priceHistory.map((entry, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                      <div>
-                        <p className="font-medium">{entry.unit_price.toLocaleString('hu-HU')} Ft</p>
-                        <p className="text-sm text-gray-600">{new Date(entry.price_date).toLocaleDateString('hu-HU')}</p>
-                        {entry.store_name && (
-                          <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                            <Store className="h-3 w-3" />
-                            {entry.store_name}
-                          </p>
-                        )}
-                      </div>
-                      {index < priceHistory.length - 1 && (
-                        <Badge className={entry.unit_price > priceHistory[index + 1].unit_price ? 'bg-red-500' : 'bg-green-500'}>
-                          {entry.unit_price > priceHistory[index + 1].unit_price ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
-                          {entry.unit_price > priceHistory[index + 1].unit_price ? '+' : ''}
-                          {((entry.unit_price - priceHistory[index + 1].unit_price) / priceHistory[index + 1].unit_price * 100).toFixed(1)}%
-                        </Badge>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
+        {/* Ártörténet: grafikon + szerkesztés + akciós jelölés */}
+        <ArTortenetDialog
+          open={showHistoryDialog}
+          onOpenChange={setShowHistoryDialog}
+          userId={currentUser.id}
+          termekNev={selectedProduct}
+          onModositas={loadPriceChanges}
+        />
 
       </div>
     </div>

@@ -14,6 +14,8 @@ export interface ProductPriceHistory {
   total_price: number;
   price_date: string; // YYYY-MM-DD format
   source: 'ocr' | 'manual' | 'import' | 'list';
+  /** Akciós ár — nem valódi árváltozás, kimarad a változás-/inflációszámításból (migráció 20261106_002) */
+  akcios?: boolean;
   created_at: string;
   updated_at: string;
 }

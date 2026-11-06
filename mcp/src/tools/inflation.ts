@@ -23,7 +23,8 @@ export async function getInflationReportHandler(args: { months_back?: number }) 
   // Csoportosítás: hónap → termék → rekordok
   const monthlyData: { [period: string]: { [productName: string]: PriceRecord[] } } = {}
 
-  data.forEach(record => {
+  // Akciós árak nélkül — azok nem valódi árváltozások (migráció 20261106_002)
+  data.filter(record => !record.akcios).forEach(record => {
     const period = record.price_date.substring(0, 7) // YYYY-MM
     if (!monthlyData[period]) monthlyData[period] = {}
     if (!monthlyData[period][record.product_name]) monthlyData[period][record.product_name] = []

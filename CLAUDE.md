@@ -129,7 +129,7 @@ if (!user) redirect('/login')
 | `/bevasarlas-quick` | `app/bevasarlas-quick/page.tsx` | Gyors checklist mód |
 | `/termekek` | `app/termekek/page.tsx` | Termékadatbázis |
 | `/statisztika` | `app/statisztika/page.tsx` | Bevásárlási statisztikák (idő/kategória/termék/bolt szerinti elemzés) |
-| `/arfigyeles` | `app/arfigyeles/page.tsx` | Árváltozás riasztások |
+| `/arfigyeles` | `app/arfigyeles/page.tsx` | Árváltozás riasztások. A termék ártörténete (`src/components/arfigyeles/ar-tortenet-dialog.tsx`) grafikonon jelenik meg; a bejegyzések szerkeszthetők és törölhetők (hibás OCR ár), és akciósnak jelölhetők. Az akciós ár nem számít árváltozásnak |
 | `/inflacio` | `app/inflacio/page.tsx` | Inflációs trendek |
 | `/befektetesek`, `/szamlak`, `/receptek` | — | Placeholder oldalak |
 
@@ -149,7 +149,7 @@ A Supabase minden táblán **Row Level Security (RLS)** van engedélyezve. A `au
 | `egyenleg_pillanatkep` | Havi számlaegyenleg-mentés (accounts JSONB, migráció `20261101_001`); csak az Edge Function írja, a kliens csak olvassa |
 | `shopping_lists` | Bevásárlólisták (items JSONB) |
 | `products` | Termékadatbázis |
-| `product_price_history` | Árkövetési adatok |
+| `product_price_history` | Árkövetési adatok. Az `akcios` jelölésű sorok (migráció `20261106_002`) kimaradnak a változás-, infláció- és statisztika-számításból |
 | `user_preferences` | Aktív income/budget plan ID-k |
 
 Migrációk helye: `supabase/migrations/`. Az összes tábla egybén is létrehozható: `supabase/complete_setup.sql`.
@@ -160,6 +160,8 @@ Migrációk helye: `supabase/migrations/`. Az összes tábla egybén is létreho
 - `savePriceHistory()` — ár mentése a `product_price_history` táblába
 - `getPriceChanges()` — árváltozások lekérése időtartomány szerint
 - `getInflationData()` — havi inflációs adatok aggregálva
+- `updatePriceHistory()` / `deletePriceHistory()` — ártörténet-bejegyzés javítása vagy törlése. Az ár módosításakor a `total_price` újraszámolódik.
+- `isRegularPrice()` — kiszűri az akciós (`akcios = true`) árakat. A változás-, infláció- és statisztika-számítás csak rendes árakkal dolgozik. Az MCP szerver (`mcp/src/tools/`) ugyanezt a szabályt alkalmazza, ezért a kettőt együtt kell módosítani.
 - A bevásárláskor és termék-mentéskor automatikusan hívódik.
 
 ### `lib/userPreferences.ts`
